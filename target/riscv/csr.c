@@ -27,14 +27,6 @@
 #include "cheri-helper-utils.h"
 #endif
 
-/* CSR function table */
-static riscv_csr_operations csr_ops[];
-
-/* CSR function table constants */
-enum {
-    CSR_TABLE_SIZE = 0x1000
-};
-
 /* CSR update logging API */
 #if CONFIG_TCG_LOG_INSTR
 void riscv_log_instr_csr_changed(CPURISCVState *env, int csrno)
@@ -1612,7 +1604,7 @@ static void log_changed_csr_fn(CPURISCVState *env, int csrno,
      .csr_name=stringify(name)}
 
 /* Control and Status Register function table */
-static riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
+riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
     /* User Floating-Point CSRs */
     [CSR_FFLAGS] =              CSR_OP_RW(fs, fflags),
     [CSR_FRM] =                 CSR_OP_RW(fs, frm),
