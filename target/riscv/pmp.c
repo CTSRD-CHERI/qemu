@@ -392,53 +392,35 @@ target_ulong pmpaddr_csr_read(CPURISCVState *env, uint32_t addr_index)
 }
 
 /*
- * Calculate the TLB size if the start address or the end address of
- * PMP entry is presented in thie TLB page.
+ * Check if the PMP entry for a byte would also cover an entire TLB entry
  */
-static target_ulong pmp_get_tlb_size(CPURISCVState *env, int pmp_index,
-                                     target_ulong tlb_sa, target_ulong tlb_ea)
-{
-    target_ulong pmp_sa = env->pmp_state.addr[pmp_index].sa;
-    target_ulong pmp_ea = env->pmp_state.addr[pmp_index].ea;
-
-    if (pmp_sa >= tlb_sa && pmp_ea <= tlb_ea) {
-        return pmp_ea - pmp_sa + 1;
-    }
-
-    if (pmp_sa >= tlb_sa && pmp_sa <= tlb_ea && pmp_ea >= tlb_ea) {
-        return tlb_ea - pmp_sa + 1;
-    }
-
-    if (pmp_ea <= tlb_ea && pmp_ea >= tlb_sa && pmp_sa <= tlb_sa) {
-        return pmp_ea - tlb_sa + 1;
-    }
-
-    return 0;
-}
-
-/*
- * Check is there a PMP entry which range covers this page. If so,
- * try to find the minimum granularity for the TLB size.
- */
-bool pmp_is_range_in_tlb(CPURISCVState *env, hwaddr tlb_sa,
-                         target_ulong *tlb_size)
+bool pmp_covers_page(CPURISCVState *env, hwaddr tlb_byte, target_ulong mode)
 {
     int i;
     target_ulong val;
+    target_ulong tlb_sa = tlb_byte & TARGET_PAGE_MASK;
     target_ulong tlb_ea = (tlb_sa + TARGET_PAGE_SIZE - 1);
 
     for (i = 0; i < MAX_RISCV_PMPS; i++) {
-        val = pmp_get_tlb_size(env, i, tlb_sa, tlb_ea);
-        if (val) {
-            if (*tlb_size == 0 || *tlb_size > val) {
-                *tlb_size = val;
-            }
+        target_ulong pmp_sa = env->pmp_state.addr[i].sa;
+        target_ulong pmp_ea = env->pmp_state.addr[i].ea;
+
+        if (pmp_sa <= tlb_sa && pmp_ea >= tlb_ea) {
+            // PMP covers whole page (also implies it covers the byte)
+            return true;
+        } else if (pmp_sa <= tlb_byte && pmp_ea >= tlb_byte) {
+            // PMP covered at least one byte, and so only this entry
+            // is allowed to apply.
+            return false;
         }
     }
-
-    if (*tlb_size != 0) {
-        return true;
+    if (mode == PRV_M) {
+        // NB: Technically, an entry may have covered another byte in this page
+        return true; /* Privileged spec v1.10 states if no PMP entry matches an
+                  * M-Mode access, the access succeeds */
+    } else {
+        /* Other modes are not allowed to succeed if they don't
+         * match a rule, but there are rules. */
+        return pmp_get_num_rules(env) == 0;
     }
-
-    return false;
 }

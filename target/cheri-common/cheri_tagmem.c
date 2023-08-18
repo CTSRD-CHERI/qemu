@@ -313,7 +313,8 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
 static inline void *get_tagmem_from_iotlb_entry(CPUArchState *env,
                                                 target_ulong vaddr, int mmu_idx,
                                                 bool isWrite,
-                                                uintptr_t *flags_out)
+                                                uintptr_t *flags_out,
+                                                void* host_mem)
 {
     /* XXXAR: see mte_helper.c */
     /*
@@ -322,10 +323,35 @@ static inline void *get_tagmem_from_iotlb_entry(CPUArchState *env,
      * TODO: Perhaps there should be a cputlb helper that returns a
      * matching tlb entry + iotlb entry.
      */
+    /* Upstream now has a probe_access_full function that returns the
+     * CPUIOTLBEntry (renamed to CPUTLBEntryFull).
+     * There are times when probe returns NULL, but the probe succeeded.
+     * These are the cases where an access control mechanism does not align
+     * to a page boundary. The TLB entry is filled, but is marked invalid to
+     * ensure that is re-probed every access.
+     * On the next merge, we can likely simplify the following logic a bit.
+     * For now, if some host mem was returned, there must be an IOTLB entry.
+     * If none was returned, there MIGHT be if the there is a hit ignoring
+     * the TLB_INVALID_MASK bit. If that hits, then it was just a short
+     * entry. We checked at least one byte, which actually was probably not
+     * enough because we have failed to plumb the length of accesses
+     * into this logic. If we still miss, it was really IO mem or  some such
+     */
+
+    if (unlikely(!host_mem)) {
+        CPUTLBEntry *entry = tlb_entry(env, mmu_idx, vaddr);
+        target_ulong tlb_addr = isWrite ? tlb_addr_write(entry) : entry->addr_read;
+        tlb_addr &= ~TLB_INVALID_MASK;
+        if (!tlb_hit(tlb_addr, vaddr)) {
+            *flags_out = TLBENTRYCAP_FLAG_CLEAR;
+            return ALL_ZERO_TAGBLK;
+        }
+    } else {
 #ifdef CONFIG_DEBUG_TCG
-    CPUTLBEntry *entry = tlb_entry(env, mmu_idx, vaddr);
-    g_assert(tlb_hit(isWrite ? tlb_addr_write(entry) : entry->addr_read, vaddr));
+        CPUTLBEntry *entry = tlb_entry(env, mmu_idx, vaddr);
+        g_assert(tlb_hit(isWrite ? tlb_addr_write(entry) : entry->addr_read, vaddr));
 #endif
+    }
     CPUIOTLBEntry *iotlbentry =
         &env_tlb(env)->d[mmu_idx].iotlb[tlb_index(env, mmu_idx, vaddr)];
     if (isWrite) {
@@ -429,13 +455,12 @@ static void *cheri_tag_invalidate_one(CPUArchState *env, target_ulong vaddr,
     void *host_addr = probe_write(env, vaddr, 1, mmu_idx, pc);
     // Only RAM and ROM regions are backed by host addresses so if
     // probe_write() returns NULL we know that we can't write the tagmem.
-    if (unlikely(!host_addr)) {
-        return NULL;
-    }
+    // probe also returns NULL if something like a PMP entry did not cover
+    // an entire page. get_tagmem_from_iotlb_entry will handle that.
 
     uintptr_t tagmem_flags;
     void *tagmem =
-        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, true, &tagmem_flags);
+        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, true, &tagmem_flags, host_addr);
 
     if (tagmem == ALL_ZERO_TAGBLK) {
         // All tags for this page are zero -> no need to invalidate. We also
@@ -536,13 +561,10 @@ void *cheri_tag_set(CPUArchState *env, target_ulong vaddr, int reg,
 
     handle_paddr_return(write);
 
-    if (unlikely(!host_addr)) {
-        return NULL;
-    }
-
     uintptr_t tagmem_flags;
     void *tagmem = get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx,
-                                               /*write=*/true, &tagmem_flags);
+                                               /*write=*/true, &tagmem_flags,
+                                               host_addr);
 
     /* Clear + ALL_ZERO_TAGBLK means no tags can be stored here. */
     if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
@@ -585,7 +607,8 @@ bool cheri_tag_get(CPUArchState *env, target_ulong vaddr, int reg,
 
     uintptr_t tagmem_flags;
     void *tagmem = get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx,
-                                               /*write=*/false, &tagmem_flags);
+                                               /*write=*/false, &tagmem_flags,
+                                               host_addr);
 
     if (prot) {
         *prot = 0;
@@ -621,12 +644,13 @@ int cheri_tag_get_many(CPUArchState *env, target_ulong vaddr, int reg,
 {
 
     const int mmu_idx = cpu_mmu_index(env, false);
-    probe_read(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
+    void *host_addr = probe_read(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     handle_paddr_return(read);
 
     uintptr_t tagmem_flags;
     void *tagmem = get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx,
-                                               /*write=*/false, &tagmem_flags);
+                                               /*write=*/false, &tagmem_flags,
+                                               host_addr);
 
     int result =
         ((tagmem == ALL_ZERO_TAGBLK) || (tagmem_flags & TLBENTRYCAP_FLAG_CLEAR))
@@ -653,11 +677,12 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
      * We call probe_(cap)_write rather than probe_access since the branches
      * checking access_type can be eliminated.
      */
+    void* host_addr;
     if (tags) {
         // Note: this probe will handle any store cap faults
-        probe_cap_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
+        host_addr = probe_cap_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     } else {
-        probe_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
+        host_addr = probe_write(env, vaddr, CAP_TAG_MANY_DATA_SIZE, mmu_idx, pc);
     }
     clear_capcause_reg(env);
 
@@ -665,7 +690,7 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
 
     uintptr_t tagmem_flags;
     void *tagmem =
-        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, true, &tagmem_flags);
+        get_tagmem_from_iotlb_entry(env, vaddr, mmu_idx, true, &tagmem_flags, host_addr);
 
     if ((tagmem_flags & TLBENTRYCAP_FLAG_CLEAR) &&
         (tagmem == ALL_ZERO_TAGBLK)) {
