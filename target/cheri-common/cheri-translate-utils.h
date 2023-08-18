@@ -96,7 +96,7 @@ _gen_cap_check(rmw)
 #ifdef TARGET_MIPS
 
 #define DDC_ENV_OFFSET offsetof(CPUArchState, active_tc.CHWR.DDC)
-static inline void gen_load_gpr(TCGv t, int reg);
+void gen_load_gpr(TCGv t, int reg);
 #define target_get_gpr(ctx, t, reg) gen_load_gpr((TCGv)t, reg)
 #define MERGED_FILE 0
 
