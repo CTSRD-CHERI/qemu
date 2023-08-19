@@ -41,6 +41,7 @@
 #include "exec/cpu-all.h"
 #include "sysemu/cpu-timers.h"
 #include "sysemu/replay.h"
+#include "internal.h"
 
 /* -icount align implementation. */
 
@@ -287,6 +288,9 @@ void cpu_exec_step_atomic(CPUState *cpu)
 
     if (sigsetjmp(cpu->jmp_env, 0) == 0) {
         start_exclusive();
+        g_assert(cpu == current_cpu);
+        g_assert(!cpu->running);
+        cpu->running = true;
 
         tb = tb_lookup__cpu_state(cpu, &pc, &cs_base, &cs_top, &cheri_flags,
                                   &flags, cf_mask);
@@ -327,6 +331,7 @@ void cpu_exec_step_atomic(CPUState *cpu)
      */
     g_assert(cpu_in_exclusive_context(cpu));
     parallel_cpus = true;
+    cpu->running = false;
     end_exclusive();
 }
 
