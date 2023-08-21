@@ -41,6 +41,18 @@
 
 /* common functionality among all TCG variants */
 
+void tcg_cpu_init_cflags(CPUState *cpu, bool parallel)
+{
+    uint32_t cflags = cpu->cluster_index << CF_CLUSTER_SHIFT;
+    cflags |= parallel ? CF_PARALLEL : 0;
+    cflags |= icount_enabled() ? CF_USE_ICOUNT : 0;
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (cpu->log_state.loglevel_active && qemu_loglevel_mask(CPU_LOG_INSTR))
+        cflags |= CF_LOG_INSTR;
+#endif
+    cpu->tcg_cflags = cflags;
+}
+
 void tcg_cpus_destroy(CPUState *cpu)
 {
     cpu_thread_signal_destroyed(cpu);
