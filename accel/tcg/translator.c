@@ -116,8 +116,8 @@ void translator_loop(const TranslatorOps *ops, DisasContextBase *db,
     while (true) {
         db->num_insns++;
 #ifdef CONFIG_DEBUG_TCG
-        // For debugging mark the current PCC.cursor as outdated
-        if (_pc_is_current) {
+        /* Mark the current PCC.cursor as outdated after first instruction. */
+        if (_pc_is_current && db->num_insns > 1) {
             tcg_gen_movi_tl(_pc_is_current, 0);
         }
 #endif
