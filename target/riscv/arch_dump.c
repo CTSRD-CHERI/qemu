@@ -18,6 +18,7 @@
 #include "qemu/osdep.h"
 #include "cpu.h"
 #include "elf.h"
+#include "helper_utils.h"
 #include "sysemu/dump.h"
 
 /* struct user_regs_struct from arch/riscv/include/uapi/asm/ptrace.h */
@@ -78,10 +79,10 @@ int riscv_cpu_write_elf64_note(WriteCoreDumpFunction f, CPUState *cs,
 
     note.prstatus.pr_pid = cpu_to_dump32(s, cpuid);
 
-    note.prstatus.pr_reg.pc = cpu_to_dump64(s, env->pc);
+    note.prstatus.pr_reg.pc = cpu_to_dump64(s, PC_ADDR(env));
 
     for (i = 0; i < 31; i++) {
-        note.prstatus.pr_reg.regs[i] = cpu_to_dump64(s, env->gpr[i + 1]);
+        note.prstatus.pr_reg.regs[i] = cpu_to_dump64(s, gpr_int_value(env, i + 1));
     }
 
     ret = f(&note, RISCV64_PRSTATUS_NOTE_SIZE, s);
@@ -148,10 +149,10 @@ int riscv_cpu_write_elf32_note(WriteCoreDumpFunction f, CPUState *cs,
 
     note.prstatus.pr_pid = cpu_to_dump32(s, cpuid);
 
-    note.prstatus.pr_reg.pc = cpu_to_dump32(s, env->pc);
+    note.prstatus.pr_reg.pc = cpu_to_dump32(s, PC_ADDR(env));
 
     for (i = 0; i < 31; i++) {
-        note.prstatus.pr_reg.regs[i] = cpu_to_dump32(s, env->gpr[i + 1]);
+        note.prstatus.pr_reg.regs[i] = cpu_to_dump32(s, gpr_int_value(env, i + 1));
     }
 
     ret = f(&note, RISCV32_PRSTATUS_NOTE_SIZE, s);
