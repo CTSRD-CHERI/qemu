@@ -937,7 +937,7 @@ void riscv_cpu_do_unaligned_access(CPUState *cs, vaddr addr,
     env->badaddr = addr;
     riscv_raise_exception(env, cs->exception_index, retaddr);
 }
-#endif
+#endif /* !CONFIG_USER_ONLY */
 
 static inline int rvfi_dii_check_addr(CPURISCVState *env, int ret, hwaddr *pa,
                                       vaddr address, int size, int *prot,

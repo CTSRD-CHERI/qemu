@@ -427,6 +427,7 @@ static void mips_cpu_set_pc(CPUState *cs, vaddr value)
     }
 }
 
+#ifdef CONFIG_TCG
 static void mips_cpu_synchronize_from_tb(CPUState *cs,
                                          const TranslationBlock *tb)
 {
@@ -448,6 +449,7 @@ static void mips_cpu_synchronize_from_tb(CPUState *cs,
      */
     env->lladdr = 1;
 }
+#endif /* CONFIG_TCG */
 
 static bool mips_cpu_has_work(CPUState *cs)
 {
@@ -954,6 +956,26 @@ static Property mips_cpu_properties[] = {
     DEFINE_PROP_END_OF_LIST()
 };
 
+#ifdef CONFIG_TCG
+#include "hw/core/tcg-cpu-ops.h"
+/*
+ * NB: cannot be const, as some elements are changed for specific
+ * mips hardware (see hw/mips/jazz.c).
+ */
+static struct TCGCPUOps mips_tcg_ops = {
+    .initialize = mips_tcg_init,
+    .synchronize_from_tb = mips_cpu_synchronize_from_tb,
+    .cpu_exec_interrupt = mips_cpu_exec_interrupt,
+    .tlb_fill = mips_cpu_tlb_fill,
+
+#if !defined(CONFIG_USER_ONLY)
+    .do_interrupt = mips_cpu_do_interrupt,
+    .do_transaction_failed = mips_cpu_do_transaction_failed,
+    .do_unaligned_access = mips_cpu_do_unaligned_access,
+#endif /* !CONFIG_USER_ONLY */
+};
+#endif /* CONFIG_TCG */
+
 static void mips_cpu_class_init(ObjectClass *c, void *data)
 {
     MIPSCPUClass *mcc = MIPS_CPU_CLASS(c);
@@ -967,32 +989,20 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
 
     cc->class_by_name = mips_cpu_class_by_name;
     cc->has_work = mips_cpu_has_work;
-    cc->do_interrupt = mips_cpu_do_interrupt;
-    cc->cpu_exec_interrupt = mips_cpu_exec_interrupt;
     cc->dump_state = mips_cpu_dump_state;
     cc->set_pc = mips_cpu_set_pc;
-    cc->synchronize_from_tb = mips_cpu_synchronize_from_tb;
     cc->gdb_read_register = mips_cpu_gdb_read_register;
     cc->gdb_write_register = mips_cpu_gdb_write_register;
 #ifndef CONFIG_USER_ONLY
-    cc->do_transaction_failed = mips_cpu_do_transaction_failed;
-    cc->do_unaligned_access = mips_cpu_do_unaligned_access;
     cc->get_phys_page_debug = mips_cpu_get_phys_page_debug;
     cc->vmsd = &vmstate_mips_cpu;
 #endif
     cc->disas_set_info = mips_cpu_disas_set_info;
-#ifdef CONFIG_TCG
-    cc->tcg_initialize = mips_tcg_init;
-    cc->tlb_fill = mips_cpu_tlb_fill;
-#endif
-
-#if defined(TARGET_MIPS64)
-    cc->gdb_core_xml_file = "mips64-cpu.xml";
-#else
-    cc->gdb_core_xml_file = "mips-cpu.xml";
-#endif
     cc->gdb_num_core_regs = 73;
     cc->gdb_stop_before_watchpoint = true;
+#ifdef CONFIG_TCG
+    cc->tcg_ops = &mips_tcg_ops;
+#endif /* CONFIG_TCG */
 #if defined(TARGET_CHERI)
     cc->dump_statistics = cheri_cpu_dump_statistics;
     start_ns = get_clock();
