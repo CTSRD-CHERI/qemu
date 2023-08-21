@@ -26,7 +26,7 @@
 #include "cpu.h"
 #include "internal.h"
 #include "tcg/tcg-op.h"
-#include "exec/cpu_ldst.h"
+#include "exec/translator.h"
 #include "exec/helper-proto.h"
 #include "exec/helper-gen.h"
 #include "hw/semihosting/semihost.h"
@@ -2419,7 +2419,12 @@ enum {
 
 /* global register indices */
 TCGv cpu_gpr[32], cpu_PC;
-static TCGv cpu_HI[MIPS_DSP_ACC], cpu_LO[MIPS_DSP_ACC];
+/*
+ * For CPUs using 128-bit GPR registers, we put the lower halves in cpu_gpr[])
+ * and the upper halves in cpu_gpr_hi[].
+ */
+TCGv_i64 cpu_gpr_hi[32];
+TCGv cpu_HI[MIPS_DSP_ACC], cpu_LO[MIPS_DSP_ACC];
 static TCGv cpu_dspctrl, btarget;
 TCGv bcond;
 static TCGv cpu_lladdr, cpu_llval;
@@ -2428,11 +2433,6 @@ TCGv_i32 fpu_fcr0, fpu_fcr31;
 TCGv_i64 fpu_f64[32];
 static TCGv cpu_statcounters_icount_kernel, cpu_statcounters_icount_user;
 
-
-#if defined(TARGET_MIPS64)
-/* Upper halves of R5900's 128-bit registers: MMRs (multimedia registers) */
-static TCGv_i64 cpu_mmr[32];
-#endif
 
 #if !defined(TARGET_MIPS64)
 /* MXU registers */
@@ -2517,6 +2517,24 @@ void _gen_store_gpr(DisasContext *ctx, TCGv t, int reg)
     }
 }
 
+
+#if defined(TARGET_MIPS64)
+void gen_load_gpr_hi(TCGv_i64 t, int reg)
+{
+    if (reg == 0) {
+        tcg_gen_movi_i64(t, 0);
+    } else {
+        tcg_gen_mov_i64(t, cpu_gpr_hi[reg]);
+    }
+}
+
+void gen_store_gpr_hi(TCGv_i64 t, int reg)
+{
+    if (reg != 0) {
+        tcg_gen_mov_i64(cpu_gpr_hi[reg], t);
+    }
+}
+#endif /* TARGET_MIPS64 */
 
 /* Moves to/from shadow registers. */
 static inline void gen_load_srsgpr(DisasContext *ctx, int from, int to)
@@ -4514,33 +4532,20 @@ static void gen_shift(DisasContext *ctx, uint32_t opc,
 /* Copy GPR to and from TX79 HI1/LO1 register. */
 static void gen_HILO1_tx79(DisasContext *ctx, uint32_t opc, int reg)
 {
-    if (reg == 0 && (opc == MMI_OPC_MFHI1 || opc == MMI_OPC_MFLO1)) {
-        /* Treat as NOP. */
-        return;
-    }
-
     switch (opc) {
     case MMI_OPC_MFHI1:
-        tcg_gen_mov_tl(cpu_gpr[reg], cpu_HI[1]);
+        gen_store_gpr(cpu_HI[1], reg);
         gen_log_instr_gpr_update(ctx, reg);
         break;
     case MMI_OPC_MFLO1:
-        tcg_gen_mov_tl(cpu_gpr[reg], cpu_LO[1]);
+        gen_store_gpr(cpu_LO[1], reg);
         gen_log_instr_gpr_update(ctx, reg);
         break;
     case MMI_OPC_MTHI1:
-        if (reg != 0) {
-            tcg_gen_mov_tl(cpu_HI[1], cpu_gpr[reg]);
-        } else {
-            tcg_gen_movi_tl(cpu_HI[1], 0);
-        }
+        gen_load_gpr(cpu_HI[1], reg);
         break;
     case MMI_OPC_MTLO1:
-        if (reg != 0) {
-            tcg_gen_mov_tl(cpu_LO[1], cpu_gpr[reg]);
-        } else {
-            tcg_gen_movi_tl(cpu_LO[1], 0);
-        }
+        gen_load_gpr(cpu_LO[1], reg);
         break;
     default:
         MIPS_INVAL("mfthilo1 TX79");
@@ -14644,7 +14649,7 @@ static void decode_i64_mips16(DisasContext *ctx,
 
 static int decode_extended_mips16_opc(CPUMIPSState *env, DisasContext *ctx)
 {
-    int extend = cpu_lduw_code(env, ctx->base.pc_next + 2);
+    int extend = translator_lduw(env, ctx->base.pc_next + 2);
     int op, rx, ry, funct, sa;
     int16_t imm, offset;
 
@@ -14899,7 +14904,7 @@ static int decode_mips16_opc(CPUMIPSState *env, DisasContext *ctx)
         /* No delay slot, so just process as a normal instruction */
         break;
     case M16_OPC_JAL:
-        offset = cpu_lduw_code(env, ctx->base.pc_next + 2);
+        offset = translator_lduw(env, ctx->base.pc_next + 2);
         offset = (((ctx->opcode & 0x1f) << 21)
                   | ((ctx->opcode >> 5) & 0x1f) << 16
                   | offset) << 2;
@@ -17048,7 +17053,7 @@ static void decode_micromips32_opc(CPUMIPSState *env, DisasContext *ctx)
     uint32_t op, minor, minor2, mips32_op;
     uint32_t cond, fmt, cc;
 
-    insn = cpu_lduw_code(env, ctx->base.pc_next + 2);
+    insn = translator_lduw(env, ctx->base.pc_next + 2);
     ctx->opcode = (ctx->opcode << 16) | insn;
 
     rt = (ctx->opcode >> 21) & 0x1f;
@@ -22113,7 +22118,7 @@ static int decode_nanomips_32_48_opc(CPUMIPSState *env, DisasContext *ctx)
     int offset;
     int imm;
 
-    insn = cpu_lduw_code(env, ctx->base.pc_next + 2);
+    insn = translator_lduw(env, ctx->base.pc_next + 2);
     ctx->opcode = (ctx->opcode << 16) | insn;
 
     rt = extract32(ctx->opcode, 21, 5);
@@ -22232,7 +22237,7 @@ static int decode_nanomips_32_48_opc(CPUMIPSState *env, DisasContext *ctx)
         break;
     case NM_P48I:
         {
-            insn = cpu_lduw_code(env, ctx->base.pc_next + 4);
+            insn = translator_lduw(env, ctx->base.pc_next + 4);
             target_long addr_off = extract32(ctx->opcode, 0, 16) | insn << 16;
             switch (extract32(ctx->opcode, 16, 5)) {
             case NM_LI48:
@@ -25549,7 +25554,7 @@ static void gen_mmi_pcpyh(DisasContext *ctx)
         /* nop */
     } else if (rt == 0) {
         tcg_gen_movi_i64(cpu_gpr[rd], 0);
-        tcg_gen_movi_i64(cpu_mmr[rd], 0);
+        tcg_gen_movi_i64(cpu_gpr_hi[rd], 0);
     } else {
         TCGv_i64 t0 = tcg_temp_new();
         TCGv_i64 t1 = tcg_temp_new();
@@ -25567,7 +25572,7 @@ static void gen_mmi_pcpyh(DisasContext *ctx)
 
         tcg_gen_mov_i64(cpu_gpr[rd], t1);
 
-        tcg_gen_andi_i64(t0, cpu_mmr[rt], mask);
+        tcg_gen_andi_i64(t0, cpu_gpr_hi[rt], mask);
         tcg_gen_movi_i64(t1, 0);
         tcg_gen_or_i64(t1, t0, t1);
         tcg_gen_shli_i64(t0, t0, 16);
@@ -25577,7 +25582,7 @@ static void gen_mmi_pcpyh(DisasContext *ctx)
         tcg_gen_shli_i64(t0, t0, 16);
         tcg_gen_or_i64(t1, t0, t1);
 
-        tcg_gen_mov_i64(cpu_mmr[rd], t1);
+        tcg_gen_mov_i64(cpu_gpr_hi[rd], t1);
 
         tcg_temp_free(t0);
         tcg_temp_free(t1);
@@ -25609,9 +25614,9 @@ static void gen_mmi_pcpyld(DisasContext *ctx)
         /* nop */
     } else {
         if (rs == 0) {
-            tcg_gen_movi_i64(cpu_mmr[rd], 0);
+            tcg_gen_movi_i64(cpu_gpr_hi[rd], 0);
         } else {
-            tcg_gen_mov_i64(cpu_mmr[rd], cpu_gpr[rs]);
+            tcg_gen_mov_i64(cpu_gpr_hi[rd], cpu_gpr[rs]);
         }
         if (rt == 0) {
             tcg_gen_movi_i64(cpu_gpr[rd], 0);
@@ -25650,13 +25655,13 @@ static void gen_mmi_pcpyud(DisasContext *ctx)
         if (rs == 0) {
             tcg_gen_movi_i64(cpu_gpr[rd], 0);
         } else {
-            tcg_gen_mov_i64(cpu_gpr[rd], cpu_mmr[rs]);
+            tcg_gen_mov_i64(cpu_gpr[rd], cpu_gpr_hi[rs]);
         }
         if (rt == 0) {
-            tcg_gen_movi_i64(cpu_mmr[rd], 0);
+            tcg_gen_movi_i64(cpu_gpr_hi[rd], 0);
         } else {
             if (rd != rt) {
-                tcg_gen_mov_i64(cpu_mmr[rd], cpu_mmr[rt]);
+                tcg_gen_mov_i64(cpu_gpr_hi[rd], cpu_gpr_hi[rt]);
             }
         }
     }
@@ -30085,22 +30090,22 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
         return;
 #else
         gen_mips_log_instr_unsupported(ctx, "nanomips");
-        ctx->opcode = cpu_lduw_code(env, ctx->base.pc_next);
+        ctx->opcode = translator_lduw(env, ctx->base.pc_next);
         insn_bytes = decode_nanomips_opc(env, ctx);
 #endif
     } else if (!(ctx->hflags & MIPS_HFLAG_M16)) {
-        ctx->opcode = cpu_ldl_code(env, ctx->base.pc_next);
+        ctx->opcode = translator_ldl(env, ctx->base.pc_next);
         insn_bytes = 4;
         gen_mips_log_instr32(ctx);
         decode_opc(env, ctx);
     } else if (ctx->insn_flags & ASE_MICROMIPS) {
         gen_mips_log_instr_unsupported(ctx, "micromips");
-        ctx->opcode = cpu_lduw_code(env, ctx->base.pc_next);
+        ctx->opcode = translator_lduw(env, ctx->base.pc_next);
         insn_bytes = decode_micromips_opc(env, ctx);
 #ifndef TARGET_CHERI /* MIPS16 not supported */
     } else if (ctx->insn_flags & ASE_MIPS16) {
         gen_mips_log_instr_unsupported(ctx, "mips16");
-        ctx->opcode = cpu_lduw_code(env, ctx->base.pc_next);
+        ctx->opcode = translator_lduw(env, ctx->base.pc_next);
         insn_bytes = decode_mips16_opc(env, ctx);
 #endif
     } else {
@@ -30293,6 +30298,18 @@ void mips_tcg_init(void)
                                         offsetof(CPUMIPSState,
                                                  active_tc.gpr[i]),
                                         mips_gp_regnames[i]);
+#if defined(TARGET_MIPS64)
+    cpu_gpr_hi[0] = NULL;
+
+    for (unsigned i = 1; i < 32; i++) {
+        g_autofree char *rname = g_strdup_printf("%s[hi]", mips_gp_regnames[i]);
+
+        cpu_gpr_hi[i] = tcg_global_mem_new_i64(cpu_env,
+                                               offsetof(CPUMIPSState,
+                                                        active_tc.gpr_hi[i]),
+                                               rname);
+    }
+#endif /* !TARGET_MIPS64 */
     for (i = 0; i < 32; i++) {
         int off = offsetof(CPUMIPSState, active_fpu.fpr[i].wr.d[0]);
 
@@ -30349,15 +30366,6 @@ void mips_tcg_init(void)
     cpu_statcounters_icount_user = tcg_global_mem_new(
         cpu_env, offsetof(CPUMIPSState, statcounters_icount_user),
         "statcounters_icount_user");
-#if defined(TARGET_MIPS64)
-    cpu_mmr[0] = NULL;
-    for (i = 1; i < 32; i++) {
-        cpu_mmr[i] = tcg_global_mem_new_i64(cpu_env,
-                                            offsetof(CPUMIPSState,
-                                                     active_tc.mmr[i]),
-                                            mips_gp_regnames[i]);
-    }
-#endif
 
 #if !defined(TARGET_MIPS64)
     for (i = 0; i < NUMBER_OF_MXU_REGISTERS - 1; i++) {
@@ -30370,7 +30378,7 @@ void mips_tcg_init(void)
     mxu_CR = tcg_global_mem_new(cpu_env,
                                 offsetof(CPUMIPSState, active_tc.mxu_cr),
                                 mips_mxuregnames[NUMBER_OF_MXU_REGISTERS - 1]);
-#endif
+#endif /* !TARGET_MIPS64 */
 }
 
 void restore_state_to_opc(CPUMIPSState *env, TranslationBlock *tb,

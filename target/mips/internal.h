@@ -131,7 +131,7 @@ struct CPUMIPSTLBContext {
     uint32_t nb_tlb;
     uint32_t tlb_in_use;
     int (*map_address)(struct CPUMIPSState *env, hwaddr *physical, int *prot,
-                       target_ulong address, int rw, int access_type);
+                       target_ulong address, MMUAccessType access_type);
     void (*helper_tlbwi)(struct CPUMIPSState *env, uintptr_t retpc);
     void (*helper_tlbwr)(struct CPUMIPSState *env, uintptr_t retpc);
     void (*helper_tlbp)(struct CPUMIPSState *env);
@@ -146,11 +146,11 @@ struct CPUMIPSTLBContext {
 };
 
 int no_mmu_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
-                       target_ulong address, int rw, int access_type);
+                       target_ulong address, MMUAccessType access_type);
 int fixed_mmu_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
-                          target_ulong address, int rw, int access_type);
+                          target_ulong address, MMUAccessType access_type);
 int r4k_map_address(CPUMIPSState *env, hwaddr *physical, int *prot,
-                    target_ulong address, int rw, int access_type);
+                    target_ulong address, MMUAccessType access_type);
 void r4k_helper_tlbwi(CPUMIPSState *env, uintptr_t retpc);
 void r4k_helper_tlbwr(CPUMIPSState *env, uintptr_t retpc);
 void r4k_helper_tlbp(CPUMIPSState *env);
@@ -167,7 +167,7 @@ void mips_cpu_do_transaction_failed(CPUState *cs, hwaddr physaddr,
                                     int mmu_idx, MemTxAttrs attrs,
                                     MemTxResult response, uintptr_t retaddr);
 hwaddr cpu_mips_translate_address(CPUMIPSState *env, target_ulong address,
-                                  int rw);
+                                  MMUAccessType access_type);
 #endif
 
 #define cpu_signal_handler cpu_mips_signal_handler
@@ -561,8 +561,8 @@ void r4k_dump_tlb(CPUMIPSState *env, int idx);
 #endif
 void do_hexdump(GString *strbuf, uint8_t* buffer, target_ulong length,
                 target_ulong vaddr);
-hwaddr do_translate_address(CPUMIPSState *env, target_ulong address, int rw,
-                            uintptr_t retaddr);
+hwaddr do_translate_address(CPUMIPSState *env, target_ulong address,
+                            MMUAccessType access_type, uintptr_t retaddr);
 
 #ifdef TARGET_CHERI
 #include "cheri-helper-utils.h"
