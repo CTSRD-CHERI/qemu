@@ -25,7 +25,7 @@
 #include "exec/log_instr.h"
 #include "tcg/tcg-op.h"
 #include "trace.h"
-#include "hw/semihosting/common-semi.h"
+#include "semihosting/common-semi.h"
 #include "disas/disas.h"
 #include "helper_utils.h"
 #ifdef TARGET_CHERI

@@ -36,7 +36,7 @@
 #include "exec/gdbstub.h"
 #include "hw/qdev-properties.h"
 #include "hw/qdev-clock.h"
-#include "hw/semihosting/semihost.h"
+#include "semihosting/semihost.h"
 #include "qapi/qapi-commands-machine-target.h"
 #include "fpu_helper.h"
 
