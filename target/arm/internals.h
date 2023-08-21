@@ -991,6 +991,9 @@ static inline uint32_t aarch32_cpsr_valid_mask(uint64_t features,
     if (isar_feature_aa32_dit(id)) {
         valid |= CPSR_DIT;
     }
+    if (isar_feature_aa32_ssbs(id)) {
+        valid |= CPSR_SSBS;
+    }
 
     return valid;
 }
@@ -1016,6 +1019,9 @@ static inline uint32_t aarch64_pstate_valid_mask(const ARMISARegisters *id)
     }
     if (isar_feature_aa64_dit(id)) {
         valid |= PSTATE_DIT;
+    }
+    if (isar_feature_aa64_ssbs(id)) {
+        valid |= PSTATE_SSBS;
     }
     if (isar_feature_aa64_mte(id)) {
         valid |= PSTATE_TCO;
