@@ -449,6 +449,23 @@ static void mips_cpu_synchronize_from_tb(CPUState *cs,
      */
     env->lladdr = 1;
 }
+
+# ifndef CONFIG_USER_ONLY
+static bool mips_io_recompile_replay_branch(CPUState *cs,
+                                            const TranslationBlock *tb)
+{
+    MIPSCPU *cpu = MIPS_CPU(cs);
+    CPUMIPSState *env = &cpu->env;
+
+    if ((env->hflags & MIPS_HFLAG_BMASK) != 0 && PC_ADDR(env) != tb->pc) {
+        mips_update_pc(env, PC_ADDR(env) - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4),
+                       /*can_be_unrepresentable=*/false);
+        env->hflags &= ~MIPS_HFLAG_BMASK;
+        return true;
+    }
+    return false;
+}
+# endif /* !CONFIG_USER_ONLY */
 #endif /* CONFIG_TCG */
 
 static bool mips_cpu_has_work(CPUState *cs)
@@ -972,6 +989,7 @@ static struct TCGCPUOps mips_tcg_ops = {
     .do_interrupt = mips_cpu_do_interrupt,
     .do_transaction_failed = mips_cpu_do_transaction_failed,
     .do_unaligned_access = mips_cpu_do_unaligned_access,
+    .io_recompile_replay_branch = mips_io_recompile_replay_branch,
 #endif /* !CONFIG_USER_ONLY */
 };
 #endif /* CONFIG_TCG */
@@ -998,6 +1016,11 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
     cc->vmsd = &vmstate_mips_cpu;
 #endif
     cc->disas_set_info = mips_cpu_disas_set_info;
+#if defined(TARGET_MIPS64)
+    cc->gdb_core_xml_file = "mips64-cpu.xml";
+#else
+    cc->gdb_core_xml_file = "mips-cpu.xml";
+#endif
     cc->gdb_num_core_regs = 73;
     cc->gdb_stop_before_watchpoint = true;
 #ifdef CONFIG_TCG

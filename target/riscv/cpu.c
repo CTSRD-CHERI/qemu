@@ -581,7 +581,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env, bool was_trap) {
             cpu_reset(cs);
             // FIXME: Hopefully this resets RAM?
             qemu_system_reset(SHUTDOWN_CAUSE_HOST_SIGNAL);
-            cs->cflags_next_tb |= CF_NOCACHE;
+            cs->cflags_next_tb |= 1;
             hwaddr system_ram_addr = cpu_get_phys_page_debug(cs, PC_ADDR(env));
             hwaddr system_ram_size = RVFI_DII_RAM_SIZE;
             void *ram_ptr = cpu_physical_memory_map(
@@ -667,7 +667,7 @@ void rvfi_dii_communicate(CPUState* cs, CPURISCVState* env, bool was_trap) {
             env->rvfi_dii_trace.PC.rvfi_pc_wdata = -1; // Will be set after single-step trap
             // Clear the EXCP_DEBUG flag to avoid dropping into GDB
             cs->exception_index = EXCP_NONE; // EXCP_INTERRUPT;
-            cs->cflags_next_tb |= CF_NOCACHE;
+            cs->cflags_next_tb |= 1;
             // Continue execution at env->pc
             cpu_loop_exit_noexc(cs); // noreturn -> jumps back to TCG
         }

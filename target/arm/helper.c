@@ -10195,6 +10195,7 @@ static int aarch64_regnum(CPUARMState *env, int aarch32_reg)
     }
 }
 
+#ifndef TARGET_CHERI
 static uint32_t cpsr_read_for_spsr_elx(CPUARMState *env)
 {
     uint32_t ret = cpsr_read(env);
@@ -10209,6 +10210,7 @@ static uint32_t cpsr_read_for_spsr_elx(CPUARMState *env)
 
     return ret;
 }
+#endif
 
 /* Handle exception entry to a target EL which is using AArch64 */
 static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
