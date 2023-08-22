@@ -15167,7 +15167,7 @@ static inline void gen_movep(DisasContext *ctx, int enc_dest, int enc_rt,
     gen_load_gpr(cpu_gpr[rd], rs_rt_enc[enc_rs]);
     gen_log_instr_gpr_update(ctx, rd);
     gen_load_gpr(cpu_gpr[re], rs_rt_enc[enc_rt]);
-  gen_log_instr_gpr_update(ctx, re);
+    gen_log_instr_gpr_update(ctx, re);
 }
 
 static void gen_pool16c_r6_insn(DisasContext *ctx)
