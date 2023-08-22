@@ -5578,6 +5578,7 @@ static void gen_compute_branch(DisasContext *ctx, uint32_t opc,
              */
             MIPS_INVAL("jump hint");
             gen_reserved_instruction(ctx);
+            SET_BTARGET_CHECKED(true); // exception raised -> no need to check
             goto out;
         }
         gen_load_gpr(btarget, rs);
