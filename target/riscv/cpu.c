@@ -710,6 +710,7 @@ static void riscv_cpu_reset(DeviceState *dev)
     env->priv = PRV_M;
     env->mstatus &= ~(MSTATUS_MIE | MSTATUS_MPRV);
     env->mcause = 0;
+    env->two_stage_lookup = false;
 #if defined(TARGET_RISCV64)
     target_ulong mxl = get_field(env->misa, MISA_MXL);
     env->mstatus = set_field(env->mstatus, MSTATUS64_SXL, mxl);
