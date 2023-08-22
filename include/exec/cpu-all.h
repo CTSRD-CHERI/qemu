@@ -268,8 +268,8 @@ extern intptr_t qemu_host_page_mask;
 #define PAGE_RESERVED  0x0100
 #endif
 /* Target-specific bits that will be used via page_get_flags().  */
-#define PAGE_TARGET_1  0x0080
-#define PAGE_TARGET_2  0x0200
+#define PAGE_TARGET_1  0x0200
+#define PAGE_TARGET_2  0x0400
 #ifdef TARGET_CHERI
 #define PAGE_LC_CLEAR	0x8000
 #define PAGE_LC_TRAP	0x4000
