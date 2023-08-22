@@ -36,7 +36,6 @@
 #include "sysemu/replay.h"
 #include "exec/translate-all.h"
 #include "exec/log.h"
-#include "exec/log_instr.h"
 
 uintptr_t qemu_host_page_size;
 intptr_t qemu_host_page_mask;
