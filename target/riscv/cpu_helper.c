@@ -401,7 +401,8 @@ static int get_physical_address_pmp(CPURISCVState *env, int *prot,
         return TRANSLATE_SUCCESS;
     }
 
-    if (!pmp_hart_has_privs(env, addr, size, 1 << access_type, &pmp_priv,
+    if (!pmp_hart_has_privs(env, addr, size,
+                            access_type_to_pmp_priv(access_type), &pmp_priv,
                             mode)) {
         *prot = 0;
         return TRANSLATE_PMP_FAIL;
