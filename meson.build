@@ -1580,8 +1580,12 @@ subdir('replay')
 subdir('hw')
 subdir('accel')
 subdir('plugins')
-subdir('bsd-user')
-subdir('linux-user')
+if 'CONFIG_BSD_USER' in config_target
+  subdir('bsd-user')
+endif
+if 'CONFIG_LINUX_USER' in config_target
+  subdir('linux-user')
+endif
 
 bsd_user_ss.add(files('gdbstub.c', 'thunk.c'))
 specific_ss.add_all(when: 'CONFIG_BSD_USER', if_true: bsd_user_ss)
@@ -1783,7 +1787,7 @@ foreach target : target_dirs
     if 'CONFIG_LINUX_USER' in config_target
       base_dir = 'linux-user'
       target_inc += include_directories('linux-user/host/' / config_host['ARCH'])
-    else
+    elif 'CONFIG_BSD_USER' in config_target
       base_dir = 'bsd-user'
       target_inc += include_directories(
         base_dir / 'host' / config_host['ARCH'],
