@@ -33,11 +33,11 @@
  * SUCH DAMAGE.
  */
 #include "cheri_tagmem.h"
-#include "cheri_usermem.h"
 #include "exec/exec-all.h"
 #include "exec/log.h"
 #include "exec/ramblock.h"
 #ifdef CONFIG_USER_ONLY
+#include "cheri_usermem.h"
 #include "qemu.h"
 #else
 #include "hw/boards.h"
