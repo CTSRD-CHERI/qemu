@@ -355,12 +355,11 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 
 static void riscv_cpu_set_pc(CPUState *cs, vaddr value)
 {
-#ifdef TARGET_CHERI
-    // FIXME: does this set addr or offset?
-    assert(false && "Not implemented yet");
-#else
     RISCVCPU *cpu = RISCV_CPU(cs);
     CPURISCVState *env = &cpu->env;
+#ifdef TARGET_CHERI
+    cheri_update_pcc(&env->PCC, value, /*can_be_unrepresentable=*/true);
+#else
     env->pc = value;
 #endif
 }
