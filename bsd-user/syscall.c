@@ -32,6 +32,7 @@
 
 #include "qemu.h"
 #include "qemu-common.h"
+#include "qemu/timer.h"
 #include "user/syscall-trace.h"
 
 #define target_to_host_bitmask(x, tbl) (x)
@@ -281,6 +282,7 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
 #else
     static abi_long retreg;
 #endif
+    uint64_t timestamp;
     abi_syscallret_t retval;
 
     assert(retvalp != NULL);
@@ -301,8 +303,10 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
     record_syscall_start(cpu, sa->code, arg1, arg2, arg3, arg4, arg5, arg6, 0,
         0);
 
-    if(do_strace)
+    if(do_strace) {
         print_freebsd_syscall(sa->code, arg1, arg2, arg3, arg4, arg5, arg6);
+        timestamp = get_clock();
+    }
 
     switch (sa->code) {
         /*
@@ -1931,8 +1935,9 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
 #ifdef DEBUG
     gemu_log(" = %ld\n", ret);
 #endif
-    if (do_strace)
-        print_freebsd_syscall_ret(sa->code, ret);
+    if (do_strace) {
+        print_freebsd_syscall_ret(sa->code, ret, get_clock() - timestamp);
+    }
 
     record_syscall_return(cpu, sa->code, ret);
     *retvalp = retval;

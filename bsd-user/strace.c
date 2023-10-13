@@ -136,13 +136,14 @@ static void print_sysarch(const struct syscallname *name, abi_long arg1,
  * Variants for the return value output function
  */
 
-static void print_syscall_ret_addr(const struct syscallname *name, abi_long ret)
+static void print_syscall_ret_addr(const struct syscallname *name, abi_long ret,
+                                   uint64_t timespent)
 {
-    if (ret == -1) {
-        gemu_log(" = -1 errno=%d (%s)\n", errno, strerror(errno));
-    } else {
-        gemu_log(" = 0x" TARGET_ABI_FMT_lx "\n", ret);
-    }
+    if (ret == -1)
+        gemu_log(" = -1 errno=%d (%s)", errno, strerror(errno));
+    else
+        gemu_log(" = 0x" TARGET_ABI_FMT_lx, ret);
+    gemu_log(" <%lu.%lu>\n", timespent / 1000, timespent % 1000);
 }
 
 #if 0 /* currently unused */
@@ -207,29 +208,31 @@ static void print_syscall(int num, const struct syscallname *scnames,
             return;
         }
     }
-    gemu_log("Unknown syscall %d\n", num);
+    gemu_log("Unknown syscall %d", num);
 }
 
 static void print_syscall_ret(int num, abi_long ret,
-        const struct syscallname *scnames, unsigned int nscnames)
+        const struct syscallname *scnames, unsigned int nscnames,
+        uint64_t timespent)
 {
     unsigned int i;
 
     for (i = 0; i < nscnames; i++) {
         if (scnames[i].nr == num) {
             if (scnames[i].result != NULL) {
-                scnames[i].result(&scnames[i], ret);
-            } else {
-                if (ret < 0) {
-                    gemu_log(" = -1 errno=" TARGET_ABI_FMT_ld " (%s)\n", -ret,
-                             strerror(-ret));
-                } else {
-                    gemu_log(" = " TARGET_ABI_FMT_ld "\n", ret);
-                }
+                scnames[i].result(&scnames[i], ret, timespent);
+                return;
             }
             break;
         }
     }
+    if (ret < 0) {
+        gemu_log(" = -1 errno=" TARGET_ABI_FMT_ld " (%s)", -ret,
+                 strerror(-ret));
+    } else {
+        gemu_log(" = " TARGET_ABI_FMT_ld, ret);
+    }
+    gemu_log(" <%lu.%lu>\n", timespent / 1000, timespent % 1000);
 }
 
 /*
