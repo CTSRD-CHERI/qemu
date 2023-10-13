@@ -256,7 +256,12 @@ void
 print_freebsd_syscall(int num,
                       abi_long arg1, abi_long arg2, abi_long arg3,
                       abi_long arg4, abi_long arg5, abi_long arg6);
-void print_freebsd_syscall_ret(int num, abi_long ret);
+void print_freebsd_syscall_ret(int num, abi_long ret, uint64_t timespent);
+#if 0
+/*
+ * XXXKW: do_{netbsd,openbsd}_syscall must be adapted to the current system
+ * call interface to work with the current BSD user mode.
+ */
 void
 print_netbsd_syscall(int num,
                      abi_long arg1, abi_long arg2, abi_long arg3,
@@ -267,6 +272,7 @@ print_openbsd_syscall(int num,
                       abi_long arg1, abi_long arg2, abi_long arg3,
                       abi_long arg4, abi_long arg5, abi_long arg6);
 void print_openbsd_syscall_ret(int num, abi_long ret);
+#endif
 /**
  * print_taken_signal:
  * @target_signum: target signal being taken

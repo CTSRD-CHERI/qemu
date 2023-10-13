@@ -160,12 +160,17 @@ print_syscall_ret_raw(struct syscallname *name, abi_long ret)
 static const struct syscallname freebsd_scnames[] = {
 #include "freebsd/strace.list"
 };
+#if 0
+/*
+ * XXXKW: See bsd-user/qemu.h.
+ */
 static const struct syscallname netbsd_scnames[] = {
 #include "netbsd/strace.list"
 };
 static const struct syscallname openbsd_scnames[] = {
 #include "openbsd/strace.list"
 };
+#endif
 
 static void print_syscall(int num, const struct syscallname *scnames,
         unsigned int nscnames, abi_long arg1, abi_long arg2, abi_long arg3,
@@ -238,11 +243,17 @@ void print_freebsd_syscall(int num, abi_long arg1, abi_long arg2, abi_long arg3,
             arg3, arg4, arg5, arg6);
 }
 
-void print_freebsd_syscall_ret(int num, abi_long ret)
+void print_freebsd_syscall_ret(int num, abi_long ret, uint64_t timespent)
 {
 
-    print_syscall_ret(num, ret, freebsd_scnames, ARRAY_SIZE(freebsd_scnames));
+    print_syscall_ret(num, ret, freebsd_scnames, ARRAY_SIZE(freebsd_scnames),
+                      timespent);
 }
+
+#if 0
+/*
+ * XXXKW: See bsd-user/qemu.h.
+ */
 
 void print_netbsd_syscall(int num, abi_long arg1, abi_long arg2, abi_long arg3,
         abi_long arg4, abi_long arg5, abi_long arg6)
@@ -271,6 +282,7 @@ void print_openbsd_syscall_ret(int num, abi_long ret)
 
     print_syscall_ret(num, ret, openbsd_scnames, ARRAY_SIZE(openbsd_scnames));
 }
+#endif
 
 static void
 print_signal(abi_ulong arg, int last)
