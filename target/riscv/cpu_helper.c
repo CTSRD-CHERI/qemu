@@ -1037,7 +1037,7 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
 #ifndef CONFIG_USER_ONLY
     vaddr im_address;
     hwaddr pa = 0;
-    int prot, prot2, prot_pmp;
+    int prot, prot2, prot_pmp, prot_lc_preserve, prot_sc_preserve;
     bool pmp_violation = false;
     bool first_stage_error = true;
     bool two_stage_lookup = false;
@@ -1045,6 +1045,14 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
     int mode = mmu_idx;
     /* default TLB page size */
     target_ulong tlb_size = TARGET_PAGE_SIZE;
+
+#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+    prot_lc_preserve = PAGE_LC_TRAP | PAGE_LC_CLEAR;
+    prot_sc_preserve = PAGE_SC_TRAP;
+#else
+    prot_lc_preserve = 0;
+    prot_sc_preserve = 0;
+#endif
 
     env->guest_phys_fault_addr = 0;
 
@@ -1099,16 +1107,12 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                     TARGET_FMT_plx " prot %d\n",
                     __func__, im_address, ret, pa, prot2);
 
-#if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
             /*
              * CHERI's load-side caveats are enforced only on the guest
              * tables at the moment.  Because we are about to AND the two
              * prot words together, *set* both caveats in prot2 so that
              * either bit will be preserved from prot.
-             */
-            prot2 |= PAGE_LC_TRAP | PAGE_LC_CLEAR;
-
-            /*
+             *
              * XXX Eventually we probably want to permit the hypervisor to be
              * able to force tag clearing or trapping.  That probably looks
              * something like this (but details are subject to change):
@@ -1128,8 +1132,7 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
              * get_physical_address already handles the store-side CHERI
              * extensions.
              */
-#endif
-            prot &= prot2;
+            prot &= prot2 | prot_lc_preserve;
 
             if (ret == TRANSLATE_SUCCESS) {
                 ret = get_physical_address_pmp(env, &prot_pmp, &tlb_size, pa,
@@ -1140,7 +1143,8 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                               " %d tlb_size " TARGET_FMT_lu "\n",
                               __func__, pa, ret, prot_pmp, tlb_size);
 
-                prot &= prot_pmp;
+                /* PMP has no CHERI permissions; preserve trap/clear */
+                prot &= prot_pmp | prot_lc_preserve | prot_sc_preserve;
             }
 
             if (ret != TRANSLATE_SUCCESS) {
@@ -1174,7 +1178,8 @@ bool riscv_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                           " %d tlb_size " TARGET_FMT_lu "\n",
                           __func__, pa, ret, prot_pmp, tlb_size);
 
-            prot &= prot_pmp;
+            /* PMP has no CHERI permissions; preserve trap/clear */
+            prot &= prot_pmp | prot_lc_preserve | prot_sc_preserve;
         }
     }
 
