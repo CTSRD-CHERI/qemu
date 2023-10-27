@@ -169,7 +169,11 @@ set_sigtramp_args(CPUARMState *regs, TaskState *ts, int sig,
     update_capreg(regs, 2, cheri_ptr((void *)(uintptr_t)(frame_addr +
         offsetof(typeof(*frame), sf_uc)), sizeof(frame->sf_uc)));
     cheri_load(&cap, &ka->_sa_handler);
-    cheri_prepare_pcc(&cap, regs);
+    if (ts->info->benchmarkabi)
+        (void)cheri_setaddress(&regs->pc.cap, cheri_getaddress(&cap));
+    else
+        regs->pc.cap = cap;
+    cheri_prepare_pcc(&regs->pc.cap, regs);
     update_capreg(regs, TARGET_REG_SP, cheri_setaddress(cheri_zerocap(),
         (uintptr_t)frame_addr));
     update_capreg(regs, TARGET_REG_LR, &ts->cheri_sigcode_cap);

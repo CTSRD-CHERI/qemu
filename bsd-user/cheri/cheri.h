@@ -60,6 +60,7 @@ cap_register_t *cheri_exec_pcc(cap_register_t *cap, struct image_info *info);
 cap_register_t *cheri_exec_stack_pointer(cap_register_t *cap, abi_ulong stack);
 void cheri_set_mmap_capability(cap_register_t *mmapcapp,
     struct image_info *info, const cap_register_t *csp);
-cap_register_t *cheri_sigcode_capability(cap_register_t *cap);
+cap_register_t *cheri_sigcode_capability(cap_register_t *cap,
+    struct image_info *info);
 
 #endif /* _CHERI_CHERI_H_ */

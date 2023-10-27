@@ -134,6 +134,7 @@ void *new_freebsd_thread_start(void *arg)
     new_freebsd_thread_info_t *info = arg;
     CPUArchState *env;
     CPUState *cpu;
+    TaskState *ts;
     long tid;
 #ifdef TARGET_CHERI
     cap_register_t cap;
@@ -144,6 +145,7 @@ void *new_freebsd_thread_start(void *arg)
     env = info->env;
     cpu = env_cpu(env);
     thread_cpu = cpu;
+    ts = (TaskState *)thread_cpu->opaque;
     (void)thr_self(&tid);
 
     /* copy out the child TID */
@@ -160,7 +162,7 @@ void *new_freebsd_thread_start(void *arg)
 
     /* Set arch dependent registers to start thread. */
     target_thread_set_upcall(env, info->param.start_func, info->param.arg,
-        info->param.stack_base, info->param.stack_size);
+        info->param.stack_base, info->param.stack_size, ts->info);
 
     /* Enable signals */
     sigprocmask(SIG_SETMASK, &info->sigmask, NULL);

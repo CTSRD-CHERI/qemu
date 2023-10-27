@@ -85,32 +85,47 @@ cheri_exec_pcc(cap_register_t *cap, struct image_info *info)
      * use interp_end.  If we are executing rtld directly we can
      * use end_addr to find the end of the rtld mapping.
      */
-    if (info->interp_end != 0) {
-        code_start = info->reloc_base;
-        code_end = info->interp_end;
+    if (info->benchmarkabi) {
+        code_start = CHERI_CAP_USER_CODE_BASE;
+        code_end = CHERI_CAP_USER_CODE_BASE + CHERI_CAP_USER_CODE_LENGTH;
+    } else if (info->interp_end != 0) {
+        code_start = CHERI_REPRESENTABLE_ALIGN_DOWN(info->reloc_base,
+            info->interp_end - info->reloc_base);
+        code_end = code_start + CHERI_REPRESENTABLE_LENGTH(info->interp_end -
+            info->reloc_base);
     } else {
-        code_start = info->start_addr;
-        code_end = info->end_addr;
+        code_start = CHERI_REPRESENTABLE_ALIGN_DOWN(info->start_addr,
+            info->end_addr - info->start_addr);
+        code_end = code_start + CHERI_REPRESENTABLE_LENGTH(info->end_addr -
+            info->start_addr);
     }
 
     /* Ensure CHERI128 representability */
     code_length = code_end - code_start;
-    code_start = CHERI_REPRESENTABLE_BASE(code_start, code_length);
-    code_length = CHERI_REPRESENTABLE_LENGTH(code_length);
-    assert(code_start + code_length >= code_end);
+    assert(code_start == CHERI_REPRESENTABLE_ALIGN_DOWN(code_start,
+        code_length));
+    assert(code_length == CHERI_REPRESENTABLE_LENGTH(code_length));
+    assert(code_start < code_end);
     return (cheri_capability_build_user_code(cap, CHERI_CAP_USER_CODE_PERMS,
         code_start, code_length, info->entry - code_start));
 }
 
 cap_register_t *
-cheri_sigcode_capability(cap_register_t *cap)
+cheri_sigcode_capability(cap_register_t *cap, struct image_info *info)
 {
     vm_offset_t sigcode_base;
 
     sigcode_base = TARGET_PS_STRINGS - TARGET_SZSIGCODE;
     assert(sigcode_base != 0);
-    return (cheri_capability_build_user_code(cap,
-        CHERI_CAP_USER_CODE_PERMS, sigcode_base, TARGET_SZSIGCODE, 0));
+    if (info->benchmarkabi) {
+        return (cheri_capability_build_user_code(cap,
+            CHERI_CAP_USER_CODE_PERMS, CHERI_CAP_USER_CODE_BASE,
+            CHERI_CAP_USER_CODE_LENGTH,
+            sigcode_base - CHERI_CAP_USER_CODE_BASE));
+    } else {
+        return (cheri_capability_build_user_code(cap,
+            CHERI_CAP_USER_CODE_PERMS, sigcode_base, TARGET_SZSIGCODE, 0));
+    }
 }
 
 cap_register_t *

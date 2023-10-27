@@ -27,7 +27,7 @@
 /* Compare to arm64/arm64/vm_machdep.c cpu_set_upcall_kse() */
 static inline void target_thread_set_upcall(CPUARMState *regs,
     abi_uintptr_t entry, abi_uintptr_t arg, abi_uintptr_t stack_base,
-    abi_ulong stack_size)
+    abi_ulong stack_size, const struct image_info *info)
 {
 #ifdef TARGET_CHERI
     cap_register_t cap;
@@ -66,7 +66,11 @@ static inline void target_thread_set_upcall(CPUARMState *regs,
 #endif
     /* pc = start function entry */
 #ifdef TARGET_CHERI
-    (void)cheri_load(&regs->pc.cap, &entry);
+    (void)cheri_load(&cap, &entry);
+    if (info->benchmarkabi)
+        (void)cheri_setaddress(&regs->pc.cap, cheri_getaddress(&cap));
+    else
+        regs->pc.cap = cap;
     cheri_prepare_pcc(&regs->pc.cap, regs);
 #else
     regs->pc = entry &  ~0x3ULL;
@@ -98,7 +102,7 @@ static inline void target_thread_init(struct target_pt_regs *regs,
 
     (void)cheri_exec_pcc(&regs->regs[30], infop);
     regs->pc = regs->regs[30];
-    (void)cheri_sigcode_capability(sigcodecapp);
+    (void)cheri_sigcode_capability(sigcodecapp, infop);
 #else
     regs->regs[0] = infop->start_stack;
     regs->pc = infop->entry &  ~0x3ULL;

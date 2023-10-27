@@ -127,8 +127,11 @@
 /* Provide macros to make it easier to work with the raw CRAM/CRRL results: */
 #define	CHERI_REPRESENTABLE_ALIGNMENT(len) \
 	(~CHERI_REPRESENTABLE_ALIGNMENT_MASK(len) + 1)
-#define	CHERI_REPRESENTABLE_BASE(base, len) \
+#define	CHERI_REPRESENTABLE_ALIGN_DOWN(base, len) \
 	((base) & CHERI_REPRESENTABLE_ALIGNMENT_MASK(len))
+
+/* Backwards compat. */
+#define	CHERI_REPRESENTABLE_BASE	CHERI_REPRESENTABLE_ALIGN_DOWN
 
 /*
  * In the current encoding sealed and unsealed capabilities have the same

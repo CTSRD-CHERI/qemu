@@ -28,7 +28,7 @@
 /* Compare with cpu_set_upcall() in riscv/riscv/vm_machdep.c */
 static inline void target_thread_set_upcall(CPURISCVState *regs,
     abi_uintptr_t entry, abi_uintptr_t arg, abi_uintptr_t stack_base,
-    abi_ulong stack_size)
+    abi_ulong stack_size, const struct image_info *info __unused)
 {
 #ifdef TARGET_CHERI
     cap_register_t cap;
@@ -81,7 +81,7 @@ static inline void target_thread_init(struct target_pt_regs *regs,
         CHERI_CAP_USER_DATA_PERMS), infop->start_stack);
 
     (void)cheri_exec_pcc(&regs->sepc, infop);
-    (void)cheri_sigcode_capability(sigcodecapp);
+    (void)cheri_sigcode_capability(sigcodecapp, infop);
 #else
     regs->sepc = infop->entry & ~0x03;
     regs->regs[10] = infop->start_stack;               /* a0 */
