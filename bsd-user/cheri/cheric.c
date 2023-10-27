@@ -37,15 +37,14 @@
 /*
  * See crap_impl() from target/cheri-common/op_helper_cheri_common.c.
  */
-target_long
+target_ulong
 __cheri_round_representable_length(target_ulong len)
 {
 #if CHERI_CAP_BITS == 128
     cap_register_t tmpcap;
-
     set_max_perms_capability(&tmpcap, 0);
     CAP_cc(setbounds)(&tmpcap, 0, len);
-    return ((target_ulong)cap_get_length_full(&tmpcap));
+    return (cap_get_length_sat(&tmpcap));
 #else
 
     return (len);

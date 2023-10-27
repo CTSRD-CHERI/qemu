@@ -38,7 +38,7 @@
 /*
  * Functions emulating CHERI compiler built-in functions.
  */
-target_long __cheri_round_representable_length(target_ulong len);
+target_ulong __cheri_round_representable_length(target_ulong len);
 
 /*
  * Programmer-friendly helpers for C code emulating CHERI-aware code.
