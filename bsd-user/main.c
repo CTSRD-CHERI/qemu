@@ -155,7 +155,7 @@ static void usage(void)
            "-h                print this help\n"
            "-g port           wait gdb connection to port\n"
            "-L path           set the ELF interpreter prefix (default=%s)\n"
-           "-interpreter path set the ELF interpreter path relative to the ELF interpreter prefix\n"
+           "-interpreter path set the default ELF interpreter path relative to the ELF interpreter prefix\n"
            "-s size           set the stack size in bytes (default=%ld)\n"
            "-cpu model        select CPU (-cpu help for list)\n"
            "-drop-ld-preload  drop LD_PRELOAD for target process\n"

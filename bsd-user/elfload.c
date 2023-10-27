@@ -69,6 +69,9 @@ size_t target_auxents_sz;   /* Size of AUX entries including AT_NULL */
 #define TARGET_NT_PROCSTAT_PSSTRINGS   15       /* Procstat ps_strings data. */
 #define TARGET_NT_PROCSTAT_AUXV        16       /* Procstat auxv data. */
 
+/* CHERI note types. */
+#define TARGET_NT_CHERI_MORELLO_PURECAP_BENCHMARK_ABI   0x80000000
+
 static int elf_core_dump(int signr, CPUArchState *env);
 static int load_elf_sections(const struct elfhdr *hdr, struct elf_phdr *phdr,
     int fd, abi_ulong rbase, abi_ulong *baddrp, abi_ulong *max_addrp);
@@ -562,6 +565,98 @@ int is_target_elf_binary(int fd)
     }
 }
 
+#if defined(TARGET_CHERI)
+static int
+parse_elf_notes(const char *buf, size_t size, const struct elfhdr *hdr,
+    struct image_info *info)
+{
+    struct elf_note note;
+    const char *src, *src_benchmarkabi;
+    uint32_t benchmarkabi;
+
+    src = buf;
+    src_benchmarkabi = NULL;
+
+    while (src + sizeof(note) <= buf + size) {
+        memcpy(&note, src, sizeof(note));
+        src += sizeof(note);
+        if (src + roundup2(note.n_namesz + note.n_descsz, 4) > buf + size) {
+            fprintf(stderr, "Truncated buffer with ELF notes\n");
+            errno = EINVAL;
+            return (-1);
+        }
+        if (strncmp((const char *) src, "CHERI", note.n_namesz) == 0) {
+            if (src_benchmarkabi == NULL && note.n_type ==
+                TARGET_NT_CHERI_MORELLO_PURECAP_BENCHMARK_ABI) {
+                src_benchmarkabi = src + roundup2(note.n_namesz, 4);
+            }
+        }
+        src += roundup2(note.n_namesz + note.n_descsz, 4);
+    }
+
+    if (src_benchmarkabi != NULL) {
+        if (hdr->e_ident[EI_DATA] == ELFDATA2MSB)
+            benchmarkabi = be32dec(src_benchmarkabi);
+        else
+            benchmarkabi = le32dec(src_benchmarkabi);
+        if (benchmarkabi != 0 && benchmarkabi != 1) {
+            fprintf(stderr, "Invalid NT_CHERI_MORELLO_PURECAP_BENCHMARK_ABI description data\n");
+            errno = EINVAL;
+            return (-1);
+        }
+        info->benchmarkabi = benchmarkabi;
+    }
+
+    return (0);
+}
+
+static int
+parse_elf_segments(const struct elfhdr *hdr, const struct elf_phdr *phdrs,
+    int fd, struct image_info *info)
+{
+    const struct elf_phdr *phdr;
+    char *buf;
+    int error;
+    unsigned int ii;
+
+    for (ii = 0, phdr = phdrs; ii < hdr->e_phnum; ii++, phdr++) {
+        error = 0;
+
+        if (phdr->p_type != PT_NOTE)
+            continue;
+
+        buf = malloc(phdr->p_filesz);
+        if (buf == NULL) {
+            return (-1);
+        }
+
+        if (lseek(fd, phdr->p_offset, SEEK_SET) < 0) {
+            error = errno;
+            goto next;
+        }
+        if (read(fd, buf, phdr->p_filesz) != phdr->p_filesz) {
+            error = errno;
+            goto next;
+        }
+
+        if (parse_elf_notes(buf, phdr->p_filesz, hdr, info) != 0) {
+            error = errno;
+            goto next;
+        }
+
+next:
+        free(buf);
+        if (error != 0) {
+            errno = error;
+            return (-1);
+        }
+    }
+
+    return (0);
+}
+#endif
+
+
 /*
  * load_elf_sections() is based on __elfN(load_sections) from
  * sys/kern/imgact_elf.c in FreeBSD.
@@ -650,6 +745,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     struct elf_phdr *elf_phdata;
     int error, retval;
     char * elf_interpreter;
+    const char *new_interp_path;
     abi_ulong baddr, elf_entry, end_addr, et_dyn_addr, interp_load_addr;
     abi_ulong reloc_func_desc, seg_size, seg_addr;
     char passed_fileno[6];
@@ -707,6 +803,15 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
     interp_ex.a_info = 0;
     reloc_func_desc = 0;
 
+#ifdef TARGET_CHERI
+    info->benchmarkabi = false;
+    error = parse_elf_segments(&elf_ex, elf_phdata, bprm->fd, info);
+    if (error != 0) {
+        perror("parse_elf_segments");
+        exit(-1);
+    }
+#endif
+
     for (i = 0; i < elf_ex.e_phnum; i++) {
         if (elf_ppnt->p_type == PT_INTERP) {
             if ( elf_interpreter != NULL )
@@ -744,9 +849,21 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
 
     /* Some simple consistency checks for the interpreter */
     if (elf_interpreter){
-        if (interp_path != NULL) {
+        if (strcmp(elf_interpreter, "/libexec/ld-elf.so.1") == 0) {
+#ifdef TARGET_CHERI
+            if (info->benchmarkabi) {
+                new_interp_path = "/libexec/ld-elf64cb.so.1";
+            } else
+#endif
+            {
+                new_interp_path = interp_path;
+            }
+        } else {
+            new_interp_path = NULL;
+        }
+        if (new_interp_path != NULL) {
             free(elf_interpreter);
-            elf_interpreter = strdup(interp_path);
+            elf_interpreter = strdup(new_interp_path);
             if (elf_interpreter == NULL) {
                 free(elf_phdata);
                 close(bprm->fd);

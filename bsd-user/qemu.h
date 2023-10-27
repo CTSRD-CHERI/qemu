@@ -89,6 +89,9 @@ struct image_info {
     abi_ulong arg_end;
     abi_ulong reloc_base;
     int       personality;
+#ifdef TARGET_CHERI
+    bool      benchmarkabi;
+#endif
 };
 
 extern abi_ulong target_auxents;   /* Where the AUX entries are in target */
