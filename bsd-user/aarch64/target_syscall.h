@@ -65,5 +65,8 @@ struct target_pt_regs {
 
 #define TARGET_HW_MACHINE       "arm64"
 #define TARGET_HW_MACHINE_ARCH  UNAME_MACHINE
+#ifdef TARGET_CHERI
+#define TARGET_HW_MACHINE_ARCH64CB  "aarch64cb"
+#endif
 
 #endif /* !__ARCH_SYSCALL_H_ */

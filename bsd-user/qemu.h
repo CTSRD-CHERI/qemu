@@ -61,6 +61,7 @@ extern enum BSDType bsd_type;
 
 #define THREAD __thread
 #define THREAD_ENV()    ((CPUArchState *)thread_cpu->env_ptr)
+#define THREAD_STATE()  ((TaskState *)thread_cpu->opaque)
 
 /* This struct is used to hold certain information about the image.
  * Basically, it replicates in user space what would be certain

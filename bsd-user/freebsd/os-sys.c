@@ -1688,6 +1688,7 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
 
         case HW_MACHINE_ARCH:
         {
+            char *machine_arch;
 #ifdef	TARGET_ARM
             /*
              * For ARM, we'll try to grab the MACHINE_ARCH from the ELF that we are
@@ -1699,19 +1700,27 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
              * If we can't find the expected ARCH tag, fallback to armv6 as a
              * sensible default.
              */
-            char *machine_arch;
             if (get_target_arch(ts, &machine_arch) == 0) {
-                holdlen = strlen(machine_arch);
-                if (holdp)
-                    strlcpy(holdp, machine_arch, oldlen);
-                free(machine_arch);
-                ret = 0;
-                goto out;
+                goto copy;
             }
 #endif
-            holdlen = sizeof(TARGET_HW_MACHINE_ARCH);
+#if defined(TARGET_HW_MACHINE_ARCH64CB)
+            if (THREAD_STATE()->info->benchmarkabi)
+                machine_arch = strdup(TARGET_HW_MACHINE_ARCH64CB);
+            else
+#endif
+                machine_arch = strdup(TARGET_HW_MACHINE_ARCH);
+#ifdef TARGET_ARM
+copy:
+#endif
+            if (machine_arch == NULL) {
+                ret = errno;
+                goto out;
+            }
+            holdlen = strlen(machine_arch);
             if (holdp)
-                strlcpy(holdp, TARGET_HW_MACHINE_ARCH, oldlen);
+                strlcpy(holdp, machine_arch, oldlen);
+            free(machine_arch);
             ret = 0;
             goto out;
         }
