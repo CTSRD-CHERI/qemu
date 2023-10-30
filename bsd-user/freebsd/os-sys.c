@@ -1689,29 +1689,29 @@ static abi_long do_freebsd_sysctl_oid(CPUArchState *env, int32_t *snamep,
         case HW_MACHINE_ARCH:
         {
 #ifdef	TARGET_ARM
-        /*
-         * For ARM, we'll try to grab the MACHINE_ARCH from the ELF that we are
-         * currently emulating. It should have a .note containing the
-         * MACHINE_ARCH that this binary has been compiled for, so we'll assume
-         * this is right and otherwise matches the jail/environment we're
-         * operating out of.
-         *
-         * If we can't find the expected ARCH tag, fallback to armv6 as a
-         * sensible default.
-         */
-        char *machine_arch;
-        if (get_target_arch(ts, &machine_arch) == 0) {
-            holdlen = strlen(machine_arch);
-            if (holdp)
-                strlcpy(holdp, machine_arch, oldlen);
-            free(machine_arch);
-            ret = 0;
-            goto out;
-        }
+            /*
+             * For ARM, we'll try to grab the MACHINE_ARCH from the ELF that we are
+             * currently emulating. It should have a .note containing the
+             * MACHINE_ARCH that this binary has been compiled for, so we'll assume
+             * this is right and otherwise matches the jail/environment we're
+             * operating out of.
+             *
+             * If we can't find the expected ARCH tag, fallback to armv6 as a
+             * sensible default.
+             */
+            char *machine_arch;
+            if (get_target_arch(ts, &machine_arch) == 0) {
+                holdlen = strlen(machine_arch);
+                if (holdp)
+                    strlcpy(holdp, machine_arch, oldlen);
+                free(machine_arch);
+                ret = 0;
+                goto out;
+            }
 #endif
-        holdlen = sizeof(TARGET_HW_MACHINE_ARCH);
-        if (holdp)
-        strlcpy(holdp, TARGET_HW_MACHINE_ARCH, oldlen);
+            holdlen = sizeof(TARGET_HW_MACHINE_ARCH);
+            if (holdp)
+                strlcpy(holdp, TARGET_HW_MACHINE_ARCH, oldlen);
             ret = 0;
             goto out;
         }
