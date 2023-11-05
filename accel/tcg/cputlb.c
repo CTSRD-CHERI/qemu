@@ -1749,7 +1749,7 @@ probe_access_inlined(CPUArchState *env, target_ulong addr, int size,
 
         /* Handle clean RAM pages.  */
         if (flags & TLB_NOTDIRTY) {
-            notdirty_write(env_cpu(env), addr, 1, iotlbentry, retaddr);
+            notdirty_write(env_cpu(env), addr, size, iotlbentry, retaddr);
         }
     }
 
