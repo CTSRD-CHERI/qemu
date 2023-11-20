@@ -773,6 +773,7 @@ typedef struct {
 #define EF_ARM_SOFT_FLOAT  0x200
 #define EF_ARM_VFP_FLOAT   0x400
 #define EF_ARM_MAVERICK_FLOAT 0x800
+#define EF_AARCH64_CHERI_PURECAP 0x00010000
 
 /* Other constants defined in the ARM ELF spec. version B-01.  */
 #define EF_ARM_SYMSARESORTED 0x04       /* NB conflicts with EF_INTERWORK */

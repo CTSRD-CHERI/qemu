@@ -22,7 +22,16 @@
 #define ELF_START_MMAP 0x80000000
 #define ELF_ET_DYN_LOAD_ADDR    0x100000
 
-#define elf_check_arch(x) ( (x) == EM_AARCH64 )
+#define ELF_MACHINE_OK(x) ((x) == (ELF_ARCH))
+
+#define ELF_IS_CHERI(hdr) (((hdr)->e_flags & EF_AARCH64_CHERI_PURECAP) != 0)
+
+#ifdef TARGET_CHERI
+#define elf_check_arch(hdr)						\
+	(ELF_MACHINE_OK((hdr)->e_machine) && ELF_IS_CHERI(hdr))
+#else
+#define elf_check_arch(hdr) ELF_MACHINE_OK((hdr)->e_machine)
+#endif
 
 #define ELF_CLASS       ELFCLASS64
 #ifdef TARGET_WORDS_BIGENDIAN

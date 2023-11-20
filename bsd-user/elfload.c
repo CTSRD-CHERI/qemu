@@ -328,7 +328,7 @@ static abi_ulong load_elf_interp(struct elfhdr * interp_elf_ex,
     bswap_ehdr(interp_elf_ex);
     /* First of all, some simple consistency checks */
     if ((interp_elf_ex->e_type != ET_EXEC && interp_elf_ex->e_type != ET_DYN) ||
-          !elf_check_arch(interp_elf_ex->e_machine)) {
+          !elf_check_arch(interp_elf_ex)) {
         return ~((abi_ulong)0UL);
     }
 
@@ -558,7 +558,7 @@ int is_target_elf_binary(int fd)
     bswap_ehdr(&elf_ex);
 
     if ((elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN) ||
-        (!elf_check_arch(elf_ex.e_machine))) {
+        (!elf_check_arch(&elf_ex))) {
         return 0;
     } else {
         return 1;
@@ -757,7 +757,7 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
 
     /* First of all, some simple consistency checks */
     if ((elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN) ||
-                                (! elf_check_arch(elf_ex.e_machine))) {
+                                (! elf_check_arch(&elf_ex))) {
             return -ENOEXEC;
     }
 

@@ -20,7 +20,7 @@
 #ifndef _TARGET_ARCH_ELF_H_
 #define _TARGET_ARCH_ELF_H_
 
-#define elf_check_arch(x) ( (x) == EM_RISCV )
+#define elf_check_arch(hdr) ( (hdr)->e_machine == EM_RISCV )
 #define ELF_START_MMAP 0x80000000
 #define ELF_ET_DYN_LOAD_ADDR    0x100000
 #define ELF_CLASS   ELFCLASS64
