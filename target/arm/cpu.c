@@ -918,7 +918,7 @@ static void aarch64_cpu_dump_cap_register(FILE *f, const char *capname,
     const cap_register_t *capreg)
 {
 
-    qemu_fprintf(f, " %8s  0x%016" PRIx64 "%016" PRIx64 "  0x%" PRIx64 " [%s%s%s%s%s,0x%" PRIx64 "-0x%" PRIx64 "]%s%s%s%s%s\n",
+    qemu_fprintf(f, " %8s  0x%016" PRIx64 "%016" PRIx64 "  0x%" PRIx64 " [%s%s%s%s%s%s,0x%" PRIx64 "-0x%" PRIx64 "]%s%s%s%s%s\n",
         capname,
         CAP_cc(compress_raw)(capreg) ^ CAP_CC(NULL_XOR_MASK),
         cap_get_cursor(capreg),
@@ -928,6 +928,7 @@ static void aarch64_cpu_dump_cap_register(FILE *f, const char *capname,
         cap_get_perms(capreg) & CAP_CC(PERM_EXECUTE) ? "x" : "",
         cap_get_perms(capreg) & CAP_CC(PERM_LOAD_CAP) ? "R" : "",
         cap_get_perms(capreg) & CAP_CC(PERM_STORE_CAP) ? "W" : "",
+        cap_get_perms(capreg) & CAP_CC(PERM_EXECUTIVE) ? "E" : "",
         cap_get_base(capreg),
         cap_get_top(capreg),
         (!capreg->cr_tag || CAP_cc(is_cap_sealed)(capreg)) ? " (" : "",
