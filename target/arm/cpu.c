@@ -976,12 +976,15 @@ static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
         ns_status = "";
     }
 #ifdef TARGET_CHERI
-    qemu_fprintf(f, " %8s  %08x %c%c%c%c %sEL%d%c\n",
+    qemu_fprintf(f, " %8s  %08x %s %c%c%c%c %sEL%d%c\n",
 #else
     qemu_fprintf(f, "%s=%08x %c%c%c%c %sEL%d%c",
 #endif
                  "PSTATE",
                  psr,
+#ifdef TARGET_CHERI
+                 psr & PSTATE_C64 ? "C64" : "A64",
+#endif
                  psr & PSTATE_N ? 'N' : '-',
                  psr & PSTATE_Z ? 'Z' : '-',
                  psr & PSTATE_C ? 'C' : '-',
