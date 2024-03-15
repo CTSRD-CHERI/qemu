@@ -1325,6 +1325,7 @@ void qemu_log_gen_printf(DisasContextBase *base, const char *qemu_format,
             case 'd':
             case 'i':
                 is_signed = true;
+                QEMU_FALLTHROUGH;
             case 'u':
             case 'x':
             case 'X':
