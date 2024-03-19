@@ -1303,7 +1303,7 @@ void qemu_log_gen_printf(DisasContextBase *base, const char *qemu_format,
          */
         char c;
         bool format = false;
-        bool is_short, is_long, is_long_long, is_signed;
+        bool is_short = false, is_long = false, is_long_long = false, is_signed = false;
 
         while ((c = *fmt++)) {
             if (!format) {
