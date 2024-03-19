@@ -45,8 +45,6 @@
 #include "qemu/log.h"
 #include "exec/log_instr.h"
 
-static inline GPCapRegs *cheri_get_gpcrs(CPUArchState *env);
-
 static inline QEMU_ALWAYS_INLINE CapRegState
 get_capreg_state(const GPCapRegs *gpcrs, unsigned reg)
 {
