@@ -58,17 +58,17 @@ DEF_HELPER_3(raise_exception_ddc_bounds, noreturn, env, tl, i32)
 
 // Two-operand capability inspection
 DEF_HELPER_FLAGS_2(cgetaddr, TCG_CALL_NO_WG, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetbase, 0, tl, env, i32)
+DEF_HELPER_2(cgetbase, tl, env, i32)
 #ifndef TARGET_AARCH64
-DEF_HELPER_FLAGS_2(cgetflags, 0, tl, env, i32)
+DEF_HELPER_2(cgetflags, tl, env, i32)
 #endif
-DEF_HELPER_FLAGS_2(cgethigh, 0, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetlen, 0, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetperm, 0, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetoffset, 0, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgetsealed, 0, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgettag, 0, tl, env, i32)
-DEF_HELPER_FLAGS_2(cgettype, 0, tl, env, i32)
+DEF_HELPER_2(cgethigh, tl, env, i32)
+DEF_HELPER_2(cgetlen, tl, env, i32)
+DEF_HELPER_2(cgetperm, tl, env, i32)
+DEF_HELPER_2(cgetoffset, tl, env, i32)
+DEF_HELPER_2(cgetsealed, tl, env, i32)
+DEF_HELPER_2(cgettag, tl, env, i32)
+DEF_HELPER_2(cgettype, tl, env, i32)
 
 // Two operands (cap cap)
 DEF_HELPER_3(ccleartag, void, env, i32, i32)
