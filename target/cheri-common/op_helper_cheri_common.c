@@ -106,7 +106,7 @@ static inline QEMU_ALWAYS_INLINE bool
 try_set_cap_cursor(CPUArchState *env, const cap_register_t *cptr,
                    int regnum_src, int regnum_dst, target_ulong new_addr,
                    bool precise_repr_check, uintptr_t retpc,
-                   struct oob_stats_info *oob_info ATTRIBUTE_UNUSED)
+                   struct oob_stats_info *oob_info)
 {
     DEFINE_RESULT_VALID;
 #ifdef DO_CHERI_STATISTICS
