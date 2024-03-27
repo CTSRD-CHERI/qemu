@@ -122,10 +122,10 @@ DEF_HELPER_4(csetflags, void, env, i32, i32, tl)
 DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)
 
 // Three operands (int cap cap)
-DEF_HELPER_FLAGS_3(csub, 0, tl, env, i32, i32)
-DEF_HELPER_FLAGS_3(ctestsubset, 0, tl, env, i32, i32)
-DEF_HELPER_FLAGS_3(cseqx, 0, tl, env, i32, i32)
-DEF_HELPER_FLAGS_3(ctoptr, 0, tl, env, i32, i32)
+DEF_HELPER_3(csub, tl, env, i32, i32)
+DEF_HELPER_3(ctestsubset, tl, env, i32, i32)
+DEF_HELPER_3(cseqx, tl, env, i32, i32)
+DEF_HELPER_3(ctoptr, tl, env, i32, i32)
 
 // Loads+Stores
 /*
