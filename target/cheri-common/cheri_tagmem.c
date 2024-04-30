@@ -348,18 +348,19 @@ typedef struct TagOffset {
     target_ulong value;
 } TagOffset;
 
-static QEMU_ALWAYS_INLINE TagOffset addr_to_tag_offset(target_ulong addr)
+static inline QEMU_ALWAYS_INLINE TagOffset addr_to_tag_offset(target_ulong addr)
 {
     return (struct TagOffset){.value = addr / CHERI_CAP_SIZE};
 }
 
-static QEMU_ALWAYS_INLINE target_ulong
+static inline QEMU_ALWAYS_INLINE target_ulong
 page_vaddr_to_tag_offset(target_ulong addr)
 {
     return (addr & ~TARGET_PAGE_MASK) / CHERI_CAP_SIZE;
 }
 
-static QEMU_ALWAYS_INLINE target_ulong tag_offset_to_addr(TagOffset offset)
+static inline QEMU_ALWAYS_INLINE target_ulong
+tag_offset_to_addr(TagOffset offset)
 {
     return offset.value * CHERI_CAP_SIZE;
 }
