@@ -91,12 +91,16 @@ def bootCheriBSDForAllArchitectures(params, String qemuConfig, boolean isDebug) 
 
 def bootCheriBSD(params, String qemuConfig, String stageSuffix, String archSuffix, String kernelABI, String cheribsdBranch="main") {
     try {
-        def extraCheribuildArgs = []
+        def defaultKernelAbi = cheribsdInfo.getDefaultKernelAbi(cheribsdBranch)
+        def extraCheribuildArgs = [
+            "--cheribsd/default-kernel-abi=${defaultKernelAbi}"
+        ]
         def compressedKernel = "artifacts-${archSuffix}/kernel.xz"
         if (kernelABI != null) {
             extraCheribuildArgs += ["--run-${archSuffix}/kernel-abi=${kernelABI}"]
-            if (archSuffix.startsWith('riscv64') && kernelABI == 'purecap') {
-                compressedKernel = "artifacts-${archSuffix}/kernel.CHERI-PURECAP-QEMU.xz"
+            if (archSuffix.startsWith('riscv64') && kernelABI != defaultKernelAbi) {
+                def kernelConfig = cheribsdInfo.getKernelConfig(archSuffix, kernelABI, cheribsdBranch)
+                compressedKernel = "artifacts-${archSuffix}/kernel.${kernelConfig}.xz"
             }
         }
         def compressedDiskImage = "artifacts-${archSuffix}/cheribsd-${archSuffix}.img.xz"
