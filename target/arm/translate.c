@@ -9107,6 +9107,15 @@ static void arm_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
     insn = arm_ldl_code(env, dc->base.pc_next, dc->sctlr_b);
     dc->insn = insn;
     dc->base.pc_next += 4;
+
+#if defined(CONFIG_TCG_LOG_INSTR)
+    if (unlikely(dcbase->log_instr_enabled)) {
+        TCGv pc = tcg_const_tl(dcbase->pc_next);
+        gen_helper_arm_log_instr(cpu_env, pc, tcg_constant_i32(insn));
+        tcg_temp_free(pc);
+    }
+#endif
+
     disas_arm_insn(dc, insn);
 
     arm_post_translate_insn(dc);

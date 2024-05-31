@@ -10410,7 +10410,7 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
     qemu_log_instr_dbg_reg(env, SPSR_NAMES[new_el], old_mode);
 #endif
 
-    qemu_log_mask(CPU_LOG_INT, "...with ELR 0x%" PRIx64 "\n",
+    qemu_log_mask(CPU_LOG_INT, "...with ELR 0x" TARGET_FMT_lx "\n",
                   get_aarch_reg_as_x(&env->elr_el[new_el]));
 
     // NZCV is preserved on exception
@@ -10473,8 +10473,8 @@ static void arm_cpu_do_interrupt_aarch64(CPUState *cs)
 
     qemu_maybe_log_instr_extra(env, "Took exception to EL%d. PSTATE: 0x%x\n",
                                new_el, pstate_read(env));
-    qemu_log_mask(CPU_LOG_INT, "...to EL%d PC 0x%" PRIx64 " PSTATE 0x%x\n",
-                  new_el, get_aarch_reg_as_x(&env->pc), pstate_read(env));
+    qemu_log_mask(CPU_LOG_INT, "...to EL%d PC 0x" TARGET_FMT_lx " PSTATE 0x%x\n",
+                  new_el, cpu_get_recent_pc(env), pstate_read(env));
 
     qemu_log_instr_mode_switch(env, arm_el_to_logging_mode(env, new_el),
                                get_aarch_reg_as_x(&env->pc));
@@ -10495,7 +10495,7 @@ static void handle_semihosting(CPUState *cs)
 
     if (is_a64(env)) {
         qemu_log_mask(CPU_LOG_INT,
-                      "...handling as semihosting call 0x%" PRIx64 "\n",
+                      "...handling as semihosting call 0x" TARGET_FMT_lx "\n",
                       arm_get_xreg(env, 0));
         arm_set_xreg(env, 0, do_common_semihosting(cs));
         increment_aarch_reg(&env->pc, 4);
@@ -14032,10 +14032,7 @@ void aarch64_sve_change_el(CPUARMState *env, int old_el,
 }
 #endif
 
-#ifdef TARGET_CHERI
-
 #ifdef CONFIG_TCG_LOG_INSTR
-
 void HELPER(arm_log_instr)(CPUARMState *env, target_ulong pc, uint32_t opcode)
 {
     if (qemu_log_instr_enabled(env)) {
@@ -14043,6 +14040,4 @@ void HELPER(arm_log_instr)(CPUARMState *env, target_ulong pc, uint32_t opcode)
         qemu_log_instr(env, pc, (char *)&opcode, sizeof(opcode));
     }
 }
-
-#endif
 #endif

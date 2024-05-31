@@ -4661,7 +4661,7 @@ static inline target_ulong cpu_get_recent_pc(CPUArchState *env)
 #ifdef TARGET_CHERI
     return env->pc.cap._cr_cursor;
 #else
-    return env->pc;
+    return is_a64(env) ? env->pc : env->regs[15];
 #endif
 }
 
