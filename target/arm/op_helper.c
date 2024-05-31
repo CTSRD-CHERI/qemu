@@ -453,6 +453,7 @@ void HELPER(set_user_reg)(CPUARMState *env, uint32_t regno, uint32_t val)
         env->usr_regs[regno - 8] = val;
     } else {
         env->regs[regno] = val;
+        qemu_log_instr_reg(env, arm32_regnames[regno], val);
     }
 }
 

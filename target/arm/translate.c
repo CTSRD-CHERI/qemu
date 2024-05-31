@@ -98,7 +98,7 @@ TCGv_i64 cpu_exclusive_val;
 
 #include "exec/gen-icount.h"
 
-static const char * const regnames[] =
+const char * const arm32_regnames[16] =
     { "r0", "r1", "r2", "r3", "r4", "r5", "r6", "r7",
       "r8", "r9", "r10", "r11", "r12", "r13", "r14", "pc" };
 
@@ -116,7 +116,7 @@ void arm_translate_init(void)
     for (i = 0; i < 16; i++) {
         cpu_R[i] = tcg_global_mem_new_i32(cpu_env,
                                           offsetof(CPUARMState, regs[i]),
-                                          regnames[i]);
+                                          arm32_regnames[i]);
     }
     cpu_CF = tcg_global_mem_new_i32(cpu_env, offsetof(CPUARMState, CF), "CF");
     cpu_NF = tcg_global_mem_new_i32(cpu_env, offsetof(CPUARMState, NF), "NF");
@@ -315,6 +315,16 @@ static void store_reg(DisasContext *s, int reg, TCGv_i32 var)
         s->base.is_jmp = DISAS_JUMP;
     }
     tcg_gen_mov_i32(cpu_R[reg], var);
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (qemu_ctx_logging_enabled(s)) {
+        TCGv_ptr name = tcg_const_ptr(arm32_regnames[reg]);
+        TCGv new_val = tcg_temp_new();
+        tcg_gen_extu_i32_tl(new_val, var);
+        gen_helper_qemu_log_instr_reg(cpu_env, name, new_val);
+        tcg_temp_free(new_val);
+        tcg_temp_free_ptr(name);
+    }
+#endif
     tcg_temp_free_i32(var);
 }
 
