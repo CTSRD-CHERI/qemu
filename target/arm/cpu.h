@@ -244,6 +244,11 @@ typedef uint64_t AARCH_REG_TYPE;
 #define N_BANK_WITH_RESTRICTED 4
 #endif
 
+extern const char * const arm32_regnames[16];
+#ifdef TARGET_AARCH64
+extern const char * const arm64_regnames[32];
+#endif
+
 typedef struct CPUARMState {
     /* Regs for current mode.  */
     uint32_t regs[16];
@@ -3574,6 +3579,7 @@ typedef CPUARMState CPUArchState;
 typedef ARMCPU ArchCPU;
 
 #include "exec/cpu-all.h"
+#include "exec/log_instr.h"
 #include "cpu_cheri.h"
 #include "cheri-lazy-capregs.h"
 
@@ -3594,11 +3600,15 @@ static inline void arm_set_xreg(CPUARMState *env, int regnum,
 #ifdef TARGET_CHERI
     update_capreg_to_intval(env, regnum, value);
 #else
+#ifdef TARGET_AARCH64
     if (is_a64(env)) {
         env->xregs[regnum] = value;
-    } else {
-        env->regs[regnum] = value;
+        qemu_log_instr_reg(env, arm64_regnames[regnum], value);
+        return;
     }
+#endif
+    env->regs[regnum] = value;
+    qemu_log_instr_reg(env, arm32_regnames[regnum], value);
 #endif
 }
 
