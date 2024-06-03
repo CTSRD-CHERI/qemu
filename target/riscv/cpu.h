@@ -200,6 +200,7 @@ struct CPURISCVState {
 
 #ifdef TARGET_CHERI
     // XXX: not implemented properly
+    cap_register_t UTIDC; // SCR 3 User thread identifier cap. (UTIDC)
     cap_register_t UTCC; // SCR 4 User trap code cap. (UTCC)
     cap_register_t UTDC; // SCR 5 User trap data cap. (UTDC)
     cap_register_t UScratchC; // SCR 6 User scratch cap. (UScratchC)
@@ -207,6 +208,7 @@ struct CPURISCVState {
 #endif
 
 #ifdef TARGET_CHERI
+    cap_register_t STIDC;     // SCR 11 Supervisor thread identifier cap. (STIDC)
     cap_register_t STCC;      // SCR 12 Supervisor trap code cap. (STCC)
     cap_register_t STDC;      // SCR 13 Supervisor trap data cap. (STDC)
     cap_register_t SScratchC; // SCR 14 Supervisor scratch cap. (SScratchC)
@@ -218,6 +220,7 @@ struct CPURISCVState {
     target_ulong scause;
 
 #ifdef TARGET_CHERI
+    cap_register_t MTIDC;     // SCR 27 Machine thread identifier cap. (MTIDC)
     cap_register_t MTCC;      // SCR 28 Machine trap code cap. (MTCC)
     cap_register_t MTDC;      // SCR 29 Machine trap data cap. (MTDC)
     cap_register_t MScratchC; // SCR 30 Machine scratch cap. (MScratchC)
