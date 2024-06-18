@@ -15304,11 +15304,8 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
 
 #if defined(CONFIG_TCG_LOG_INSTR)
     if (unlikely(s->base.log_instr_enabled)) {
-        TCGv pc = tcg_const_tl(s->base.pc_next);
-        TCGv_i32 opc = tcg_const_i32(insn);
-        gen_helper_arm_log_instr(cpu_env, pc, opc);
-        tcg_temp_free(pc);
-        tcg_temp_free_i32(opc);
+        gen_helper_arm_log_instr(cpu_env, tcg_constant_i64(s->pc_curr),
+                                 tcg_constant_i32(insn), tcg_constant_i32(4));
     }
 
 #endif

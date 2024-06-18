@@ -9120,9 +9120,8 @@ static void arm_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
 
 #if defined(CONFIG_TCG_LOG_INSTR)
     if (unlikely(dcbase->log_instr_enabled)) {
-        TCGv pc = tcg_const_tl(dc->pc_curr);
-        gen_helper_arm_log_instr(cpu_env, pc, tcg_constant_i32(insn));
-        tcg_temp_free(pc);
+        gen_helper_arm_log_instr(cpu_env, tcg_constant_i64(dc->pc_curr),
+                                 tcg_constant_i32(insn), tcg_constant_i32(4));
     }
 #endif
 
@@ -9202,6 +9201,16 @@ static void thumb_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
         dc->base.pc_next += 2;
     }
     dc->insn = insn;
+
+#if defined(CONFIG_TCG_LOG_INSTR)
+    if (unlikely(dcbase->log_instr_enabled)) {
+        /* For Thumb we have to undo the 16-bit swap above for disassembly. */
+        gen_helper_arm_log_instr(
+            cpu_env, tcg_constant_i64(dc->pc_curr),
+            tcg_constant_i32(is_16bit ? insn : rol32(insn, 16)),
+            tcg_constant_i32(is_16bit ? 2 : 4));
+    }
+#endif
 
     if (dc->condexec_mask && !thumb_insn_is_unconditional(dc, insn)) {
         uint32_t cond = dc->condexec_cond;

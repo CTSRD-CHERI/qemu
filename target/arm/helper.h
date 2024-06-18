@@ -938,7 +938,7 @@ DEF_HELPER_FLAGS_5(neon_sqrdmulh_s, TCG_CALL_NO_RWG,
 #endif
 
 #ifdef CONFIG_TCG_LOG_INSTR
-DEF_HELPER_FLAGS_3(arm_log_instr, TCG_CALL_NO_WG, void, env, tl, i32)
+DEF_HELPER_FLAGS_4(arm_log_instr, TCG_CALL_NO_WG, void, env, i64, i32, i32)
 #endif
 
 #ifdef TARGET_CHERI
