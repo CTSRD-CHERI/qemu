@@ -9110,7 +9110,7 @@ static void arm_tr_translate_insn(DisasContextBase *dcbase, CPUState *cpu)
 
 #if defined(CONFIG_TCG_LOG_INSTR)
     if (unlikely(dcbase->log_instr_enabled)) {
-        TCGv pc = tcg_const_tl(dcbase->pc_next);
+        TCGv pc = tcg_const_tl(dc->pc_curr);
         gen_helper_arm_log_instr(cpu_env, pc, tcg_constant_i32(insn));
         tcg_temp_free(pc);
     }
