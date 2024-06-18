@@ -14033,11 +14033,18 @@ void aarch64_sve_change_el(CPUARMState *env, int old_el,
 #endif
 
 #ifdef CONFIG_TCG_LOG_INSTR
-void HELPER(arm_log_instr)(CPUARMState *env, target_ulong pc, uint32_t opcode)
+void HELPER(arm_log_instr)(CPUARMState *env, uint64_t pc, uint32_t opcode,
+                           uint32_t opcode_size)
 {
     if (qemu_log_instr_enabled(env)) {
         qemu_log_instr_asid(env, cpu_get_asid(env, pc));
-        qemu_log_instr(env, pc, (char *)&opcode, sizeof(opcode));
+        if (opcode_size == 2) {
+            uint16_t opcode16 = opcode;
+            qemu_log_instr(env, pc, (char *)&opcode16, opcode_size);
+        } else {
+            tcg_debug_assert(opcode_size == 4);
+            qemu_log_instr(env, pc, (char *)&opcode, opcode_size);
+        }
     }
 }
 #endif
