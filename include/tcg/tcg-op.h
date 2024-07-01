@@ -889,9 +889,6 @@ static inline void tcg_gen_plugin_cb_end(void)
 #define tcg_gen_qemu_st_i32 tcg_gen_qemu_st_i32_with_checked_addr
 #define tcg_gen_qemu_ld_i64 tcg_gen_qemu_ld_i64_with_checked_addr
 #define tcg_gen_qemu_st_i64 tcg_gen_qemu_st_i64_with_checked_addr
-void tcg_gen_qemu_st_i32(TCGv_i32, TCGv, TCGArg, MemOp);
-void tcg_gen_qemu_ld_i64(TCGv_i64, TCGv, TCGArg, MemOp);
-void tcg_gen_qemu_st_i64(TCGv_i64, TCGv, TCGArg, MemOp);
 #define TCG_LD_HELPER(name, memop)                                             \
     static inline void tcg_gen_qemu_##name(TCGv ret, TCGv addr,                \
                                            int mem_index) {                    \
