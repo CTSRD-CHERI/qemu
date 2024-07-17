@@ -78,7 +78,8 @@ def bootCheriBSDForAllArchitectures(params, String qemuConfig, boolean isDebug) 
             addBootJobs(bootJobs, params, qemuConfig, architecture, "main")
             if (!isDebug) {
                 // For the non-ASAN build of QEMU we also boot the latest release
-                addBootJobs(bootJobs, params, qemuConfig, architecture, "releng/22.12", "-latest-release")
+                def latestRelease = cheribsdInfo.getReleasedVersions()[-1]
+                addBootJobs(bootJobs, params, qemuConfig, architecture, "releng/${latestRelease}", "-latest-release")
             }
             def targetBranch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME;
             if (targetBranch == 'dev') {
