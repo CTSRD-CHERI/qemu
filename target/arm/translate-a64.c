@@ -123,7 +123,7 @@ static inline bool get_sctlr_sa(DisasContext *ctx)
 /* Load/store exclusive handling */
 static TCGv_i64 cpu_exclusive_high;
 
-static const char *regnames[] = {
+const char * const arm64_regnames[32] = {
     "x0", "x1", "x2", "x3", "x4", "x5", "x6", "x7",
     "x8", "x9", "x10", "x11", "x12", "x13", "x14", "x15",
     "x16", "x17", "x18", "x19", "x20", "x21", "x22", "x23",
@@ -169,11 +169,11 @@ void a64_translate_init(void)
         _cpu_cursors_do_not_access_directly[i] = tcg_global_mem_new(
             cpu_env,
             offsetof(CPUARMState, gpcapregs.decompressed[i].cap._cr_cursor),
-            regnames[i]);
+            arm64_regnames[i]);
 #else
         cpu_X[i] = tcg_global_mem_new_i64(cpu_env,
                                           offsetof(CPUARMState, xregs[i]),
-                                          regnames[i]);
+                                          arm64_regnames[i]);
 #endif
     }
 
@@ -15304,11 +15304,8 @@ static void disas_a64_insn(CPUARMState *env, DisasContext *s)
 
 #if defined(CONFIG_TCG_LOG_INSTR)
     if (unlikely(s->base.log_instr_enabled)) {
-        TCGv pc = tcg_const_tl(s->base.pc_next);
-        TCGv_i32 opc = tcg_const_i32(insn);
-        gen_helper_arm_log_instr(cpu_env, pc, opc);
-        tcg_temp_free(pc);
-        tcg_temp_free_i32(opc);
+        gen_helper_arm_log_instr(cpu_env, tcg_constant_i64(s->pc_curr),
+                                 tcg_constant_i32(insn), tcg_constant_i32(4));
     }
 
 #endif

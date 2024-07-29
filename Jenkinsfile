@@ -78,7 +78,8 @@ def bootCheriBSDForAllArchitectures(params, String qemuConfig, boolean isDebug) 
             addBootJobs(bootJobs, params, qemuConfig, architecture, "main")
             if (!isDebug) {
                 // For the non-ASAN build of QEMU we also boot the latest release
-                addBootJobs(bootJobs, params, qemuConfig, architecture, "releng%252F22.12", "-latest-release")
+                def latestRelease = cheribsdInfo.getReleasedVersions()[-1]
+                addBootJobs(bootJobs, params, qemuConfig, architecture, "releng/${latestRelease}", "-latest-release")
             }
             def targetBranch = env.CHANGE_TARGET ? env.CHANGE_TARGET : env.BRANCH_NAME;
             if (targetBranch == 'dev') {
@@ -106,7 +107,8 @@ def bootCheriBSD(params, String qemuConfig, String stageSuffix, String archSuffi
         def compressedDiskImage = "artifacts-${archSuffix}/cheribsd-${archSuffix}.img.xz"
         dir (stageSuffix) {
             sh "rm -rfv artifacts-${archSuffix}/cheribsd-*.img* artifacts-${archSuffix}/kernel*"
-            copyArtifacts projectName: "CheriBSD-pipeline/${cheribsdBranch}", filter: "${compressedDiskImage}, ${compressedKernel}",
+            def jenkinsBranchName = cheribsdBranch.replaceAll('/', '%2F')
+            copyArtifacts projectName: "CheriBSD-pipeline/${jenkinsBranchName}", filter: "${compressedDiskImage}, ${compressedKernel}",
                          target: '.', fingerprintArtifacts: false, flatten: false, selector: lastSuccessful()
         }
         def testExtraArgs = [
