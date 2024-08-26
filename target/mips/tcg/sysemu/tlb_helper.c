@@ -1066,7 +1066,7 @@ refill:
          * identical to a TLBWR instruction as executed by the software refill
          * handler.
          */
-        r4k_helper_tlbwr(env);
+        r4k_helper_tlbwr(env, GETPC());
 
         env->CP0_EntryHi = tmp_entryhi;
         env->CP0_PageMask = tmp_pagemask;
