@@ -250,18 +250,6 @@ void qemu_log_instr_commit(CPUArchState *env);
 void qemu_log_instr_reg(CPUArchState *env, const char *reg_name,
                         target_ulong value);
 
-/*
- * Log integer memory load.
- */
-void qemu_log_instr_ld_int(CPUArchState *env, target_ulong addr, MemOp op,
-                           target_ulong value);
-
-/*
- * Log integer memory store.
- */
-void qemu_log_instr_st_int(CPUArchState *env, target_ulong addr, MemOp op,
-                           target_ulong value);
-
 #ifdef TARGET_CHERI
 /*
  * Log changed capability register.

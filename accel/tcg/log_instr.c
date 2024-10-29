@@ -1005,18 +1005,6 @@ static inline void qemu_log_instr_mem_int(CPUArchState *env, target_ulong addr,
     g_array_append_val(iinfo->mem, m);
 }
 
-void qemu_log_instr_ld_int(CPUArchState *env, target_ulong addr, MemOpIdx oi,
-                           target_ulong value)
-{
-    qemu_log_instr_mem_int(env, addr, LMI_LD, oi, value);
-}
-
-void qemu_log_instr_st_int(CPUArchState *env, target_ulong addr, MemOpIdx oi,
-                           target_ulong value)
-{
-    qemu_log_instr_mem_int(env, addr, LMI_ST, oi, value);
-}
-
 #ifdef TARGET_CHERI
 /*
  * Note: logging the value here may be redundant as the capability is
