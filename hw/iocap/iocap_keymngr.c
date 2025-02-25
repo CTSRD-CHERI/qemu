@@ -20,16 +20,19 @@ static MemTxResult iocap_keymngr_read(void *opaque,
 {
     IOCapKeymngrState *s = opaque;
 
-    if (size != 8 || (addr % 8) + size > 8) {
+    if (size > 8 || (addr % 8) + size > 8) {
         // Incorrect access size or
         // Crossing an 8-byte boundary access
+        qemu_log("iocap: invalid rd addr 0x%lx size 0x%x\n", addr, size);
         return MEMTX_ERROR;
     }
 
-    if (addr < 0x1000 && (addr % 16) == 0) {
-        // Read key status
-        hwaddr key_index = addr >> 4;
-        *data = s->key_en[key_index];
+    if (addr < 0x1000) {
+        if ((addr % 16) == 0) {
+            // Read key status
+            hwaddr key_index = addr >> 4;
+            *data = s->key_en[key_index];
+        }
         return MEMTX_OK;
     } else if (addr >= 0x1000 && addr + size <= 0x1020) {
         // Read performance counters
@@ -40,6 +43,7 @@ static MemTxResult iocap_keymngr_read(void *opaque,
         return MEMTX_OK;
     } else {
         // Invalid address
+        qemu_log("iocap: invalid rd addr 0x%lx size 0x%x\n", addr, size);
         return MEMTX_DECODE_ERROR;
     }
 }
@@ -48,9 +52,10 @@ static MemTxResult iocap_keymngr_write(void *opaque, hwaddr addr, uint64_t data,
 {
     IOCapKeymngrState *s = opaque;
 
-    if (size != 8 || (addr % 8) + size > 8) {
+    if (size > 8 || (addr % 8) + size > 8) {
         // Incorrect access size or
         // Crossing an 8-byte boundary access
+        qemu_log("iocap: invalid wr addr 0x%lx size 0x%x\n", addr, size);
         return MEMTX_ERROR;
     }
 
@@ -95,6 +100,7 @@ static MemTxResult iocap_keymngr_write(void *opaque, hwaddr addr, uint64_t data,
         return MEMTX_OK;
     } else {
         // Invalid address
+        qemu_log("iocap: invalid wr addr 0x%lx size 0x%x\n", addr, size);
         return MEMTX_DECODE_ERROR;
     }
 }
