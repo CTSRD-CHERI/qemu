@@ -113,7 +113,6 @@ _gen_cap_check(rmw)
 #define BOUNDS_DO_NOT_WRAP
 #define TRACE_MODIFIED_REGISTERS
 
-TCGv_i64 cpu_reg(DisasContext *s, int reg);
 #define target_get_gpr_global(ctx, reg) cpu_reg_sp(ctx, reg)
 #define target_get_gpr(ctx, t, reg)                                            \
     if (reg == NULL_CAPREG_INDEX)                                              \
