@@ -1372,6 +1372,7 @@ void qemu_log_gen_printf(DisasContextBase *base, const char *qemu_format,
                 if (t == 'c') {
                     arg_const = (uint64_t)va_arg(args, void *);
                 }
+                QEMU_FALLTHROUGH;
             case '%':
                 format = false;
                 break;
