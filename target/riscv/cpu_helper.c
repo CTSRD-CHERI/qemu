@@ -823,7 +823,7 @@ restart:
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
             case MMU_DATA_CAP_STORE:
                 updated_pte |= PTE_CD;
-                /* FALLTHROUGH */
+                QEMU_FALLTHROUGH;
 #endif
             case MMU_DATA_STORE:
                 updated_pte |= PTE_D;
