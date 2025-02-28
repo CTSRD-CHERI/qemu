@@ -123,8 +123,6 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
                     syn, target_el);
 }
 
-static inline const char *cheri_cause_str(CheriCapExcCause cause);
-
 static inline void QEMU_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
     target_ulong addr, bool instavail, uintptr_t hostpc)
