@@ -39,7 +39,6 @@
 #include "qemu/log.h"
 #include "cheri_utils.h"
 
-bool cpu_restore_state(CPUState *cpu, uintptr_t host_pc, bool will_exit);
 static inline bool pc_is_current(CPUArchState *env);
 static inline target_ulong cpu_get_recent_pc(CPUArchState *env);
 
@@ -65,13 +64,6 @@ static inline const cap_register_t *cheri_get_current_pcc(CPUArchState *env)
 {
     cheri_debug_assert(pc_is_current(env));
     return _cheri_get_pcc_unchecked(env);
-}
-
-static inline const cap_register_t *
-cheri_get_current_pcc_fetch_from_tcg(CPUArchState *env, uintptr_t retpc)
-{
-    cpu_restore_state(env_cpu(env), retpc, false);
-    return cheri_get_current_pcc(env);
 }
 
 static inline void cheri_update_pcc(cap_register_t *pcc, target_ulong pc_addr,
@@ -167,14 +159,6 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
 }
 
 #endif
-
-static inline target_ulong cpu_get_current_pc(CPUArchState *env,
-                                              uintptr_t retpc, bool will_exit)
-{
-    cpu_restore_state(env_cpu(env), retpc, will_exit);
-    cheri_debug_assert(pc_is_current(env));
-    return cpu_get_recent_pc(env);
-}
 
 static inline target_ulong cpu_get_current_pc_checked(CPUArchState *env)
 {

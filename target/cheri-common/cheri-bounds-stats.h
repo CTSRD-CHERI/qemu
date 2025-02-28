@@ -38,7 +38,6 @@
 #include "cheri_utils.h"
 #include "cheri-archspecific.h"
 #include "qemu/qemu-print.h"
-#include "cheri-archspecific.h"
 
 extern bool cheri_c2e_on_unrepresentable;
 extern bool cheri_debugger_on_unrepresentable;

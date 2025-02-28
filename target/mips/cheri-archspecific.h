@@ -40,6 +40,7 @@
 
 #include "cheri-archspecific-early.h"
 #include "cheri_defs.h"
+#include "exec/exec-all.h"
 #include "internal.h"
 
 static inline const char* cheri_cause_str(CheriCapExcCause cause);
@@ -57,11 +58,13 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
     }
 
     if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT)) {
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+        cpu_restore_state(env_cpu(env), hostpc, true);
+        qemu_log_instr_or_mask_msg(
+            env, CPU_LOG_INT,
             "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=" PRINT_CAP_FMTSTR
-            " -> host PC: 0x%jx\n", cause, cheri_cause_str(cause), reg,
-            PRINT_CAP_ARGS(cheri_get_current_pcc_fetch_from_tcg(env, hostpc)),
-            (uintmax_t)hostpc);
+            " -> host PC: 0x%jx\n",
+            cause, cheri_cause_str(cause), reg,
+            PRINT_CAP_ARGS(cheri_get_current_pcc(env)), (uintmax_t)hostpc);
     }
 #ifdef DEBUG_KERNEL_CP2_VIOLATION
     if (in_kernel_mode(env)) {
