@@ -15803,17 +15803,16 @@ static void decode_opc_special3(CPUMIPSState *env, DisasContext *ctx)
 {
     int rs, rt, rd, sa;
     uint32_t op1, op2;
-    int16_t imm;
 
     rs = (ctx->opcode >> 21) & 0x1f;
     rt = (ctx->opcode >> 16) & 0x1f;
     rd = (ctx->opcode >> 11) & 0x1f;
     sa = (ctx->opcode >> 6) & 0x1f;
-    imm = sextract32(ctx->opcode, 7, 9);
 
     op1 = MASK_SPECIAL3(ctx->opcode);
 
 #ifndef TARGET_CHERI
+    int16_t imm = sextract32(ctx->opcode, 7, 9);
     /*
      * EVA loads and stores overlap Loongson 2E instructions decoded by
      * decode_opc_special3_legacy(), so be careful to allow their decoding when
