@@ -473,10 +473,13 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
     switch (iinfo->flags & LI_FLAG_INTR_MASK) {
     case LI_FLAG_INTR_TRAP:
         entry.exception = (uint8_t)(iinfo->intr_code & 0xff);
+        break;
     case LI_FLAG_INTR_ASYNC:
         entry.exception = 0;
+        break;
     default:
         entry.exception = CTE_EXCEPTION_NONE;
+        break;
     }
 
     if (iinfo->regs->len) {
