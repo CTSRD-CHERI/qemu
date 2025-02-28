@@ -37,6 +37,7 @@
 #else
 # define cheri_debug_assert(X) ((void)0)
 #endif
+#define GET_HOST_RETPC() const uintptr_t _host_return_address = GETPC()
 
 #ifdef TARGET_CHERI
 

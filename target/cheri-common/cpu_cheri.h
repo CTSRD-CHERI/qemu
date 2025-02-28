@@ -37,12 +37,13 @@
 #pragma once
 // This file should be included from cpu.h after CPURISCVState has been defined
 #include "qemu/log.h"
-#include "cheri_utils.h"
+#include "cheri_defs.h"
 
 static inline bool pc_is_current(CPUArchState *env);
 static inline target_ulong cpu_get_recent_pc(CPUArchState *env);
 
 #ifdef TARGET_CHERI
+#include "cheri_utils.h"
 static inline const cap_register_t *_cheri_get_pcc_unchecked(CPUArchState *env);
 #include "cheri-archspecific-early.h"
 // Returns a recent PCC value. This means that the cursor field may be out of

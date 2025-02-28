@@ -62,8 +62,6 @@
 #define PRINT_CAP_FMTSTR PRINT_CAP_FMTSTR_L1 " " PRINT_CAP_FMTSTR_L2
 #define PRINT_CAP_ARGS(cr) PRINT_CAP_ARGS_L1(cr), PRINT_CAP_ARGS_L2(cr)
 
-#define GET_HOST_RETPC() const uintptr_t _host_return_address = GETPC()
-
 #ifdef TARGET_CHERI
 
 static inline target_ulong cap_get_cursor(const cap_register_t *c)
