@@ -3013,7 +3013,7 @@ static void tcg_gen_qemu_st_i32_with_checked_addr_cond_invalidate(
     gen_rvfi_dii_set_mem_data_i32(w, addr, val, memop);
     plugin_gen_mem_callbacks(addr, oi, QEMU_PLUGIN_MEM_W);
 #if defined(TARGET_CHERI) || defined(CONFIG_TCG_LOG_INSTR)
-    TCGv_i32 tcoi = tcg_const_i32(oi);
+    TCGv_i32 tcoi = tcg_const_i32(make_memop_idx(memop, idx));
 #if defined(CONFIG_TCG_LOG_INSTR)
     if (tcg_ctx_logging_enabled) {
         gen_helper_qemu_log_instr_store32(cpu_env, addr, val, tcoi);
