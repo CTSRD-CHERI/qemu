@@ -162,6 +162,7 @@ static inline bool gen_cheri_addr_op_tcgval(DisasContext *ctx, int cd,
         break;
     case OP_ALIGN_UP:
         tcg_gen_add_i64(result, result, val);
+        QEMU_FALLTHROUGH;
     case OP_ALIGN_DOWN:
         tcg_gen_andc_i64(result, result, val);
         break;
