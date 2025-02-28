@@ -899,7 +899,7 @@ def parse_generic(lineno, parent_pat, name, toks):
             continue
 
         # '?Foo' and '?!Foo' give a pattern a dynamic predicate.
-        if re.fullmatch('\?!?' + re_C_ident, t):
+        if re.fullmatch(r'\?!?' + re_C_ident, t):
             tt = t[1:]
             preds.append(tt)
             continue
