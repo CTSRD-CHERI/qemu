@@ -200,12 +200,15 @@ static void arm_trickbox_write(void *opaque, hwaddr addr, uint64_t val,
 #define HANDLE_WRITE(name, resetv, readmask, writemask, writefn, ...)          \
     CASE_HANDLE(name)                                                          \
     __VA_ARGS__                                                                \
-    old = tb->name;                                                            \
-    tb->name = (tb->name & ~writemask) | (val & writemask);                    \
-    if (writefn) {                                                             \
-        ((write_helper_fn *)writefn)(tb, addr, &tb->name, old);                \
-    }                                                                          \
-    break;                                                                     \
+    {                                                                          \
+        old = tb->name;                                                        \
+        tb->name = (tb->name & ~writemask) | (val & writemask);                \
+        write_helper_fn *write_handler = writefn;                              \
+        if (write_handler) {                                                   \
+            write_handler(tb, addr, &tb->name, old);                           \
+        }                                                                      \
+        break;                                                                 \
+    }
 
     REGISTER_LIST(HANDLE_WRITE, CASE_HANDLE)
 
