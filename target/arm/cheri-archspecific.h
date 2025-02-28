@@ -21,6 +21,7 @@
 
 #define CAP_TAG_GET_MANY_SHFT 2
 
+#include "exec/exec-all.h"
 #include "internals.h"
 
 typedef enum CheriCapExc {
