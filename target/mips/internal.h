@@ -94,6 +94,7 @@ extern const int mips_defs_number;
 
 int mips_gdb_get_cheri_reg(CPUMIPSState *env, GByteArray *buf, int n);
 int mips_gdb_set_cheri_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
+static inline bool cheri_have_access_sysregs(CPUArchState *env);
 #endif
 int mips_gdb_get_sys_reg(CPUMIPSState *env, GByteArray *buf, int n);
 int mips_gdb_set_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
@@ -318,15 +319,12 @@ static inline int mips_vp_active(CPUMIPSState *env)
     return 1;
 }
 
-static inline bool cheri_have_access_sysregs(CPUArchState *env);
-
 static inline bool can_access_cp0(CPUMIPSState* env) {
     if (((env->CP0_Status & (1 << CP0St_CU0)) &&
         !(env->insn_flags & ISA_MIPS_R6)) ||
         !(env->hflags & MIPS_HFLAG_KSU)) {
 #ifdef TARGET_CHERI
         // For CHERI we need to check PCC.perms before enabling access to cp0 features.
-        // XXX: can't use cheri_have_access_sysregs() here due to cyclic deps
         if (!cheri_have_access_sysregs(env)) {
             /* qemu_log_mask(CPU_LOG_INSTR, "Kernel mode but no ASR!\n"); */
             return false;
