@@ -75,7 +75,6 @@ static void qemu_logfile_free(QemuLogFile *logfile)
 
 static bool log_uses_own_buffers;
 
-__attribute__((weak)) int qemu_log_instr_global_switch(int log_flags);
 __attribute__((weak)) int qemu_log_instr_global_switch(int log_flags)
 {
     /* Real implementation in accel/tcg/log_instr.c. */
