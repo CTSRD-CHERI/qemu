@@ -36,6 +36,7 @@
 #include "cheri-translate-utils-base.h"
 #include "cheri-lazy-capregs-types.h"
 #include "tcg-target.h"
+#include "cheri-archspecific-translate.h"
 #include "exec/log_instr.h"
 
 #ifdef TARGET_CHERI
