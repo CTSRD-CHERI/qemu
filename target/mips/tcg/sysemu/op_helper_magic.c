@@ -665,6 +665,7 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
                         lookup_symbol(PC_ADDR(env)), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
             }
         }
+        break;
     }
     case 0xfe:
     case 0xff:
