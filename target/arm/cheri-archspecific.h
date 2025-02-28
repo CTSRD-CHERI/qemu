@@ -85,9 +85,6 @@ static inline ARMFaultType cheri_cause_to_arm_fault(CheriCapExcCause cause)
     }
 }
 
-void QEMU_NORETURN raise_exception(CPUARMState *env, uint32_t excp,
-                                   uint32_t syndrome, uint32_t target_el);
-
 static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
     target_ulong addr, bool instavail, uintptr_t hostpc, bool instruction_fetch,
