@@ -133,8 +133,9 @@ static inline bool cap_otype_is_reserved(target_ulong otype)
 {
     cheri_debug_assert(otype <= CAP_MAX_REPRESENTABLE_OTYPE &&
                        "Should only be called for in-range otypes!");
-    return otype >= CAP_CC(MIN_RESERVED_OTYPE) &&
-           otype <= CAP_CC(MAX_RESERVED_OTYPE);
+    /* Silence -Wtype-limits by using an intermediate variable. */
+    target_ulong min = CAP_CC(MIN_RESERVED_OTYPE);
+    return otype >= min && otype <= CAP_CC(MAX_RESERVED_OTYPE);
 }
 
 static inline target_ulong cap_get_otype_unsigned(const cap_register_t *c)
