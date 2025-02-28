@@ -38,9 +38,7 @@
 #include "qemu/qemu-print.h"
 #include "fpu_helper.h"
 #include "translate.h"
-#ifdef TARGET_CHERI
-#include "cheri-helper-utils.h"
-#endif
+#include "cheri-translate-utils.h"
 
 
 /*
@@ -1559,7 +1557,6 @@ static inline void gen_save_pc(target_ulong pc)
     tcg_gen_movi_tl(_pc_is_current, 1); // PC has been updated.
 #endif
 }
-#include "cheri-translate-utils.h"
 
 static inline void save_cpu_state(DisasContext *ctx, int do_save_pc)
 {
