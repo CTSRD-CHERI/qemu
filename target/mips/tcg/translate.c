@@ -1615,12 +1615,12 @@ void generate_exception_err(DisasContext *ctx, MipsExcp excp, int err)
     ctx->base.is_jmp = DISAS_NORETURN;
 }
 
-void generate_exception(DisasContext *ctx, int excp)
+void generate_exception(DisasContext *ctx, MipsExcp excp)
 {
     gen_helper_raise_exception(cpu_env, tcg_constant_i32(excp));
 }
 
-void generate_exception_end(DisasContext *ctx, int excp)
+void generate_exception_end(DisasContext *ctx, MipsExcp excp)
 {
     generate_exception_err(ctx, excp, 0);
 }
