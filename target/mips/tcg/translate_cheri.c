@@ -1219,6 +1219,8 @@ static void gen_cp2 (DisasContext *ctx, uint32_t opc, int r16, int r11, int r6)
         case OPC_CCSEAL_NI: /* 0x1f */
             check_cop2x(ctx);
             generate_ccseal(r16, r11, r6);
+            opn = "ccseal";
+            break;
         case OPC_CTESTSUBSET_NI: /* 0x20 */
             check_cop2x(ctx);
             generate_ctestsubset(ctx, r16, r11, r6);
