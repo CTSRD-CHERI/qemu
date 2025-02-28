@@ -376,17 +376,6 @@ struct CPURISCVState {
     QEMUTimer *timer; /* Internal timer */
 };
 
-// Note: the pc does not have to be up-to-date, tb start is fine.
-// We may miss a few dumps or print too many if -dfilter is on but
-// that shouldn't really matter.
-static inline target_ulong cpu_get_recent_pc(CPURISCVState *env) {
-#ifdef TARGET_CHERI
-    return env->pcc._cr_cursor;
-#else
-    return env->pc;
-#endif
-}
-
 OBJECT_DECLARE_TYPE(RISCVCPU, RISCVCPUClass,
                     RISCV_CPU)
 
@@ -696,6 +685,20 @@ static inline bool pc_is_current(CPURISCVState *env)
     return env->_pc_is_current;
 #else
     return true;
+#endif
+}
+
+/*
+ * Note: the pc does not have to be up-to-date, tb start is fine.
+ * We may miss a few dumps or print too many if -dfilter is on but
+ * that shouldn't really matter.
+ */
+static inline target_ulong cpu_get_recent_pc(CPURISCVState *env)
+{
+#ifdef TARGET_CHERI
+    return env->pcc._cr_cursor;
+#else
+    return env->pc;
 #endif
 }
 
