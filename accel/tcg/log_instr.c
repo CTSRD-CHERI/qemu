@@ -1216,7 +1216,7 @@ static void g_string_append_printf_union_args(GString *string, const char *fmt,
 
     g_string_append_printf(string, bounce_buf);
 
-#pragma clang diagnostic pop
+#pragma GCC diagnostic pop
 }
 
 static TCGv_i64 qemu_log_printf_valid_entries;
