@@ -99,7 +99,6 @@ static inline bool cheri_have_access_sysregs(CPUArchState *env);
 int mips_gdb_get_sys_reg(CPUMIPSState *env, GByteArray *buf, int n);
 int mips_gdb_set_sys_reg(CPUMIPSState *env, uint8_t *mem_buf, int n);
 
-hwaddr mips_cpu_get_phys_page_debug(CPUState *cpu, vaddr addr);
 int mips_cpu_gdb_read_register(CPUState *cpu, GByteArray *buf, int reg);
 int mips_cpu_gdb_write_register(CPUState *cpu, uint8_t *buf, int reg);
 
