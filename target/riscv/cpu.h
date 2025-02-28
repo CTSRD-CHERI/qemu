@@ -376,15 +376,6 @@ struct CPURISCVState {
     QEMUTimer *timer; /* Internal timer */
 };
 
-static inline bool pc_is_current(CPURISCVState *env)
-{
-#ifdef CONFIG_DEBUG_TCG
-    return env->_pc_is_current;
-#else
-    return true;
-#endif
-}
-
 // Note: the pc does not have to be up-to-date, tb start is fine.
 // We may miss a few dumps or print too many if -dfilter is on but
 // that shouldn't really matter.
@@ -698,6 +689,15 @@ typedef CPURISCVState CPUArchState;
 typedef RISCVCPU ArchCPU;
 #include "exec/cpu-all.h"
 #include "cpu_cheri.h"
+
+static inline bool pc_is_current(CPURISCVState *env)
+{
+#ifdef CONFIG_DEBUG_TCG
+    return env->_pc_is_current;
+#else
+    return true;
+#endif
+}
 
 FIELD(TB_FLAGS, MEM_IDX, 0, 3)
 FIELD(TB_FLAGS, VL_EQ_VLMAX, 3, 1)
