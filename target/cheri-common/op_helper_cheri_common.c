@@ -1397,15 +1397,16 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
 #error "Unhandled target long width"
 #endif
         *pesbt = ld_cap_word_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
-                CAP_NULL_XOR_MASK;
+                 CAP_MEM_XOR_MASK;
         *cursor = ld_cap_word_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
 #undef ld_cap_word_p
     } else {
         // Slow path for e.g. IO regions.
         qemu_maybe_log_instr_extra(env, "Using slow path for load from guest "
             "address " TARGET_FMT_lx "\n", vaddr);
-        *pesbt = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
-                CAP_NULL_XOR_MASK;
+        *pesbt =
+            cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
+            CAP_MEM_XOR_MASK;
         *cursor = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
     }
     int prot;
@@ -1426,7 +1427,7 @@ bool load_cap_from_memory_raw_tag_mmu_idx(
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     env->rvfi_dii_trace.MEM.rvfi_mem_addr = vaddr;
     env->rvfi_dii_trace.MEM.rvfi_mem_rdata[0] = *cursor;
-    env->rvfi_dii_trace.MEM.rvfi_mem_rdata[1] = *pesbt ^ CAP_NULL_XOR_MASK;
+    env->rvfi_dii_trace.MEM.rvfi_mem_rdata[1] = *pesbt ^ CAP_MEM_XOR_MASK;
     env->rvfi_dii_trace.MEM.rvfi_mem_rdata[2] = tag;
     env->rvfi_dii_trace.MEM.rvfi_mem_rmask = (1 << CHERI_CAP_SIZE) - 1;
     // TODO: Add one extra bit to include the tag?
@@ -1498,7 +1499,7 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
                                    int mmu_idx)
 {
     target_ulong cursor = get_capreg_cursor(env, cs);
-    target_ulong pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CAP_NULL_XOR_MASK;
+    target_ulong pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CAP_MEM_XOR_MASK;
 #ifdef CONFIG_DEBUG_TCG
     if (get_capreg_state(cheri_get_gpcrs(env), cs) == CREG_INTEGER) {
         tcg_debug_assert(pesbt_for_mem == 0 && "Integer values should have NULL PESBT");
@@ -1566,7 +1567,7 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
          * TODO(am2419): see notes on the load path on compression.
          */
         cap_register_t stored_cap;
-        const target_ulong pesbt = pesbt_for_mem ^ CAP_NULL_XOR_MASK;
+        const target_ulong pesbt = pesbt_for_mem ^ CAP_MEM_XOR_MASK;
         CAP_cc(decompress_raw)(pesbt, cursor, tag, &stored_cap);
         cheri_debug_assert(cursor == cap_get_cursor(&stored_cap));
         qemu_log_instr_st_cap(env, vaddr, &stored_cap);
@@ -1712,7 +1713,7 @@ void CHERI_HELPER_IMPL(debug_cap(CPUArchState *env, uint32_t regndx))
     printf("Debug Cap %2d: Cursor " TARGET_FMT_lx ". Pesbt " TARGET_FMT_lx
            ". Tagged %d (%d,%d). Type " TARGET_FMT_lx ". "
            "Perms " TARGET_FMT_lx "\n",
-           regndx, cap->_cr_cursor, pesbt ^ CAP_NULL_XOR_MASK,
+           regndx, cap->_cr_cursor, pesbt ^ CAP_MEM_XOR_MASK,
            stateMeansTagged || decompressedMeansTagged, state, cap->cr_tag,
            cap_get_otype_unsigned(cap), cap_get_all_perms(cap));
     if (state == CREG_FULLY_DECOMPRESSED) {

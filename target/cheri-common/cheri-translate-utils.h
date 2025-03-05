@@ -2166,7 +2166,7 @@ static inline void gen_cap_set_pesbt(DisasContext *ctx, int regnum, TCGv pesbt)
     gen_lazy_cap_set_state(ctx, regnum, CREG_UNTAGGED_CAP);
     // Again, once I bother to change where we apply this mask this should go
     // away
-    TCGv mem_pesbt = tcg_const_tl(CAP_NULL_XOR_MASK);
+    TCGv mem_pesbt = tcg_const_tl(CAP_MEM_XOR_MASK);
     tcg_gen_xor_tl(mem_pesbt, mem_pesbt, pesbt);
     tcg_gen_st_tl(mem_pesbt, cpu_env,
                   gp_register_offset(regnum) +

@@ -444,9 +444,9 @@ static inline target_ulong cap_encode_perms(target_ulong perms)
     /* This assumes permissions are single-bit checks (Morello, ISAv9) */
     cap_register_t reg;
     null_capability(&reg);
-    assert(reg.cr_pesbt == CAP_NULL_XOR_MASK);
+    assert(reg.cr_pesbt == CAP_MEM_XOR_MASK);
     cap_set_perms(&reg, perms);
-    return reg.cr_pesbt ^ CAP_NULL_XOR_MASK;
+    return reg.cr_pesbt ^ CAP_MEM_XOR_MASK;
 }
 
 #endif /* TARGET_CHERI */

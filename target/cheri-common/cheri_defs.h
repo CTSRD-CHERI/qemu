@@ -123,7 +123,7 @@ CHERI_DECLARE_ALIGNED_CC_CAP_T(128m)
 #define CAP_MAX_TOP CAP_CC(MAX_TOP)
 
 #define CAP_NULL_PESBT CAP_CC(NULL_PESBT)
-#define CAP_NULL_XOR_MASK CAP_CC(NULL_XOR_MASK)
+#define CAP_MEM_XOR_MASK CAP_CC(MEM_XOR_MASK)
 
 typedef CAP_cc(cap_t) cap_register_t;
 typedef CAP_cc(offset_t) cap_offset_t;

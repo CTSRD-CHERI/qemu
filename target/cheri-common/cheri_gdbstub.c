@@ -72,7 +72,7 @@ int gdb_get_general_purpose_capreg(GByteArray *buf, CPUArchState *env,
 {
     // No need to decompress:
     target_ulong pesbt_for_mem =
-        get_capreg_pesbt(env, regnum) ^ CAP_NULL_XOR_MASK;
+        get_capreg_pesbt(env, regnum) ^ CAP_MEM_XOR_MASK;
     append_tag(buf, get_capreg_tag(env, regnum));
 #if CHERI_MEM_OFFSET_METADATA == 0
     append(buf, pesbt_for_mem);
