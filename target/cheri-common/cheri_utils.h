@@ -438,4 +438,17 @@ static inline void cap_increment_offset(cap_register_t *cap, uint64_t offset)
     return cap_set_cursor(cap, new_addr);
 }
 
+/** Encode the permissions for the in-memory capability representation. */
+static inline target_ulong cap_encode_perms(target_ulong perms)
+{
+    /* This assumes permissions are single-bit checks (Morello, ISAv9) */
+    cap_register_t reg;
+    null_capability(&reg);
+    assert(reg.cr_pesbt == CAP_NULL_XOR_MASK);
+    cap_set_perms(&reg, perms);
+    assert((reg.cr_pesbt ^ CAP_NULL_XOR_MASK) ==
+           CAP_cc(cap_pesbt_encode_perms)(perms));
+    return reg.cr_pesbt ^ CAP_NULL_XOR_MASK;
+}
+
 #endif /* TARGET_CHERI */

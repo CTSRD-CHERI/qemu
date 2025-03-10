@@ -1364,9 +1364,9 @@ void squash_mutable_permissions(CPUArchState *env, target_ulong *pesbt,
         (CAP_cc(cap_pesbt_extract_otype)(*pesbt) == CAP_OTYPE_UNSEALED)) {
         qemu_maybe_log_instr_extra(env,
                                    "Squashing mutable load related perms\n");
-        *pesbt &= ~CAP_cc(cap_pesbt_encode_perms)(
-            CAP_PERM_MUTABLE_LOAD | CAP_PERM_STORE_LOCAL |
-            CAP_PERM_STORE_CAP | CAP_PERM_STORE);
+        *pesbt &=
+            ~cap_encode_perms(CAP_PERM_MUTABLE_LOAD | CAP_PERM_STORE_LOCAL |
+                              CAP_PERM_STORE_CAP | CAP_PERM_STORE);
     }
 #endif
 }

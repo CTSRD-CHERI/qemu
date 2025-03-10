@@ -1523,7 +1523,7 @@ static inline void gen_cap_has_perms(DisasContext *ctx, int regnum,
                                      uint32_t perms, TCGv result)
 {
     gen_cap_load_pesbt(ctx, regnum, result);
-    TCGv compare = tcg_const_tl(CAP_cc(cap_pesbt_encode_perms)(perms));
+    TCGv compare = tcg_const_tl(cap_encode_perms(perms));
     tcg_gen_and_tl(result, result, compare);
     tcg_gen_setcond_tl(TCG_COND_EQ, result, result, compare);
     tcg_temp_free(compare);
