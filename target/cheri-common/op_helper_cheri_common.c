@@ -1710,8 +1710,7 @@ void CHERI_HELPER_IMPL(debug_cap(CPUArchState *env, uint32_t regndx))
            "Perms " TARGET_FMT_lx "\n",
            regndx, cap->_cr_cursor, pesbt ^ CAP_NULL_XOR_MASK,
            stateMeansTagged || decompressedMeansTagged, state, cap->cr_tag,
-           CAP_cc(cap_pesbt_extract_otype)(pesbt),
-           CAP_cc(cap_pesbt_extract_perms)(pesbt));
+           cap_get_otype_unsigned(cap), cap_get_all_perms(cap));
     if (state == CREG_FULLY_DECOMPRESSED) {
         printf("Base: " TARGET_FMT_lx ". Top " TARGET_FMT_lu TARGET_FMT_lx
                ".\n",
