@@ -41,15 +41,15 @@
 #define PRINT_CAP_FMT_EXTRA " bv: %d"
 #define PRINT_CAP_ARGS_EXTRA(cr) , (cr)->cr_bounds_valid
 #else
-#define PRINT_CAP_FMT_EXTRA
-#define PRINT_CAP_ARGS_EXTRA(cr)
+#define PRINT_CAP_FMT_EXTRA      " f:%d"
+#define PRINT_CAP_ARGS_EXTRA(cr) , (unsigned)cap_get_exec_mode(cr)
 #endif
 
 #define PRINT_CAP_FMTSTR_L1                                                    \
-    "v:%d s:%d p:" TARGET_FMT_lx " f:%d b:" TARGET_FMT_lx " l:" TARGET_FMT_lx
+    "v:%d s:%d p:" TARGET_FMT_lx " b:" TARGET_FMT_lx " l:" TARGET_FMT_lx
 #define PRINT_CAP_ARGS_L1(cr)                                                  \
     (cr)->cr_tag, cap_is_sealed_with_type(cr), cap_get_all_perms(cr),          \
-        cap_get_flags(cr), cap_get_base(cr), cap_get_length_sat(cr)
+        cap_get_base(cr), cap_get_length_sat(cr)
 #define PRINT_CAP_FMTSTR_L2                                                    \
     "o:" TARGET_FMT_lx " t:" TARGET_FMT_lx PRINT_CAP_FMT_EXTRA
 #define PRINT_CAP_ARGS_L2(cr)                                                  \
@@ -89,10 +89,25 @@ static inline void cap_set_perms(cap_register_t *c, target_ulong perms)
                           (perms >> CAP_CC(UPERMS_SHFT)) & CAP_CC(UPERMS_ALL));
 }
 
-static inline uint8_t cap_get_flags(const cap_register_t *c)
+#ifndef TARGET_AARCH64
+static inline CheriExecMode cap_get_exec_mode(const cap_register_t *c)
 {
-    return CAP_cc(get_flags)(c);
+    /*
+     * NB: For the RISC-V standard these values are inverted, but this will
+     * be handled by the next cheri-compressed-cap upgrade.
+     */
+    return CAP_cc(get_flags)(c) == 1 ? CHERI_EXEC_CAPMODE : CHERI_EXEC_INTMODE;
 }
+
+static inline void cap_set_exec_mode(cap_register_t *c, CheriExecMode mode)
+{
+    /*
+     * NB: For the RISC-V standard these values are inverted, but this will
+     * be handled by the next cheri-compressed-cap upgrade.
+     */
+    CAP_cc(update_flags)(c, mode == CHERI_EXEC_CAPMODE ? 1 : 0);
+}
+#endif
 
 static inline bool cap_has_reserved_bits_set(const cap_register_t *c)
 {

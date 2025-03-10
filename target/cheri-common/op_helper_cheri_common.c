@@ -250,14 +250,6 @@ target_ulong CHERI_HELPER_IMPL(cgetbase(CPUArchState *env, uint32_t cb))
     return (target_ulong)cap_get_base(get_readonly_capreg(env, cb));
 }
 
-target_ulong CHERI_HELPER_IMPL(cgetflags(CPUArchState *env, uint32_t cb))
-{
-    /*
-     * CGetFlags: Move Flags to a General-Purpose Register.
-     */
-    return (target_ulong)cap_get_flags(get_readonly_capreg(env, cb));
-}
-
 target_ulong CHERI_HELPER_IMPL(cgethigh(CPUArchState *env, uint32_t cb))
 {
     /*
@@ -705,7 +697,9 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
         cap_set_cursor(&derived, cap_get_cursor(&result));
         cap_set_perms(&derived,
                       cap_get_all_perms(cbp) & cap_get_all_perms(ctp));
-        CAP_cc(update_flags)(&derived, cap_get_flags(ctp));
+#ifndef TARGET_AARCH64
+        cap_set_exec_mode(&derived, cap_get_exec_mode(ctp));
+#endif
         if (cap_is_sealed_entry(ctp)) {
             CAP_cc(update_otype)(&derived, CAP_OTYPE_SENTRY);
         }
@@ -1106,7 +1100,17 @@ void CHERI_HELPER_IMPL(csetboundsexact(CPUArchState *env, uint32_t cd,
 }
 
 #ifndef TARGET_AARCH64
-/* Morello does not have flags in the capaibility metadata */
+/* Morello does not have flags in the capability metadata */
+target_ulong CHERI_HELPER_IMPL(cgetflags(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetFlags: Move Flags to a General-Purpose Register.
+     * Returns 1 for capability mode, 0 for integer mode.
+     */
+    CheriExecMode mode = cap_get_exec_mode(get_readonly_capreg(env, cb));
+    return mode == CHERI_EXEC_CAPMODE ? 1 : 0;
+}
+
 void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
                                  target_ulong flags))
 {
@@ -1125,7 +1129,7 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     }
     flags &= CAP_FLAGS_ALL_BITS;
     _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
-    CAP_cc(update_flags)(&result, flags);
+    cap_set_exec_mode(&result, flags ? CHERI_EXEC_CAPMODE : CHERI_EXEC_INTMODE);
     update_capreg(env, cd, &result);
 }
 #endif

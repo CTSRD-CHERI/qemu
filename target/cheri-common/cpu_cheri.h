@@ -94,15 +94,21 @@ static inline void cheri_update_pcc(cap_register_t *pcc, target_ulong pc_addr,
     pcc->_cr_cursor = pc_addr;
 }
 
-static inline bool cap_has_capmode_flag(const cap_register_t *cap) {
-    return (cap_get_flags(cap) & CHERI_FLAG_CAPMODE) == CHERI_FLAG_CAPMODE;
+#ifndef TARGET_AARCH64
+static inline bool cap_has_capmode_flag(const cap_register_t *cap)
+{
+    return cap_get_exec_mode(cap) == CHERI_EXEC_CAPMODE;
 }
 
-static inline bool cheri_in_capmode(CPUArchState *env) {
-    // Note: No need to synchronize the PCC.cursor value from TCG since
-    // Every change to capmode will exit the current translation block.
+static inline bool cheri_in_capmode(CPUArchState *env)
+{
+    /*
+     * Note: No need to synchronize the PCC.cursor value from TCG since
+     * Every change to capmode will exit the current translation block.
+     */
     return cap_has_capmode_flag(cheri_get_recent_pcc(env));
 }
+#endif
 
 // Note: this function does not check the bounds of pcc!
 static inline bool cheri_cap_perms_valid_for_exec(const cap_register_t *pcc)
@@ -126,8 +132,10 @@ static inline void cheri_cpu_get_tb_cpu_state(const cap_register_t *pcc,
     *pcc_base = cap_get_base(pcc);
     *pcc_top = cap_get_top(pcc);
     cheri_debug_assert(*cheri_flags == 0);
+#ifndef TARGET_AARCH64 /* Morello looks at PSTATE.C64 instead */
     if (cap_has_capmode_flag(pcc))
         *cheri_flags |= TB_FLAG_CHERI_CAPMODE;
+#endif
     if (cheri_cap_perms_valid_for_exec(pcc))
         *cheri_flags |= TB_FLAG_CHERI_PCC_EXECUTABLE;
 

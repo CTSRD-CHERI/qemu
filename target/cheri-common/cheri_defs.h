@@ -151,10 +151,10 @@ typedef enum CheriPermissions {
 #endif
 } CheriPermissions;
 
-typedef enum CheriFlags {
-    CHERI_FLAG_INTMODE = 0,
-    CHERI_FLAG_CAPMODE = 1,
-} CheriFlags;
+typedef enum CheriExecMode {
+    CHERI_EXEC_INTMODE = 0,
+    CHERI_EXEC_CAPMODE = 1,
+} CheriExecMode;
 
 typedef enum CheriTbFlags {
     /* CHERI PCC is tagged, executable and unsealed */

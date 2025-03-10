@@ -59,7 +59,9 @@ DEF_HELPER_3(raise_exception_ddc_bounds, noreturn, env, tl, i32)
 // Two-operand capability inspection
 DEF_HELPER_FLAGS_2(cgetaddr, TCG_CALL_NO_WG, tl, env, i32)
 DEF_HELPER_FLAGS_2(cgetbase, 0, tl, env, i32)
+#ifndef TARGET_AARCH64
 DEF_HELPER_FLAGS_2(cgetflags, 0, tl, env, i32)
+#endif
 DEF_HELPER_FLAGS_2(cgethigh, 0, tl, env, i32)
 DEF_HELPER_FLAGS_2(cgetlen, 0, tl, env, i32)
 DEF_HELPER_FLAGS_2(cgetperm, 0, tl, env, i32)
