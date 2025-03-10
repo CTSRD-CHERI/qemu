@@ -197,8 +197,8 @@ static inline void update_next_pcc_for_tcg(CPUARMState *env,
 
     // TODO: Reading BranchAddr in the arm ARM it looks like there is some
     // top byte sign extending not being respected here
-    uint32_t old_perms = cap_get_perms(cheri_get_recent_pcc(env));
-    uint32_t new_perms = cap_get_perms(target);
+    target_ulong old_perms = cap_get_all_perms(cheri_get_recent_pcc(env));
+    target_ulong new_perms = cap_get_all_perms(target);
 
     bool system_changed = ((old_perms ^ new_perms) & CAP_ACCESS_SYS_REGS) != 0;
     bool executive_changed =

@@ -46,12 +46,9 @@
 #endif
 
 #define PRINT_CAP_FMTSTR_L1                                                    \
-    "v:%d s:%d p:%08x f:%d b:" TARGET_FMT_lx " l:" TARGET_FMT_lx
-#define COMBINED_PERMS_VALUE(cr)                                               \
-    (unsigned)(((cap_get_uperms(cr) & CAP_UPERMS_ALL) << CAP_UPERMS_SHFT) |    \
-               (cap_get_perms(cr) & CAP_PERMS_ALL))
+    "v:%d s:%d p:" TARGET_FMT_lx " f:%d b:" TARGET_FMT_lx " l:" TARGET_FMT_lx
 #define PRINT_CAP_ARGS_L1(cr)                                                  \
-    (cr)->cr_tag, cap_is_sealed_with_type(cr), COMBINED_PERMS_VALUE(cr),       \
+    (cr)->cr_tag, cap_is_sealed_with_type(cr), cap_get_all_perms(cr),          \
         cap_get_flags(cr), cap_get_base(cr), cap_get_length_sat(cr)
 #define PRINT_CAP_FMTSTR_L2                                                    \
     "o:" TARGET_FMT_lx " t:" TARGET_FMT_lx PRINT_CAP_FMT_EXTRA
@@ -80,14 +77,16 @@ static inline cap_offset_t cap_get_offset(const cap_register_t *c)
     return (cap_offset_t)c->_cr_cursor - (cap_offset_t)c->cr_base;
 }
 
-static inline uint32_t cap_get_uperms(const cap_register_t *c)
+static inline target_ulong cap_get_all_perms(const cap_register_t *c)
 {
-    return CAP_cc(get_uperms)(c);
+    return CAP_cc(get_perms)(c) | (CAP_cc(get_uperms)(c) << CAP_CC(UPERMS_SHFT));
 }
 
-static inline uint32_t cap_get_perms(const cap_register_t *c)
+static inline void cap_set_perms(cap_register_t *c, target_ulong perms)
 {
-    return CAP_cc(get_perms)(c);
+    CAP_cc(update_perms)(c, perms & CAP_CC(PERMS_ALL));
+    CAP_cc(update_uperms)(c,
+                          (perms >> CAP_CC(UPERMS_SHFT)) & CAP_CC(UPERMS_ALL));
 }
 
 static inline uint8_t cap_get_flags(const cap_register_t *c)
@@ -242,7 +241,7 @@ cap_cursor_in_bounds(const cap_register_t *c)
 static inline QEMU_ALWAYS_INLINE bool cap_has_perms(const cap_register_t *reg,
                                                     uint32_t perms)
 {
-    return (cap_get_perms(reg) & perms) == perms;
+    return (cap_get_all_perms(reg) & perms) == perms;
 }
 
 static inline bool cap_is_unsealed(const cap_register_t *c)

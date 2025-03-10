@@ -438,7 +438,7 @@ static inline target_ulong get_capreg_tag_filtered(CPUArchState *env, unsigned r
     // MAGIC_REVOKE_TYPE)
     if (csp->cr_base >= env->cheri_capfilter_lo &&
         csp->_cr_top <= env->cheri_capfilter_hi &&
-        (cap_get_perms(csp) & env->cheri_capfilter_perms) == cap_get_perms(csp))
+        cap_has_perms(csp, env->cheri_capfilter_perms))
         return 0;
 
     return tagged;
@@ -447,12 +447,13 @@ static inline target_ulong get_capreg_tag_filtered(CPUArchState *env, unsigned r
 #endif
 }
 
-static inline uint32_t get_capreg_hwperms(CPUArchState *env, unsigned regnum)
+static inline target_ulong get_capreg_hwperms(CPUArchState *env,
+                                              unsigned regnum)
 {
     GPCapRegs *gpcrs = cheri_get_gpcrs(env);
     sanity_check_capreg(gpcrs, regnum);
     // Permissions can be read directly from pebst, no need to decompress
-    uint32_t result = cap_get_perms(get_cap_in_gpregs(gpcrs, regnum));
+    target_ulong result = cap_get_all_perms(get_cap_in_gpregs(gpcrs, regnum));
     if (get_capreg_state(gpcrs, regnum) == CREG_INTEGER) {
         cheri_debug_assert(result == 0);
     }

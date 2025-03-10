@@ -183,9 +183,9 @@ void helper_store_exclusive_cap_via_cap(CPUArchState *env, uint32_t rs,
     bool tag;
 
     // Fudge permissions so that no fault occur on load
-    uint32_t temp_perms = cap_get_perms(&cbp) | CAP_PERM_LOAD;
+    target_ulong temp_perms = cap_get_all_perms(&cbp) | CAP_PERM_LOAD;
     temp_perms &= ~CAP_PERM_LOAD_CAP;
-    CAP_cc(update_perms)(&cbp, temp_perms);
+    cap_set_perms(&cbp, temp_perms);
 
     // Check first cap value equal
     if (success) {

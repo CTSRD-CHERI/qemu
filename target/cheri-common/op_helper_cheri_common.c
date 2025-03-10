@@ -285,14 +285,10 @@ target_ulong CHERI_HELPER_IMPL(cgetperm(CPUArchState *env, uint32_t cb))
      * Register.
      */
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    cheri_debug_assert((cap_get_perms(cbp) & CAP_PERMS_ALL) ==
-                           cap_get_perms(cbp) &&
-                       "Unknown HW perms bits set!");
-    cheri_debug_assert((cap_get_uperms(cbp) & CAP_UPERMS_ALL) ==
-                           cap_get_uperms(cbp) &&
-                       "Unknown SW perms bits set!");
-
-    return COMBINED_PERMS_VALUE(cbp);
+    target_ulong perms = cap_get_all_perms(cbp);
+    cheri_debug_assert(((perms & CAP_VALID_PERM_BITS) == perms) &&
+                       "Unknown permission bits set!");
+    return perms;
 }
 
 target_ulong CHERI_HELPER_IMPL(cgetoffset(CPUArchState *env, uint32_t cb))
@@ -584,18 +580,12 @@ void CHERI_HELPER_IMPL(ccheckperm(CPUArchState *env, uint32_t cs,
 {
     GET_HOST_RETPC();
     const cap_register_t *csp = get_readonly_capreg(env, cs);
-    uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
-    uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     /*
      * CCheckPerm: Raise exception if don't have permission
      */
     if (!csp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cs);
-    } else if ((cap_get_perms(csp) & rt_perms) != rt_perms) {
-        raise_cheri_exception(env, CapEx_UserDefViolation, cs);
-    } else if ((cap_get_uperms(csp) & rt_uperms) != rt_uperms) {
-        raise_cheri_exception(env, CapEx_UserDefViolation, cs);
-    } else if ((rt >> (16 + CAP_MAX_UPERM)) != 0UL) {
+    } else if ((cap_get_all_perms(csp) & rt) != rt) {
         raise_cheri_exception(env, CapEx_UserDefViolation, cs);
     }
 }
@@ -681,11 +671,8 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
     } else if (cap_get_base(ctp) > cap_get_top_full(ctp)) {
         // check for length < 0 - possible because cs2 might be untagged
         raise_cheri_exception_or_invalidate(env, CapEx_LengthViolation, ct);
-    } else if ((cap_get_perms(ctp) & cap_get_perms(cbp)) !=
-               cap_get_perms(ctp)) {
-        raise_cheri_exception_or_invalidate(env, CapEx_UserDefViolation, cb);
-    } else if ((cap_get_uperms(ctp) & cap_get_uperms(cbp)) !=
-               cap_get_uperms(ctp)) {
+    } else if ((cap_get_all_perms(ctp) & cap_get_all_perms(cbp)) !=
+               cap_get_all_perms(ctp)) {
         raise_cheri_exception_or_invalidate(env, CapEx_UserDefViolation, cb);
     } else if (cap_has_reserved_bits_set(ctp)) {
         // TODO: It would be nice to use a different exception code for this
@@ -716,9 +703,8 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
         cap_set_cursor(&derived, cap_get_base(&result));
         CAP_cc(setbounds)(&derived, cap_get_length_full(&result));
         cap_set_cursor(&derived, cap_get_cursor(&result));
-        CAP_cc(update_perms)(&derived, cap_get_perms(cbp) & cap_get_perms(ctp));
-        CAP_cc(update_uperms)(&derived,
-                              cap_get_uperms(cbp) & cap_get_uperms(ctp));
+        cap_set_perms(&derived,
+                      cap_get_all_perms(cbp) & cap_get_all_perms(ctp));
         CAP_cc(update_flags)(&derived, cap_get_flags(ctp));
         if (cap_is_sealed_entry(ctp)) {
             CAP_cc(update_otype)(&derived, CAP_OTYPE_SENTRY);
@@ -885,14 +871,14 @@ void CHERI_HELPER_IMPL(cunseal(CPUArchState *env, uint32_t cd, uint32_t cs,
     }
 
     cap_register_t result = *csp;
-    target_ulong new_perms = cap_get_perms(&result);
+    target_ulong new_perms = cap_get_all_perms(&result);
     if (cap_has_perms(csp, CAP_PERM_GLOBAL) &&
         cap_has_perms(ctp, CAP_PERM_GLOBAL)) {
         new_perms |= CAP_PERM_GLOBAL;
     } else {
         new_perms &= ~CAP_PERM_GLOBAL;
     }
-    CAP_cc(update_perms)(&result, new_perms);
+    cap_set_perms(&result, new_perms);
     if (RESULT_VALID) {
         cap_set_unsealed(&result);
     } else {
@@ -954,14 +940,12 @@ void CHERI_HELPER_IMPL(candperm(CPUArchState *env, uint32_t cd, uint32_t cb,
         raise_cheri_exception_or_invalidate(env, CapEx_SealViolation, cb);
     }
 
-    uint32_t rt_perms = (uint32_t)rt & (CAP_PERMS_ALL);
-    uint32_t rt_uperms = ((uint32_t)rt >> CAP_UPERMS_SHFT) & CAP_UPERMS_ALL;
     cap_register_t result = *cbp;
     if (!RESULT_VALID) {
         result.cr_tag = 0;
     }
-    CAP_cc(update_perms)(&result, cap_get_perms(cbp) & rt_perms);
-    CAP_cc(update_uperms)(&result, cap_get_uperms(cbp) & rt_uperms);
+    target_ulong new_perms = cap_get_all_perms(cbp) & rt;
+    cap_set_perms(&result, new_perms);
     update_capreg(env, cd, &result);
 }
 
@@ -1195,8 +1179,8 @@ target_ulong CHERI_HELPER_IMPL(ctestsubset(CPUArchState *env, uint32_t cb,
         /* is_cap_sealed(cbp) == is_cap_sealed(ctp) && */
         cap_get_base(cbp) <= cap_get_base(ctp) &&
         cap_get_top_full(ctp) <= cap_get_top_full(cbp) &&
-        (cap_get_perms(cbp) & cap_get_perms(ctp)) == cap_get_perms(ctp) &&
-        (cap_get_uperms(cbp) & cap_get_uperms(ctp)) == cap_get_uperms(ctp)) {
+        (cap_get_all_perms(cbp) & cap_get_all_perms(ctp)) ==
+            cap_get_all_perms(ctp)) {
         is_subset = true;
     }
     return (target_ulong)is_subset;

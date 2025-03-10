@@ -105,7 +105,7 @@ static inline void check_cap(CPUArchState *env, const cap_register_t *cr,
         // qemu_log("CAP Seal VIOLATION: ");
         goto do_exception;
     }
-    if ((cap_get_perms(cr) & perm) != perm) {
+    if (!cap_has_perms(cr, perm)) {
         if (perm & CAP_PERM_EXECUTE) {
             cause = CapEx_PermitExecuteViolation;
             // qemu_log("CAP Exe VIOLATION: ");
@@ -311,7 +311,8 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
     uint32_t size, uintptr_t _host_return_address, const cap_register_t *cbp,
     uint32_t alignment_required, unaligned_memaccess_handler unaligned_handler)
 {
-#define MISSING_REQUIRED_PERM(X) ((required_perms & ~cap_get_perms(cbp)) & (X))
+#define MISSING_REQUIRED_PERM(X)                                               \
+    ((required_perms & ~cap_get_all_perms(cbp)) & (X))
     // The check here is a little fiddly if this is a store and a load due to
     // priorities. For either loads or stores, permissions fault > bounds fault.
     // But: load bounds fault > store permissions fault. So all permissions

@@ -793,7 +793,7 @@ static void cheri_dump_creg(const cap_register_t *crp, const char *name,
                 "DEBUG CAP %s t:%d s:%d perms:0x%08x type:0x%016" PRIx64 " "
                 "offset:0x%016lx base:0x%016lx length:0x%016lx\n",
                 name, crp->cr_tag, is_cap_sealed(crp),
-                COMBINED_PERMS_VALUE(crp),
+                (unsigned)cap_get_all_perms(crp),
                 /* testsuite wants -1 for unsealed */
                 (uint64_t)cap_get_otype_signext(crp),
                 (uint64_t)cap_get_offset(crp), cap_get_base(crp),
