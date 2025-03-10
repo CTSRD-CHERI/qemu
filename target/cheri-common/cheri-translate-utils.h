@@ -1879,17 +1879,6 @@ static inline void gen_cap_untag_if_sealed(DisasContext *ctx, int regnum)
     tcg_temp_free(type_unsealed);
 }
 
-static inline void gen_cap_get_flags(DisasContext *ctx, int regnum, TCGv flags)
-{
-#ifdef TARGET_AARCH64
-    // Morello flags are just different from CHERI flags.
-    gen_cap_get_cursor(ctx, regnum, flags);
-    tcg_gen_andi_i64(flags, flags, 0xFFULL << (64 - MORELLO_FLAG_BITS));
-#else
-    gen_cap_pesbt_extract_FLAGS(ctx, regnum, flags);
-#endif
-}
-
 // Returns a boolean if rx and ry have equal pesbt/tag/cursor.
 // You may be concerned about equivalent non-canonical capabilities not
 // comparing equal, but to this I say: 1) This is why we cant have nice things.

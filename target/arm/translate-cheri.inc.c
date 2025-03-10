@@ -1573,7 +1573,9 @@ TRANS_F(CFHI)
         gen_cap_get_top_clamped(ctx, a->Cn, dst);
         break;
     case 0b01: // GCFLGS
-        gen_cap_get_flags(ctx, a->Cn, dst);
+        /* Morello flags are different from CHERI flags (high bits of addr) */
+        gen_cap_get_cursor(ctx, a->Cn, dst);
+        tcg_gen_andi_i64(dst, dst, 0xFFULL << (64 - 8));
         break;
     case 0b10: // CFHI
         gen_cap_get_hi(ctx, a->Cn, dst);
