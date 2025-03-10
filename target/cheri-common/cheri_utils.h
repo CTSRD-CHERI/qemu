@@ -79,14 +79,13 @@ static inline cap_offset_t cap_get_offset(const cap_register_t *c)
 
 static inline target_ulong cap_get_all_perms(const cap_register_t *c)
 {
-    return CAP_cc(get_perms)(c) | (CAP_cc(get_uperms)(c) << CAP_CC(UPERMS_SHFT));
+    return CAP_cc(get_all_permissions)(c);
 }
 
 static inline void cap_set_perms(cap_register_t *c, target_ulong perms)
 {
-    CAP_cc(update_perms)(c, perms & CAP_CC(PERMS_ALL));
-    CAP_cc(update_uperms)(c,
-                          (perms >> CAP_CC(UPERMS_SHFT)) & CAP_CC(UPERMS_ALL));
+    bool success = CAP_cc(set_permissions)(c, perms);
+    assert(success);
 }
 
 #ifndef TARGET_AARCH64
