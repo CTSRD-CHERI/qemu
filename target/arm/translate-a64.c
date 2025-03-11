@@ -82,13 +82,7 @@ static TCGv cpu_pc; // Note: this is PCC.cursor
 static TCGv_i64 cpu_X[32];
 static TCGv_i64 cpu_pc;
 
-// These really should be available to non-cheri as well. See comment in cpu.h.
-
-static inline MemOp memop_align_sctlr(DisasContext *ctx)
-{
-    return 0;
-}
-
+/* This should be available to non-cheri as well. See comment in cpu.h. */
 static inline bool get_sctlr_sa(DisasContext *ctx)
 {
     return false;
