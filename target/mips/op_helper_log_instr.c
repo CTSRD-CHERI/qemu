@@ -318,14 +318,9 @@ static void simple_dump_state(CPUMIPSState *env, FILE *f,
 
 void helper_mtc0_dumpstate(CPUMIPSState *env, target_ulong arg1)
 {
-    FILE* logfile = qemu_log_enabled() ? qemu_log_lock() : stderr;
-#if 0
-    cpu_dump_state(env_cpu(env), logfile, fprintf, CPU_DUMP_CODE);
-#else
-    simple_dump_state(env, logfile, fprintf);
-#endif
-    if (logfile != stderr)
-        qemu_log_unlock(logfile);
+    FILE *logfile = qemu_log_lock();
+    simple_dump_state(env, logfile ? logfile : stderr, fprintf);
+    qemu_log_unlock(logfile);
 }
 
 void do_hexdump(GString *strbuf, uint8_t* buffer, target_ulong length,
