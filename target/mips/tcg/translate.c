@@ -7589,7 +7589,6 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case CP0_REGISTER_26:
         save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
-#if !defined(TARGET_CHERI)
         switch (sel) {
         case CP0_REG26__ERRCTL:
             gen_helper_mtc0_errctl(cpu_env, arg);
@@ -7599,7 +7598,6 @@ static void gen_mtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         default:
             goto cp0_unimplemented;
         }
-#endif /* TARGET_CHERI */
         break;
     case CP0_REGISTER_27:
         switch (sel) {
@@ -9131,7 +9129,6 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
     case CP0_REGISTER_26:
         save_cpu_state(ctx, 1); // Need to sync PC (PCC.cursor)
         gen_helper_mtc0_dumpstate(cpu_env, arg); /* CHERI: dump reg state */
-#if !defined(TARGET_CHERI)
         switch (sel) {
         case CP0_REG26__ERRCTL:
             gen_helper_mtc0_errctl(cpu_env, arg);
@@ -9141,7 +9138,6 @@ static void gen_dmtc0(DisasContext *ctx, TCGv arg, int reg, int sel)
         default:
             goto cp0_unimplemented;
         }
-#endif /* TARGET_CHERI */
         break;
     case CP0_REGISTER_27:
         switch (sel) {
@@ -16952,6 +16948,7 @@ static void mips_tr_insn_start(DisasContextBase *dcbase, CPUState *cs)
 }
 
 #ifdef CONFIG_TCG_LOG_INSTR
+#ifndef TARGET_CHERI
 static inline void gen_mips_log_instr_unsupported(
     DisasContext *ctx, const char *what)
 {
@@ -16960,7 +16957,7 @@ static inline void gen_mips_log_instr_unsupported(
         gen_helper_mips_log_instr_drop(cpu_env);
     }
 }
-
+#endif
 static inline void gen_mips_log_instr32(DisasContext *ctx)
 {
     if (unlikely(ctx->base.log_instr_enabled)) {
