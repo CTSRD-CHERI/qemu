@@ -591,7 +591,6 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUArchState *env, uint32_t cb, uint3
     const cap_register_t *cbp = get_capreg_0_is_ddc(env, cb);
     uint64_t addr = cap_get_cursor(cbp);
 
-    env->lladdr = 1;
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -606,6 +605,10 @@ target_ulong CHERI_HELPER_IMPL(cloadlinked(CPUArchState *env, uint32_t cb, uint3
     } else {
         env->CP0_LLAddr = cpu_mips_translate_address(env, addr, 0, _host_return_address);
         env->lladdr = addr;
+        qemu_maybe_log_instr_extra(env,
+                                   "cloadlinked: lladdr=" TARGET_FMT_plx
+                                   " CP0_LLaddr=" TARGET_FMT_plx "\n",
+                                   env->lladdr, env->CP0_LLAddr);
         return addr;
     }
     return 0;
@@ -636,7 +639,7 @@ target_ulong CHERI_HELPER_IMPL(cstorecond(CPUArchState *env, uint32_t cb, uint32
         do_raise_c0_exception(env, EXCP_AdES, addr);
     } else {
         qemu_maybe_log_instr_extra(env, "cstorecond: addr="
-            TARGET_FMT_plx "lladdr=" TARGET_FMT_plx " CP0_LLaddr="
+            TARGET_FMT_plx " lladdr=" TARGET_FMT_plx " CP0_LLaddr="
             TARGET_FMT_plx "\n", addr, env->lladdr, env->CP0_LLAddr);
 
         // Can't do this here.  It might miss in the TLB.
@@ -709,7 +712,6 @@ void CHERI_HELPER_IMPL(cllc_without_tcg(CPUArchState *env, uint32_t cd, uint32_t
     uint64_t addr = cap_get_cursor(cbp);
 
     /* Clear linked state */
-    env->lladdr = 1;
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {

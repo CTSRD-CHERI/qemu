@@ -87,17 +87,6 @@ void mips_cpu_synchronize_from_tb(CPUState *cs, const TranslationBlock *tb)
     mips_update_pc(env, tb->pc, /*can_be_unrepresentable=*/false);
     env->hflags &= ~MIPS_HFLAG_BMASK;
     env->hflags |= tb->flags & MIPS_HFLAG_BMASK;
-
-    /*
-     * Break any load-link that's in flight on this CPU since we've been
-     * preempted.  This is sufficiently rare that it shouldn't hurt to do it
-     * every preemption.  Of course, it's also only really safe to use ->lladdr
-     * for capability work at all because we're forcing MTTCG off for CHERI due
-     * to its tag table implementation.  But this doesn't make it any worse!
-     *
-     * See also target/mips/op_helper:/helper_eret
-     */
-    env->lladdr = 1;
 }
 
 static const char * const excp_names[EXCP_LAST + 1] = {
