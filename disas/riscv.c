@@ -1785,7 +1785,7 @@ static void decode_inst_opcode(rv_decode *dec, rv_isa isa, int flags)
         case 2: op = rv_op_c_lw; break;
         case 3:
             if (isa == rv32) {
-                op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_c_lcsp_rv32
+                op = (flags & RISCV_DIS_FLAG_CAPMODE) ? rv_op_c_lc_rv32
                                                       : rv_op_c_flw;
             } else {
                 op = rv_op_c_ld;
