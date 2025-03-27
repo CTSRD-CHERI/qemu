@@ -1138,7 +1138,7 @@ static void g_string_append_printf_union_args(GString *string, const char *fmt,
     size_t i = 0;
     bool format = false;
     char c;
-    bool is_short, is_long, is_long_long;
+    bool is_short = false, is_long = false, is_long_long = false;
     while ((c = bounce_buf[i++] = *fmt++)) {
         assert(i != sizeof(bounce_buf));
         if (!format) {
