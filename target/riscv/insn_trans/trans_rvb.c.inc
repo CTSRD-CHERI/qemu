@@ -353,13 +353,31 @@ GEN_SHADD(1)
 GEN_SHADD(2)
 GEN_SHADD(3)
 
+/* For RISC-V standard versions post 0.9.6 we allocate new encodings instead. */
+#ifdef TARGET_CHERI_RISCV_STD_093
+#define GEN_TRANS_SHADD(SHAMT)                                                 \
+    static bool trans_sh##SHAMT##add(DisasContext *ctx, arg_sh##SHAMT##add *a) \
+    {                                                                          \
+        REQUIRE_ZBA(ctx);                                                      \
+        if (ctx->capmode) {                                                    \
+            TCGv offset = tcg_temp_new();                                      \
+            gen_get_gpr(ctx, offset, a->rs1);                                  \
+            tcg_gen_shli_tl(offset, offset, SHAMT);                            \
+            gen_helper_cincoffset(cpu_env, tcg_constant_i32(a->rd),            \
+                                  tcg_constant_i32(a->rs2), offset);           \
+            tcg_temp_free(offset);                                             \
+            return true;                                                       \
+        }                                                                      \
+        return gen_arith(ctx, a, EXT_NONE, gen_sh##SHAMT##add);                \
+    }
+#else
 #define GEN_TRANS_SHADD(SHAMT)                                             \
 static bool trans_sh##SHAMT##add(DisasContext *ctx, arg_sh##SHAMT##add *a) \
 {                                                                          \
     REQUIRE_ZBA(ctx);                                                      \
     return gen_arith(ctx, a, EXT_NONE, gen_sh##SHAMT##add);                \
 }
-
+#endif
 GEN_TRANS_SHADD(1)
 GEN_TRANS_SHADD(2)
 GEN_TRANS_SHADD(3)
