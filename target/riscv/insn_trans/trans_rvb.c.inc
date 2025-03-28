@@ -506,6 +506,17 @@ static bool trans_add_uw(DisasContext *ctx, arg_add_uw *a)
 {
     REQUIRE_64BIT(ctx);
     REQUIRE_ZBA(ctx);
+#ifdef TARGET_CHERI_RISCV_STD_093
+    if (ctx->capmode) {
+        TCGv t = tcg_temp_new();
+        gen_get_gpr(ctx, t, a->rs1);
+        tcg_gen_ext32u_tl(t, t);
+        gen_helper_cincoffset(cpu_env, tcg_constant_i32(a->rd),
+                              tcg_constant_i32(a->rs2), t);
+        tcg_temp_free(t);
+        return true;
+    }
+#endif
     return gen_arith(ctx, a, EXT_NONE, gen_add_uw);
 }
 
