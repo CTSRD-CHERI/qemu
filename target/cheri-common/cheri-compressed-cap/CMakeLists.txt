@@ -10,6 +10,7 @@ endif()
 include(CMakePushCheckState)
 include(CheckCCompilerFlag)
 include(CheckCXXCompilerFlag)
+include(GNUInstallDirs)
 
 macro(check_sanitizer_flag _flag _var)
     cmake_push_check_state()
@@ -70,19 +71,14 @@ add_compile_options($<$<COMPILE_LANGUAGE:CXX>:-Wno-old-style-cast>
 if(${CMAKE_CXX_COMPILER_ID} MATCHES "Clang")
     add_compile_options(-Wpedantic)
 endif()
+check_c_compiler_flag(-Wundef HAVE_WUNDEF)
+if (HAVE_WUNDEF)
+    add_compile_options(-Werror=undef)
+endif()
+
 
 # TODO: -Weverything
 add_library(cheri_compressed_cap14 cheri_compressed_cap.c cheri_compressed_cap.h)
-
-function(add_decompress_cap _format)
-    add_executable(decompress_cap_${_format} decompress_cap_${_format}.c)
-    include(GNUInstallDirs)
-    install(TARGETS decompress_cap_${_format} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-endfunction()
-
-# TODO: add_decompress_cap(64)
-add_decompress_cap(128)
-add_decompress_cap(128m)
 
 # Test against sail generated C code:
 # This needs GMP (and CMake doesn't include a find module)
@@ -129,20 +125,34 @@ function(add_sail_wrappers _format)
 endfunction()
 
 add_sail_wrappers(64)
+add_sail_wrappers(64r)
 add_sail_wrappers(128)
 add_sail_wrappers(128m)
+add_sail_wrappers(128r)
 
-# Add test exes for sail generated code
 
-function(add_test_sail_wrapper _format)
-    add_executable(test_sail_wrapper_${_format} decompress_cap_${_format}.c)
-    target_compile_definitions(test_sail_wrapper_${_format} PRIVATE DECOMPRESS_WITH_SAIL_GENERATED_CODE=1)
-    target_link_libraries(test_sail_wrapper_${_format} PRIVATE sail_wrapper_${_format})
+function(add_decompress_cap _format)
+    string(TOUPPER ${_format} _format_upper)
+    add_executable(decompress_cap_${_format} decompress_cap_common.cpp)
+    target_compile_definitions(decompress_cap_${_format} PRIVATE
+            CAP_FORMAT=${_format}
+            CAP_FORMAT_UPPER=${_format_upper}
+    )
+    install(TARGETS decompress_cap_${_format} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+    add_executable(decompress_cap_sail_${_format} decompress_cap_common.cpp)
+    target_compile_definitions(decompress_cap_sail_${_format} PRIVATE
+            DECOMPRESS_WITH_SAIL_GENERATED_CODE=1
+            CAP_FORMAT=${_format}
+            CAP_FORMAT_UPPER=${_format_upper}
+    )
+    target_link_libraries(decompress_cap_sail_${_format} PRIVATE sail_wrapper_${_format})
 endfunction()
 
-# TODO: add_test_sail_wrapper(64)
-add_test_sail_wrapper(128)
-add_test_sail_wrapper(128m)
+add_decompress_cap(64)
+add_decompress_cap(64r)
+add_decompress_cap(128)
+add_decompress_cap(128m)
+add_decompress_cap(128r)
 
 enable_testing()
 
@@ -150,7 +160,7 @@ enable_testing()
 Include(FetchContent)
 FetchContent_Declare(Catch2
   GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-  GIT_TAG        v3.4.0
+  GIT_TAG        v3.7.1
 )
 FetchContent_MakeAvailable(Catch2)
 list(APPEND CMAKE_MODULE_PATH ${Catch2_SOURCE_DIR}/extras)
@@ -162,11 +172,14 @@ function(add_format_test_definions _target _format)
     target_compile_definitions(${_target} PRIVATE "TEST_CC_FORMAT_UPPER=$<UPPER_CASE:${_format}>")
     if (_format STREQUAL "128m")
         target_compile_definitions(${_target} PRIVATE "TEST_CC_IS_MORELLO")
+    elseif (_format STREQUAL "256")
+        target_compile_definitions(${_target} PRIVATE "TEST_CC_IS_CHERI256")
     endif()
 endfunction()
 
 function(add_cc_test _format _target _suffix _sanitizer_flags)
     add_executable(${_target}_${_format}${_suffix} test/${_target}_${_format}.cpp)
+    add_format_test_definions(${_target}_${_format}${_suffix} ${_format})
     if (_sanitizer_flags)
         target_compile_options(${_target}_${_format}${_suffix} PRIVATE "${_sanitizer_flags}")
         target_link_libraries(${_target}_${_format}${_suffix} PRIVATE "${_sanitizer_flags}")
@@ -198,8 +211,10 @@ function(add_cc_tests _format)
 endfunction()
 
 add_cc_tests(64)
+add_cc_tests(64r)
 add_cc_tests(128)
 add_cc_tests(128m)
+add_cc_tests(128r)
 add_cc_tests(256)
 
 function(add_fuzz_tests _format)
@@ -225,5 +240,7 @@ function(add_fuzz_tests _format)
 endfunction()
 
 add_fuzz_tests(64)
+add_fuzz_tests(64r)
 add_fuzz_tests(128)
 add_fuzz_tests(128m)
+add_fuzz_tests(128r)

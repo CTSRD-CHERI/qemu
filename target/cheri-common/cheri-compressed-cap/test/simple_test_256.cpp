@@ -1,7 +1,3 @@
-#define TEST_CC_FORMAT_LOWER 256
-#define TEST_CC_FORMAT_UPPER 256
-#define TEST_CC_IS_CHERI256
-
 #include "test_common.cpp"
 
 TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {

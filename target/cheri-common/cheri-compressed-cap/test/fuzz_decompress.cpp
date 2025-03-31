@@ -3,7 +3,6 @@
  *
  * Copyright (c) 2018 Lawrence Esswood
  * Copyright (c) 2018 Alex Richardson
- * All rights reserved.
  *
  * This software was developed by SRI International and the University of
  * Cambridge Computer Laboratory (Department of Computer Science and
@@ -41,10 +40,6 @@
 
 #define CC_FORMAT_LOWER TEST_CC_FORMAT_LOWER
 #define CC_FORMAT_UPPER TEST_CC_FORMAT_UPPER
-
-#define DO_STRINGIFY2(x) #x
-#define DO_STRINGIFY1(x) DO_STRINGIFY2(x)
-#define STRINGIFY(x) DO_STRINGIFY1(x)
 
 static void dump_cap_fields(const _cc_cap_t& result) { dump_cap_fields(stderr, result); }
 
@@ -144,7 +139,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
 
     memset(&result, 0, sizeof(result));
     _cc_N(decompress_raw)(pesbt, cursor, false, &result);
-    sail_result = _cc_sail_decode_raw(pesbt, cursor, false);
+    sail_result = _cc_sail(decode_raw)(pesbt, cursor, false);
     if (!compare_caps("DECODE ALREADY XORED", result, sail_result)) {
         abort();
     }

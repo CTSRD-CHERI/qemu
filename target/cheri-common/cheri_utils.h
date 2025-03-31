@@ -446,8 +446,6 @@ static inline target_ulong cap_encode_perms(target_ulong perms)
     null_capability(&reg);
     assert(reg.cr_pesbt == CAP_NULL_XOR_MASK);
     cap_set_perms(&reg, perms);
-    assert((reg.cr_pesbt ^ CAP_NULL_XOR_MASK) ==
-           CAP_cc(cap_pesbt_encode_perms)(perms));
     return reg.cr_pesbt ^ CAP_NULL_XOR_MASK;
 }
 

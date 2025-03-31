@@ -3,7 +3,6 @@
  *
  * Copyright (c) 2018 Lawrence Esswood
  * Copyright (c) 2018-2020 Alex Richardson
- * All rights reserved.
  *
  * This software was developed by SRI International and the University of
  * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
@@ -46,9 +45,8 @@ enum {
     _CC_N(RESET_EXP) = _CC_N(MAX_EXPONENT),
     _CC_N(RESET_T) = 1u << (_CC_N(ADDR_WIDTH) - _CC_N(RESET_EXP) - _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE)),
 #ifdef CC_IS_MORELLO
-    // Due to magic constant XOR aversion (i.e. fields are either entirely
-    // inverted or not at all, rather than select bits within them like in
-    // normal CHERI Concentrate), NULL is special in Morello.
+    // In order to have an all-zeroes memory representation, Morello encodes NULL as internal exponent with an
+    // "all-ones" exponent (a value larger than the maximum exponent). Therefore NULL and reset have different EBT.
     _CC_N(NULL_EXP) = _CC_N(MAX_ENCODABLE_EXPONENT),
     _CC_N(NULL_T) = 0,
 #else
@@ -56,20 +54,16 @@ enum {
     _CC_N(NULL_EXP) = _CC_N(RESET_EXP),
     _CC_N(NULL_T) = _CC_N(RESET_T),
 #endif
-    _CC_N(RESET_EBT) =
-        _CC_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(_CC_N(RESET_T), EXP_NONZERO_TOP) |
-        _CC_ENCODE_EBT_FIELD(0, EXP_NONZERO_BOTTOM) |
-        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_EXP) >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), EXPONENT_HIGH_PART) |
-        _CC_ENCODE_EBT_FIELD(_CC_N(RESET_EXP) & _CC_N(FIELD_EXPONENT_LOW_PART_MAX_VALUE), EXPONENT_LOW_PART),
-    _CC_N(NULL_PESBT) = _CC_ENCODE_FIELD(0, UPERMS) | _CC_ENCODE_FIELD(0, HWPERMS) | _CC_ENCODE_FIELD(0, RESERVED) |
-                        _CC_ENCODE_FIELD(0, FLAGS) | _CC_ENCODE_FIELD(1, INTERNAL_EXPONENT) |
-                        _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE) |
-                        _CC_ENCODE_FIELD(_CC_N(NULL_T), EXP_NONZERO_TOP) | _CC_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM) |
-                        _CC_ENCODE_FIELD(_CC_N(NULL_EXP) >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), EXPONENT_HIGH_PART) |
-                        _CC_ENCODE_FIELD(_CC_N(NULL_EXP) & _CC_N(FIELD_EXPONENT_LOW_PART_MAX_VALUE), EXPONENT_LOW_PART),
-    // We mask on store/load so this invisibly keeps null 0 whatever we choose
-    // it to be.
-    _CC_N(NULL_XOR_MASK) = _CC_N(NULL_PESBT),
+    _CC_N(RESET_EBT) = _CC_N(ENCODE_IE)(true) | _CC_N(ENCODE_EXPONENT)(_CC_N(RESET_EXP)) |
+                       _CC_ENCODE_FIELD(_CC_N(RESET_T), EXP_NONZERO_TOP) | _CC_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM),
+    _CC_N(RESET_PESBT) =
+        _CC_N(RESET_EBT) | _CC_N(ENCODED_INFINITE_PERMS)() | _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE),
+    _CC_N(NULL_EBT) = _CC_N(ENCODE_IE)(true) | _CC_N(ENCODE_EXPONENT)(_CC_N(NULL_EXP)) |
+                      _CC_ENCODE_FIELD(_CC_N(NULL_T), EXP_NONZERO_TOP) | _CC_ENCODE_FIELD(0, EXP_NONZERO_BOTTOM),
+    _CC_N(NULL_PESBT) = _CC_N(NULL_EBT) | _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE),
+    // We mask on store/load so this invisibly keeps null 0 whatever we choose it to be.
+    _CC_N(MEM_XOR_MASK) = _CC_N(NULL_PESBT),
+    _CC_N(NULL_XOR_MASK) __attribute__((deprecated("Use _MEM_XOR_MASK instead"))) = _CC_N(MEM_XOR_MASK),
 };
 #pragma GCC diagnostic pop
 
@@ -77,6 +71,7 @@ enum {
 #define _cc_offset_t _cc_N(offset_t)
 #define _cc_addr_t _cc_N(addr_t)
 #define _cc_saddr_t _cc_N(saddr_t)
+#define _cc_mode _CC_N(Mode)
 
 #define _CC_MANTISSA_WIDTH _CC_N(MANTISSA_WIDTH)
 #define _CC_MAX_EXPONENT _CC_N(MAX_EXPONENT)
@@ -88,21 +83,24 @@ enum {
 #define _CC_MAX_ADDR _CC_N(MAX_ADDR)
 #define _CC_MAX_TOP _CC_N(MAX_TOP)
 #define _CC_CURSOR_MASK _CC_N(CURSOR_MASK)
+
+#if _CC_N(USES_LEN_MSB) == 0
+enum { _CC_N(FIELD_LEN_MSB_SIZE) = 0 };
+#endif
+
 // Check that the sizes of the individual fields match up
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_EBT_SIZE) + _CC_N(FIELD_OTYPE_SIZE) + _CC_N(FIELD_FLAGS_SIZE) +
-                           _CC_N(FIELD_RESERVED_SIZE) + _CC_N(FIELD_HWPERMS_SIZE) + _CC_N(FIELD_UPERMS_SIZE),
-                       _CC_ADDR_WIDTH);
 _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_ZERO_TOP_SIZE) +
-                           _CC_N(FIELD_EXP_ZERO_BOTTOM_SIZE),
+                           _CC_N(FIELD_LEN_MSB_SIZE) + _CC_N(FIELD_EXP_ZERO_BOTTOM_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_TOP_ENCODED_SIZE) +
+_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_LEN_MSB_SIZE) + _CC_N(FIELD_TOP_ENCODED_SIZE) +
                            _CC_N(FIELD_BOTTOM_ENCODED_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_NONZERO_TOP_SIZE) +
-                           _CC_N(FIELD_EXP_NONZERO_BOTTOM_SIZE) + _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE) +
-                           _CC_N(FIELD_EXPONENT_LOW_PART_SIZE),
+_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_LEN_MSB_SIZE) +
+                           _CC_N(FIELD_EXP_NONZERO_TOP_SIZE) + _CC_N(FIELD_EXP_NONZERO_BOTTOM_SIZE) +
+                           _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE) + _CC_N(FIELD_EXPONENT_LOW_PART_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
-
+// The code below assumes that encoding the EBT fields inside pesbt and just obtaining EBT is the same.
+_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_EBT_START), 0);
 // Sanity-check the min/max otype macros:
 _CC_STATIC_ASSERT(_CC_N(MIN_RESERVED_OTYPE) >= 0, "MIN_RESERVED_OTYPE is signed?");
 _CC_STATIC_ASSERT(_CC_N(MIN_RESERVED_OTYPE) < _CC_N(MAX_RESERVED_OTYPE),
@@ -115,9 +113,19 @@ typedef struct _cc_N(cap) _cc_N(cap_t);
 #define _cc_cap_t _cc_N(cap_t)
 static inline uint8_t _cc_N(get_flags)(const _cc_cap_t* cap);
 static inline uint32_t _cc_N(get_otype)(const _cc_cap_t* cap);
-static inline uint32_t _cc_N(get_perms)(const _cc_cap_t* cap);
+static inline _cc_addr_t _cc_N(get_perms)(const _cc_cap_t* cap);
 static inline uint8_t _cc_N(get_reserved)(const _cc_cap_t* cap);
-static inline uint32_t _cc_N(get_uperms)(const _cc_cap_t* cap);
+static inline _cc_addr_t _cc_N(get_uperms)(const _cc_cap_t* cap);
+/// Returns the combined permissions in the format specified by GCPERM/CGetPerm.
+static inline _cc_addr_t _cc_N(get_all_permissions)(const _cc_cap_t* cap);
+static inline bool _cc_N(has_permissions)(const _cc_cap_t* cap, _cc_addr_t permissions) {
+    return (_cc_N(get_all_permissions)(cap) & permissions) == permissions;
+}
+static inline bool _cc_N(set_permissions)(_cc_cap_t* cap, _cc_addr_t permissions);
+#ifndef CC_IS_MORELLO
+static inline _cc_mode _cc_N(get_execution_mode)(const _cc_cap_t* cap);
+static inline bool _cc_N(set_execution_mode)(_cc_cap_t* cap, _cc_mode new_mode);
+#endif
 
 // In order to allow vector loads and store from memory we can optionally reverse the first two fields.
 struct _cc_N(cap) {
@@ -135,8 +143,11 @@ struct _cc_N(cap) {
     _cc_addr_t cr_base;      /* Capability base addr */
     uint8_t cr_tag;          /* Tag */
     uint8_t cr_bounds_valid; /* Set if bounds decode was given an invalid cap */
-    uint8_t cr_exp;          /* Exponent */
-    uint8_t cr_extra;        /* Additional data stored by the caller */
+#if _CC_N(MANDATORY_LEVELS) != _CC_N(MAX_LEVELS)
+    uint8_t cr_lvbits; /* lvbits for RISC-V Zcherilevel (0 if unsupported/non-RISC-V) */
+#endif
+    uint8_t cr_exp;   /* Exponent */
+    uint8_t cr_extra; /* Additional data stored by the caller */
 #ifdef __cplusplus
     inline _cc_addr_t base() const { return cr_base; }
     inline _cc_addr_t address() const { return _cr_cursor; }
@@ -152,6 +163,8 @@ struct _cc_N(cap) {
         return l > _CC_MAX_ADDR ? _CC_MAX_ADDR : (_cc_addr_t)l;
     }
     inline uint32_t software_permissions() const { return _cc_N(get_uperms)(this); }
+    inline uint32_t all_permissions() const { return _cc_N(get_all_permissions)(this); }
+    inline uint32_t has_permissions(_cc_addr_t perms) const { return _cc_N(has_permissions)(this, perms); }
     inline uint32_t permissions() const { return _cc_N(get_perms)(this); }
     inline uint32_t type() const { return _cc_N(get_otype)(this); }
     inline bool is_sealed() const { return type() != _CC_N(OTYPE_UNSEALED); }
@@ -168,6 +181,9 @@ static inline bool _cc_N(exactly_equal)(const _cc_cap_t* a, const _cc_cap_t* b) 
 static inline bool _cc_N(raw_equal)(const _cc_cap_t* a, const _cc_cap_t* b) {
     return a->_cr_cursor == b->_cr_cursor && a->cr_pesbt == b->cr_pesbt && a->_cr_top == b->_cr_top &&
            a->cr_base == b->cr_base && a->cr_tag == b->cr_tag && a->cr_bounds_valid == b->cr_bounds_valid &&
+#if _CC_N(MANDATORY_LEVELS) != _CC_N(MAX_LEVELS)
+           a->cr_lvbits == b->cr_lvbits &&
+#endif
            a->cr_exp == b->cr_exp && a->cr_extra == b->cr_extra;
 }
 
@@ -238,7 +254,7 @@ TRUNCATE_LSB_FUNC(64)
 #define _cc_truncateLSB(type_width) _cc_N(_CC_CONCAT(truncateLSB_, type_width))
 
 struct _cc_N(bounds_bits) {
-    uint16_t B; // bottom bits (currently 14 bits)
+    uint16_t B; // bottom bits (currently 14 bits, 16 for Morello)
     uint16_t T; // top bits (12 bits plus two implied bits)
     uint8_t E;  // exponent
     bool IE;    // internal exponent flag
@@ -249,19 +265,43 @@ struct _cc_N(bounds_bits) {
     static inline _cc_addr_t _cc_N(cap_pesbt_extract_##FN)(_cc_addr_t pesbt) { return _CC_EXTRACT_FIELD(pesbt, X); }   \
     static inline _cc_addr_t _cc_N(cap_pesbt_encode_##FN)(type value) { return _CC_ENCODE_FIELD(value, X); }           \
     static inline _cc_addr_t _cc_N(cap_pesbt_deposit_##FN)(_cc_addr_t pesbt, type value) {                             \
-        _cc_debug_assert(value <= _CC_N(FIELD_##X##_MAX_VALUE));                                                       \
-        return (pesbt & ~_CC_N(FIELD_##X##_MASK64)) | _CC_ENCODE_FIELD(value, X);                                      \
+        return _CC_DEPOSIT_FIELD(pesbt, value, X);                                                                     \
     }                                                                                                                  \
     static inline type _cc_N(get_##FN)(const _cc_cap_t* cap) { return _cc_N(cap_pesbt_extract_##FN)(cap->cr_pesbt); }  \
     static inline void _cc_N(update_##FN)(_cc_cap_t * cap, _cc_addr_t value) {                                         \
         cap->cr_pesbt = _cc_N(cap_pesbt_deposit_##FN)(cap->cr_pesbt, value);                                           \
     }
-ALL_WRAPPERS(HWPERMS, perms, uint32_t)
-ALL_WRAPPERS(UPERMS, uperms, uint32_t)
 ALL_WRAPPERS(OTYPE, otype, uint32_t)
 ALL_WRAPPERS(FLAGS, flags, uint8_t)
+#if _CC_N(RESERVED_FIELDS) == 1
 ALL_WRAPPERS(RESERVED, reserved, uint8_t)
+#endif
 #undef ALL_WRAPPERS
+
+// These two split helpers exist for backwards compatibility with code that doesn't use the new functions
+static inline _cc_cap_t _cc_N(make_null_derived_cap)(_cc_addr_t addr);
+_CC_DEPRECATED("Use get_all_permissions") static inline _cc_addr_t _cc_N(get_perms)(const _cc_cap_t* cap) {
+    // We assume that HWPERMS always start at non-zero bit position
+    _CC_STATIC_ASSERT(_CC_N(UPERMS_SHFT) != 0, "Architectural perms expected to start at offset zero");
+    // We have to clear reserved one-bits for the 64r/128r formats (will be elided by compiler for other formats)
+    _cc_cap_t null_cap = _cc_N(make_null_derived_cap)(0);
+    _cc_addr_t reserved_one_bits = _cc_N(get_all_permissions)(&null_cap);
+    _cc_addr_t all_perms_w_reserved = _cc_N(get_all_permissions)(cap);
+    return (all_perms_w_reserved & ~reserved_one_bits) & ~_CC_N(PERM_SW_ALL);
+}
+_CC_DEPRECATED("Use get_all_permissions") static inline _cc_addr_t _cc_N(get_uperms)(const _cc_cap_t* cap) {
+    return (_cc_N(get_all_permissions)(cap) & _CC_N(PERM_SW_ALL)) >> _CC_N(UPERMS_SHFT);
+}
+_CC_DEPRECATED("Use set_permissions") static inline void _cc_N(update_perms)(_cc_cap_t* cap, _cc_addr_t value) {
+    _cc_api_requirement((value & _CC_N(PERMS_ALL)) == value, "invalid permission value");
+    _cc_addr_t current_swperms = (_cc_N(get_all_permissions)(cap) & _CC_N(PERM_SW_ALL));
+    _cc_N(set_permissions)(cap, (value & ~_CC_N(PERM_SW_ALL)) | current_swperms);
+}
+_CC_DEPRECATED("Use set_permissions") static inline void _cc_N(update_uperms)(_cc_cap_t* cap, _cc_addr_t value) {
+    _cc_api_requirement((value & _CC_N(UPERMS_ALL)) == value, "invalid permission value");
+    _cc_addr_t old_arch_perms = _cc_N(get_all_permissions)(cap) & ~_CC_N(PERM_SW_ALL);
+    _cc_N(set_permissions)(cap, ((value << _CC_N(UPERMS_SHFT)) & _CC_N(PERM_SW_ALL)) | old_arch_perms);
+}
 
 /// Extract the bits used for bounds and infer the top two bits of T
 static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
@@ -275,11 +315,10 @@ static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
     _CC_STATIC_ASSERT(sizeof(result.E) * __CHAR_BIT__ >=
                           _CC_N(FIELD_EXPONENT_LOW_PART_SIZE) + _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE),
                       "E field too small");
-    result.IE = (bool)(uint32_t)_CC_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT);
+    result.IE = (bool)_CC_N(EXTRACT_IE)(pesbt);
     uint8_t L_msb;
     if (result.IE) {
-        result.E = (uint8_t)(_CC_EXTRACT_FIELD(pesbt, EXPONENT_LOW_PART) |
-                             (_CC_EXTRACT_FIELD(pesbt, EXPONENT_HIGH_PART) << _CC_N(FIELD_EXPONENT_LOW_PART_SIZE)));
+        result.E = (uint8_t)_CC_N(EXTRACT_EXPONENT)(pesbt);
         // Do not offset by 1! We also need to encode E=0 even with IE
         // Also allow nonsense values over 64 - BWidth + 2: this is expected by sail-generated tests
         // E = MIN(64 - BWidth + 2, E);
@@ -287,13 +326,12 @@ static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
         result.T = (uint16_t)_CC_EXTRACT_FIELD(pesbt, EXP_NONZERO_TOP) << _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE);
         L_msb = 1;
     } else {
-        // So, I cheated by inverting E on memory load (to match the rest of CHERI), which Morello does not do.
-        // This means parts of B and T are incorrectly inverted. So invert back again.
-#ifdef CC_IS_MORELLO
-        pesbt ^= _CC_N(NULL_XOR_MASK);
-#endif
         result.E = 0;
+#if _CC_N(USES_LEN_MSB) != 0
+        L_msb = _CC_EXTRACT_FIELD(pesbt, LEN_MSB);
+#else
         L_msb = 0;
+#endif
         result.B = (uint16_t)_CC_EXTRACT_FIELD(pesbt, EXP_ZERO_BOTTOM);
         result.T = (uint16_t)_CC_EXTRACT_FIELD(pesbt, EXP_ZERO_TOP);
     }
@@ -336,18 +374,20 @@ static inline _cc_addr_t _cc_N(cap_bounds_address)(_cc_addr_t addr) {
     return cursor;
 }
 
+#if _CC_N(HAS_BASE_TOP_SPECIAL_CASES) != 0
+static inline bool _cc_N(compute_base_top_special_cases)(_cc_bounds_bits bounds, _cc_addr_t* base_out,
+                                                         _cc_length_t* top_out, bool* valid);
+#endif
 static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cursor, _cc_addr_t* base_out,
                                            _cc_length_t* top_out) {
-#ifdef CC_IS_MORELLO
-    if (bounds.E > _CC_MAX_EXPONENT) {
-        bool valid = bounds.E == _CC_N(MAX_ENCODABLE_EXPONENT);
-        *base_out = 0;
-        *top_out = _CC_N(MAX_TOP);
+#if _CC_N(HAS_BASE_TOP_SPECIAL_CASES) != 0
+    bool valid = true;
+    if (_cc_N(compute_base_top_special_cases)(bounds, base_out, top_out, &valid))
         return valid;
-    }
 #endif
     cursor = _cc_N(cap_bounds_address)(cursor);
 
+#if _CC_N(USES_V9_CORRECTION_FACTORS) != 0
     // For the remaining computations we have to clamp E to max_E
     //  let E = min(maxE, unsigned(c.E)) in
     uint8_t E = _CC_MIN(_CC_MAX_EXPONENT, bounds.E);
@@ -355,18 +395,26 @@ static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cu
     // let a3 = truncate(a >> (E + mantissa_width - 3), 3) in
     // let B3 = truncateLSB(c.B, 3) in
     // let T3 = truncateLSB(c.T, 3) in
-    unsigned a3 = (unsigned)_cc_N(truncate64)(cursor >> (E + _CC_MANTISSA_WIDTH - 3), 3);
-    unsigned B3 = (unsigned)_cc_truncateLSB(_CC_MANTISSA_WIDTH)(bounds.B, 3);
-    unsigned T3 = (unsigned)_cc_truncateLSB(_CC_MANTISSA_WIDTH)(bounds.T, 3);
+    unsigned a_mid = (unsigned)_cc_N(truncate64)(cursor >> (E + _CC_MANTISSA_WIDTH - 3), 3);
+    unsigned correction_B = (unsigned)_cc_truncateLSB(_CC_MANTISSA_WIDTH)(bounds.B, 3);
+    unsigned correction_T = (unsigned)_cc_truncateLSB(_CC_MANTISSA_WIDTH)(bounds.T, 3);
     // let R3 = B3 - 0b001 in /* wraps */
-    unsigned R3 = (unsigned)_cc_N(truncate64)(B3 - 1, 3); // B3 == 0 ? 7 : B3 - 1;
+    unsigned R = (unsigned)_cc_N(truncate64)(correction_B - 1, 3); // B3 == 0 ? 7 : B3 - 1;
+#else
+    _cc_debug_assert(bounds.E <= _CC_MAX_EXPONENT && "malformed caps should already be handled");
+    uint8_t E = bounds.E;
+    unsigned a_mid = (unsigned)_cc_N(truncate64)(cursor >> E, _CC_MANTISSA_WIDTH);
+    unsigned correction_B = bounds.B;
+    unsigned correction_T = bounds.T;
+    unsigned R = _cc_N(truncate64)((unsigned)bounds.B - (1 << (_CC_MANTISSA_WIDTH - 2)), _CC_MANTISSA_WIDTH);
+#endif
     /* Do address, base and top lie in the R aligned region above the one containing R? */
     // let aHi = if a3 <_u R3 then 1 else 0 in
     // let bHi = if B3 <_u R3 then 1 else 0 in
     // let tHi = if T3 <_u R3 then 1 else 0 in
-    int aHi = a3 < R3 ? 1 : 0;
-    int bHi = B3 < R3 ? 1 : 0;
-    int tHi = T3 < R3 ? 1 : 0;
+    int aHi = a_mid < R ? 1 : 0;
+    int bHi = correction_B < R ? 1 : 0;
+    int tHi = correction_T < R ? 1 : 0;
 
     /* Compute region corrections for top and base relative to a */
     // let correction_base = bHi - aHi in
@@ -426,11 +474,17 @@ static inline bool _cc_N(compute_base_top)(_cc_bounds_bits bounds, _cc_addr_t cu
 
 /// Expand a PESBT+address+tag input to a _cc_cap_t, but don't check that the tagged value is derivable.
 /// This is an internal helper and should not not be used outside of this header.
-static inline void _cc_N(unsafe_decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
+static inline void _cc_N(unsafe_decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, uint8_t lvbits,
+                                                _cc_cap_t* cdp) {
     memset(cdp, 0, sizeof(*cdp));
     cdp->cr_tag = tag;
     cdp->_cr_cursor = cursor;
     cdp->cr_pesbt = pesbt;
+#if _CC_N(MANDATORY_LEVELS) != _CC_N(MAX_LEVELS)
+    cdp->cr_lvbits = lvbits;
+#else
+    (void)lvbits;
+#endif
 
     _cc_bounds_bits bounds = _cc_N(extract_bounds_bits)(pesbt);
     bool valid = _cc_N(compute_base_top)(bounds, cursor, &cdp->cr_base, &cdp->_cr_top);
@@ -438,8 +492,9 @@ static inline void _cc_N(unsafe_decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cur
     cdp->cr_exp = bounds.E;
 }
 
-static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
-    _cc_N(unsafe_decompress_raw)(pesbt, cursor, tag, cdp);
+static inline void _cc_N(decompress_raw_ext)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, uint8_t lvbits,
+                                             _cc_cap_t* cdp) {
+    _cc_N(unsafe_decompress_raw)(pesbt, cursor, tag, lvbits, cdp);
     if (tag) {
         _cc_debug_assert(cdp->cr_base <= _CC_N(MAX_ADDR));
 #ifndef CC_IS_MORELLO
@@ -447,15 +502,19 @@ static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bo
         _cc_debug_assert(cdp->_cr_top <= _CC_N(MAX_TOP));
         _cc_debug_assert(cdp->cr_base <= cdp->_cr_top);
 #endif
-        _cc_debug_assert(_CC_EXTRACT_FIELD(pesbt, RESERVED) == 0);
+        _cc_debug_assert(_cc_N(get_reserved)(cdp) == 0);
     }
+}
+
+static inline void _cc_N(decompress_raw)(_cc_addr_t pesbt, _cc_addr_t cursor, bool tag, _cc_cap_t* cdp) {
+    _cc_N(decompress_raw_ext)(pesbt, cursor, tag, /*lvbits=*/0, cdp);
 }
 
 /*
  * Decompress a 128-bit capability.
  */
 static inline void _cc_N(decompress_mem)(uint64_t pesbt, uint64_t cursor, bool tag, _cc_cap_t* cdp) {
-    _cc_N(decompress_raw)(pesbt ^ _CC_N(NULL_XOR_MASK), cursor, tag, cdp);
+    _cc_N(decompress_raw_ext)(pesbt ^ _CC_N(MEM_XOR_MASK), cursor, tag, /*lvbits=*/0, cdp);
 }
 
 static inline bool _cc_N(is_cap_sealed)(const _cc_cap_t* cp) { return _cc_N(get_otype)(cp) != _CC_N(OTYPE_UNSEALED); }
@@ -464,7 +523,7 @@ static inline bool _cc_N(is_cap_sealed)(const _cc_cap_t* cp) { return _cc_N(get_
 static inline bool _cc_N(pesbt_is_correct)(const _cc_cap_t* csp) {
     _cc_cap_t tmp;
     // NB: We use the unsafe decompression function here to handle non-derivable caps without asserting.
-    _cc_N(unsafe_decompress_raw)(csp->cr_pesbt, csp->_cr_cursor, csp->cr_tag, &tmp);
+    _cc_N(unsafe_decompress_raw)(csp->cr_pesbt, csp->_cr_cursor, csp->cr_tag, /*lvbits=*/0, &tmp);
     tmp.cr_extra = csp->cr_extra; // raw_equal also compares, cr_extra but we don't care about that here.
     if (!_cc_N(raw_equal)(&tmp, csp)) {
         return false;
@@ -491,7 +550,7 @@ static inline _cc_addr_t _cc_N(compress_raw)(const _cc_cap_t* csp) {
 }
 
 static inline _cc_addr_t _cc_N(compress_mem)(const _cc_cap_t* csp) {
-    return _cc_N(compress_raw)(csp) ^ _CC_N(NULL_XOR_MASK);
+    return _cc_N(compress_raw)(csp) ^ _CC_N(MEM_XOR_MASK);
 }
 
 static bool _cc_N(fast_is_representable_new_addr)(const _cc_cap_t* cap, _cc_addr_t new_addr);
@@ -501,7 +560,7 @@ static inline bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
     _cc_addr_t pesbt = _cc_N(compress_raw)(cap);
     _cc_cap_t decompressed_cap;
     // NB: We use the unsafe decompression function here to handle non-derivable caps without asserting.
-    _cc_N(unsafe_decompress_raw)(pesbt, cap->_cr_cursor, cap->cr_tag, &decompressed_cap);
+    _cc_N(unsafe_decompress_raw)(pesbt, cap->_cr_cursor, cap->cr_tag, /*lvbits=*/0, &decompressed_cap);
     // These fields must not change:
     _cc_debug_assert(decompressed_cap._cr_cursor == cap->_cr_cursor);
     _cc_debug_assert(decompressed_cap.cr_pesbt == cap->cr_pesbt);
@@ -552,12 +611,33 @@ static inline uint32_t _cc_N(compute_ebt)(_cc_addr_t req_base, _cc_length_t req_
         //  lostSignificantTop  : bool = false;
         //  lostSignificantBase : bool = false;
         //  incE : bool = false;
-        uint32_t ebt_bits = _CC_ENCODE_EBT_FIELD(0, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(req_top, EXP_ZERO_TOP) |
-                            _CC_ENCODE_EBT_FIELD(req_base, EXP_ZERO_BOTTOM);
-#ifdef CC_IS_MORELLO
-        // Due to morello conditionally inverting bits, we need to invert the bits that would be an internal exponent
-        // here
-        ebt_bits ^= _CC_ENCODE_EBT_FIELD(~0, EXPONENT_HIGH_PART) | _CC_ENCODE_EBT_FIELD(~0, EXPONENT_LOW_PART);
+        uint32_t ebt_bits = _CC_N(ENCODE_IE)(false) | _CC_ENCODE_FIELD(req_top, EXP_ZERO_TOP) |
+                            _CC_ENCODE_FIELD(req_base, EXP_ZERO_BOTTOM);
+#if _CC_N(USES_LEN_MSB) != 0
+        // LEN_MSB is bit N of the bounds length, with N being the length of T plus one.
+        //
+        // For RV32 and exponent E == 0, both B and T are 10 bits wide.
+        // A capability stores B[9:0] and T[7:0]. For the bounds length l (the req_length64 variable), we know
+        // T = B + l. If l[9] was 1 we'd not have exponent 0, so l[9] must be 0.
+        //
+        // T[9:8] are not stored. Apart from B[9:0] and T[7:0], what else is required to recover T[9:8] from a stored
+        // capability?
+        //
+        //   B   .. .... ....
+        // + l   0. #### ####
+        //       ------------
+        // = T   xx .... ....
+        //
+        // (. == known bit (stored), # == known bit (not stored), x == unknown bit).
+        //
+        // T[9:8] = B[9:8] + l[8] + carry bit
+        // The carry bit is 1 if B[7:0] > T [7:0]
+        //
+        // Long story short: If we also store l[8] in the capability, we can recover T[9:8].
+        //
+        _CC_STATIC_ASSERT(_CC_N(FIELD_EXP_ZERO_TOP_SIZE) == 8, "We only support formats that use L8");
+        uint8_t len_msb = _cc_N(getbits)(req_length64, _CC_N(FIELD_EXP_ZERO_TOP_SIZE), 1);
+        ebt_bits |= _CC_ENCODE_FIELD(len_msb, LEN_MSB);
 #endif
         if (alignment_mask)
             *alignment_mask = _CC_MAX_ADDR; // no adjustment to base required
@@ -628,24 +708,13 @@ static inline uint32_t _cc_N(compute_ebt)(_cc_addr_t req_base, _cc_length_t req_
             top_ie = _cc_N(truncate64)(top_ie + 1, _CC_BOT_INTERNAL_EXP_WIDTH);
         }
     }
-    //
-    //    Bbits = B_ie @ 0b000;
-    //    Tbits = T_ie @ 0b000;
-    const _cc_addr_t Bbits = bot_ie << _CC_N(FIELD_EXPONENT_LOW_PART_SIZE);
-    const _cc_addr_t Tbits = top_ie << _CC_N(FIELD_EXPONENT_LOW_PART_SIZE);
     const uint8_t newE = E + (incE ? 1 : 0);
-
-    //  };
     //  let exact = not(lostSignificantBase | lostSignificantTop);
     *exact = !lostSignificantBase && !lostSignificantTop;
-    // Split E between T and B
-    const _cc_addr_t expHighBits =
-        _cc_N(getbits)(newE >> _CC_N(FIELD_EXPONENT_LOW_PART_SIZE), 0, _CC_N(FIELD_EXPONENT_HIGH_PART_SIZE));
-    const _cc_addr_t expLowBits = _cc_N(getbits)(newE, 0, _CC_N(FIELD_EXPONENT_LOW_PART_SIZE));
-    const _cc_addr_t Te = Tbits | expHighBits;
-    const _cc_addr_t Be = Bbits | expLowBits;
-    return _CC_ENCODE_EBT_FIELD(1, INTERNAL_EXPONENT) | _CC_ENCODE_EBT_FIELD(Te, TOP_ENCODED) |
-           _CC_ENCODE_EBT_FIELD(Be, BOTTOM_ENCODED);
+    // Split E between T and B (and L_MSB), use the remaining bits to encode Bbits/TBits
+    const _cc_addr_t expBits = _CC_N(ENCODE_EXPONENT)(newE);
+    return expBits | _CC_N(ENCODE_IE)(true) | _CC_ENCODE_FIELD(top_ie, EXP_NONZERO_TOP) |
+           _CC_ENCODE_FIELD(bot_ie, EXP_NONZERO_BOTTOM);
 }
 
 static inline bool _cc_N(precise_is_representable_new_addr)(const _cc_cap_t* oldcap, _cc_addr_t new_cursor) {
@@ -786,13 +855,18 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_length_t req_len, _
     if (req_base < cap->cr_base || req_top > cap->_cr_top) {
         cap->cr_tag = 0;
     }
+#if _CC_N(USES_LEN_MSB) != 0
+    _CC_STATIC_ASSERT(_CC_EXP_LOW_WIDTH == 2, "expected 2 bits to be used by");
+    _CC_STATIC_ASSERT(_CC_EXP_HIGH_WIDTH == 2, "expected 2 bits to be used by");
+#else
+    _CC_STATIC_ASSERT(_CC_EXP_LOW_WIDTH == 3, "expected 3 bits to be used by");
+    _CC_STATIC_ASSERT(_CC_EXP_HIGH_WIDTH == 3, "expected 3 bits to be used by");
+#endif
     /*
      * With compressed capabilities we may need to increase the range of
      * memory addresses to be wider than requested so it is
      * representable.
      */
-    _CC_STATIC_ASSERT(_CC_EXP_LOW_WIDTH == 3, "expected 3 bits to be used by");  // expected 3 bits to
-    _CC_STATIC_ASSERT(_CC_EXP_HIGH_WIDTH == 3, "expected 3 bits to be used by"); // expected 3 bits to
     bool exact = false;
     uint32_t new_ebt = _cc_N(compute_ebt)(req_base, req_top, alignment_mask, &exact);
     _cc_addr_t new_base;
@@ -885,7 +959,8 @@ static inline bool _cc_N(checked_setbounds)(_cc_cap_t* cap, _cc_length_t req_len
     return _cc_N(setbounds)(cap, req_len);
 }
 
-static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top) {
+// Common code shared between all architectures, no support for mode and levels
+static inline _cc_cap_t _cc_N(_make_max_perms_cap_common)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top) {
     _cc_cap_t creg;
     memset(&creg, 0, sizeof(creg));
     assert(base <= top && "Invalid arguments");
@@ -893,8 +968,7 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     creg._cr_cursor = cursor;
     creg.cr_bounds_valid = true;
     creg._cr_top = top;
-    creg.cr_pesbt = _CC_ENCODE_FIELD(_CC_N(UPERMS_ALL), UPERMS) | _CC_ENCODE_FIELD(_CC_N(PERMS_ALL), HWPERMS) |
-                    _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE);
+    creg.cr_pesbt = _CC_N(ENCODED_INFINITE_PERMS)() | _CC_ENCODE_FIELD(_CC_N(OTYPE_UNSEALED), OTYPE);
     creg.cr_tag = true;
     creg.cr_exp = _CC_N(RESET_EXP);
     bool exact_input = false;
@@ -903,6 +977,31 @@ static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cu
     assert(_cc_N(is_representable_cap_exact)(&creg));
     return creg;
 }
+
+#ifndef CC_IS_MORELLO
+// For risc-v cheri formats, the value of M depends on Zcherihybrid support.
+// The CL field and SL, EL perms depend on lvbits (number of Zcherilevels or 0 if unsupported)
+static inline _cc_cap_t _cc_N(make_max_perms_cap_ext)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top,
+                                                      _cc_mode mode, uint8_t lvbits) {
+    _cc_cap_t creg = _cc_N(_make_max_perms_cap_common)(base, cursor, top);
+    _cc_debug_assert(lvbits <= _CC_N(MAX_LEVELS) && "We only support local-global levels.");
+#if _CC_N(MANDATORY_LEVELS) != _CC_N(MAX_LEVELS)
+    creg.cr_lvbits = lvbits;
+#else
+    (void)lvbits;
+#endif
+    bool mode_valid = _cc_N(set_execution_mode(&creg, mode));
+    assert(mode_valid && "Could not set mode on max perms cap");
+    return creg;
+}
+static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top) {
+    return _cc_N(make_max_perms_cap_ext)(base, cursor, top, _CC_N(MODE_INT), /*lvbits*/ 0);
+}
+#else
+static inline _cc_cap_t _cc_N(make_max_perms_cap)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top) {
+    return _cc_N(_make_max_perms_cap_common)(base, cursor, top);
+}
+#endif
 
 /* @return the mask that needs to be applied to base in order to get a precisely representable capability */
 static inline _cc_addr_t _cc_N(get_alignment_mask)(_cc_addr_t req_length) {

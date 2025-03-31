@@ -34,24 +34,14 @@
 
 /* Provide the 64-specific APIs for sail_wrapper_common.c */
 #define SAIL_COMPRESSION_GENERATED_C_FILE "contrib/sail_compression_64.c"
+#define SAIL_INFINITE_CAP zdefault_cap
 // Would be nice to have a stable name for this tuple:
 #define sail_bounds_tuple ztuple_z8z5bv32zCz0z5bv33z9
 
 #define SAIL_WRAPPER_CC_FORMAT_LOWER 64
 #define SAIL_WRAPPER_CC_FORMAT_UPPER 64
+#define SAIL_WRAPPER_CC_IS_V9 1
 
-/* CHERI-64 uses uint64_t, CHERI-128 uses lbits */
-typedef uint64_t sail_cap_bits;
-static void CREATE(sail_cap_bits)(sail_cap_bits* bits) { *bits = 0; }
-static void KILL(sail_cap_bits)(sail_cap_bits* bits) { *bits = UINT64_MAX; }
-static void pesbt_and_addr_to_sail_cap_bits(sail_cap_bits* out, uint32_t pesbt, uint32_t cursor) {
-    *out = (sail_cap_bits)pesbt << 32 | (sail_cap_bits)cursor;
-}
-static void cc_length_t_to_sail_cap_bits(sail_cap_bits* out, uint64_t len) { *out = len; }
-static uint64_t cc64_getbits(uint64_t bits, uint32_t start, uint32_t size);
-static uint64_t extract_sail_cap_bits(sail_cap_bits* bits, uint64_t start, uint64_t len) {
-    return cc64_getbits(*bits, start, len);
-}
 #include "sail_wrapper_common.c"
 
 static inline void set_top_base_from_sail(const struct zCapability* sail, _cc_cap_t* c) {
@@ -64,8 +54,6 @@ static inline void set_top_base_from_sail(const struct zCapability* sail, _cc_ca
 struct cc64_bounds_bits sail_extract_bounds_bits_64(cc64_addr_t pesbt) {
     return sail_extract_bounds_bits_common(pesbt);
 }
-cc64_addr_t sail_compress_64_raw(const cc64_cap_t* csp) { return sail_compress_common_raw(csp); }
-cc64_addr_t sail_compress_64_mem(const cc64_cap_t* csp) { return sail_compress_common_mem(csp); }
 
 cc64_addr_t sail_representable_mask_64(cc64_addr_t len) { return sailgen_getRepresentableAlignmentMask(len); }
 cc64_addr_t sail_representable_length_64(cc64_addr_t len) { return sailgen_getRepresentableLength(len); }

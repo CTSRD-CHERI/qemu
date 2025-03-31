@@ -75,6 +75,10 @@
 #include "sail.h"
 #include "sail_failure.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 unit sail_exit(unit);
 
 /*
@@ -128,6 +132,9 @@ sbits fast_read_ram(const int64_t data_size,
 unit write_tag_bool(const fbits, const bool);
 bool read_tag_bool(const fbits);
 
+unit emulator_write_tag(const uint64_t addr_size, const sbits addr, const bool tag);
+bool emulator_read_tag(const uint64_t addr_size, const sbits addr);
+
 void platform_read_mem(lbits *data,
                        const int read_kind,
                        const uint64_t addr_size,
@@ -145,9 +152,34 @@ bool platform_write_mem(const int write_kind,
 bool platform_excl_res(const unit unit);
 unit platform_barrier();
 
+/* ***** New concurrency interface primitives ***** */
 
+void emulator_read_mem(lbits *data,
+                       const uint64_t addr_size,
+                       const sbits addr,
+                       const mpz_t n);
 
-unit load_raw(fbits addr, const sail_string file);
+void emulator_read_mem_ifetch(lbits *data,
+                              const uint64_t addr_size,
+                              const sbits addr,
+                              const mpz_t n);
+
+void emulator_read_mem_exclusive(lbits *data,
+                                 const uint64_t addr_size,
+                                 const sbits addr,
+                                 const mpz_t n);
+
+bool emulator_write_mem(const uint64_t addr_size,
+                        const sbits addr,
+                        const mpz_t n,
+                        const lbits data);
+
+bool emulator_write_mem_exclusive(const uint64_t addr_size,
+                                  const sbits addr,
+                                  const mpz_t n,
+                                  const lbits data);
+
+unit load_raw(fbits addr, const_sail_string file);
 
 void load_image(char *);
 
@@ -184,7 +216,7 @@ bool is_tracing(const unit);
 void trace_sail_int(const sail_int);
 void trace_bool(const bool);
 void trace_unit(const unit);
-void trace_sail_string(const sail_string);
+void trace_sail_string(const_sail_string);
 void trace_fbits(const fbits);
 void trace_lbits(const lbits);
 
@@ -224,7 +256,11 @@ int process_arguments(int, char**);
 void setup_rts(void);
 void cleanup_rts(void);
 
-unit z__SetConfig(sail_string, sail_int);
+unit z__SetConfig(const_sail_string, sail_int);
 unit z__ListConfig(const unit u);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

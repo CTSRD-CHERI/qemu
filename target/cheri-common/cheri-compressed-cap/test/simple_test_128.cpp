@@ -1,6 +1,3 @@
-#define TEST_CC_FORMAT_LOWER 128
-#define TEST_CC_FORMAT_UPPER 128
-
 #include "simple_test_common.cpp"
 
 TEST_CASE("QEMU representability regression tests", "[representable]") {

@@ -1,7 +1,3 @@
-#define TEST_CC_FORMAT_LOWER 128m
-#define TEST_CC_FORMAT_UPPER 128M
-#define TEST_CC_IS_MORELLO
-
 #include "setbounds_test_common.cpp"
 
 TEST_CASE("Morello setbounds with high bits", "[bounds]") {
@@ -35,10 +31,11 @@ TEST_CASE("Fuzzer generated behaviour difference 1", "[fuzz]") {
 
 TEST_CASE("Fuzzer incorrect exact result 1", "[fuzz]") {
     TestAPICC::cap_t cap =
-        TestAPICC::decompress_raw(/*pesbt=*/0x27ff00007ff6fe00, /*cursor=*/0xfe00000000000000, /*tag=*/true);
+        TestAPICC::decompress_mem(/*pesbt=*/0x27ff00003ff1fe07, /*cursor=*/0xfe00000000000000, /*tag=*/true);
     uint64_t req_len = 0x2300000000000000;
     CHECK(cap.base() == 0xfe00000000000000);
     CHECK(cap.top() == (_CC_MAX_TOP | 0x3ff0000000000000));
+    CHECK(cap.cr_exp == 48);
     bool was_exact = false;
     auto result = do_csetbounds<TestAPICC>(cap, &was_exact, req_len);
     // Top is > MAX_TOP so tag should be cleared

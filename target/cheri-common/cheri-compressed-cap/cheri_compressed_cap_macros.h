@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2018-2020 Alex Richardson
- * All rights reserved.
  *
  * This software was developed by SRI International and the University of
  * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
@@ -60,6 +59,9 @@
 #define _CC_CONCAT(x, y) _CC_CONCAT1(x, y)
 #define _CC_EXPAND1(x) x
 #define _CC_EXPAND(x) _CC_EXPAND1(x)
+#define _CC_STRINGIFY2(x) #x
+#define _CC_STRINGIFY1(x) _CC_STRINGIFY2(x)
+#define _CC_STRINGIFY(x) _CC_STRINGIFY1(x)
 
 #ifdef __cplusplus
 // Some versions of GCC dont't like _Static_assert() in C++ mode
@@ -68,10 +70,18 @@
 #define _CC_STATIC_ASSERT(cond, msg) _Static_assert(cond, msg)
 #endif
 
+#ifdef _CC_TEST_ENABLE_DEPRECATED
+#define _CC_DEPRECATED(msg)
+#else
+#define _CC_DEPRECATED(msg) __attribute__((deprecated(msg)))
+#endif
+
 #define _cc_N(name) _CC_CONCAT(_CC_CONCAT(_CC_CONCAT(cc, CC_FORMAT_LOWER), _), name)
 #define _CC_N(name) _CC_CONCAT(_CC_CONCAT(_CC_CONCAT(CC, CC_FORMAT_UPPER), _), name)
 
+#define _CC_BIT64(bit) (UINT64_C(1) << (bit))
 #define _CC_BITMASK64(nbits) ((UINT64_C(1) << (nbits)) - UINT64_C(1))
+#define _CC_BITMASK64_RANGE(from, to) ((UINT64_C(1) << ((to) - (from) + 1)) - UINT64_C(1)) << (from)
 
 // NB: Do not use GNU statement expressions as this is used by LLVM which warns
 // on any uses during its build. These are therefore unsafe if any arguments
@@ -88,12 +98,21 @@
     _CC_N(FIELD_##name##_MAX_VALUE) = _CC_N(FIELD_##name##_MASK_NOT_SHIFTED)
 
 #define _CC_ENCODE_FIELD(value, name)                                                                                  \
-    ((uint64_t)((value)&_CC_N(FIELD_##name##_MAX_VALUE)) << _CC_N(FIELD_##name##_START))
+    ((uint64_t)((value) & _CC_N(FIELD_##name##_MAX_VALUE)) << _CC_N(FIELD_##name##_START))
 
-#define _CC_EXTRACT_FIELD(value, name) _cc_N(getbits)((value), _CC_N(FIELD_##name##_START), _CC_N(FIELD_##name##_SIZE))
+#define _CC_EXTRACT_FIELD(pesbt, name) _cc_N(getbits)((pesbt), _CC_N(FIELD_##name##_START), _CC_N(FIELD_##name##_SIZE))
+#define _CC_DEPOSIT_FIELD(pesbt, value, name)                                                                          \
+    __extension__({                                                                                                    \
+        _cc_debug_assert(value <= _CC_N(FIELD_##name##_MAX_VALUE));                                                    \
+        ((pesbt) & ~_CC_N(FIELD_##name##_MASK64)) | _CC_ENCODE_FIELD(value, name);                                     \
+    })
 
-#define _CC_ENCODE_EBT_FIELD(value, name)                                                                              \
-    ((uint64_t)((value)&_CC_N(FIELD_##name##_MAX_VALUE)) << (_CC_N(FIELD_##name##_START) + _CC_N(FIELD_EBT_START)))
+#define _CC_ENCODE_SPLIT_FIELD(value, HIGH, LOW)                                                                       \
+    _CC_ENCODE_FIELD((value) >> _CC_N(FIELD_##LOW##_SIZE), HIGH) | _CC_ENCODE_FIELD(value, LOW)
+#define _CC_EXTRACT_SPLIT_FIELD(pesbt, HIGH, LOW)                                                                      \
+    (_CC_EXTRACT_FIELD(pesbt, LOW) | (_CC_EXTRACT_FIELD(pesbt, HIGH) << _CC_N(FIELD_##LOW##_SIZE)))
+#define _CC_ENCODE_SPLIT_EXPONENT(E) _CC_ENCODE_SPLIT_FIELD(E, EXPONENT_HIGH_PART, EXPONENT_LOW_PART)
+#define _CC_EXTRACT_SPLIT_EXPONENT(pesbt) _CC_EXTRACT_SPLIT_FIELD(pesbt, EXPONENT_HIGH_PART, EXPONENT_LOW_PART)
 
 #define _CC_SPECIAL_OTYPE(name, val)                                                                                   \
     _CC_N(name) = (_CC_N(SPECIAL_OTYPE_VAL)(val)), _CC_N(name##_SIGNED) = (_CC_N(SPECIAL_OTYPE_VAL_SIGNED)(val))
@@ -103,7 +122,7 @@ template <size_t a, size_t b> static constexpr bool check_same() {
     static_assert(a == b, "");
     return true;
 }
-#define _CC_STATIC_ASSERT_SAME(a, b) static_assert(check_same<a, b>(), "")
+#define _CC_STATIC_ASSERT_SAME(a, b) static_assert(check_same<(a), (b)>(), "")
 #else
 #define _CC_STATIC_ASSERT_SAME(a, b) _Static_assert((a) == (b), "")
 #endif

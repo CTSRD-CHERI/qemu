@@ -1,6 +1,3 @@
-#define TEST_CC_FORMAT_LOWER 128
-#define TEST_CC_FORMAT_UPPER 128
-
 #define HAVE_SAIL_SETBOUNDS_TEST_CASES
 #include "contrib/setbounds_inputs_128.cpp"
 

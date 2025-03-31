@@ -8,3 +8,5 @@ DerivePointerAlignment: false
 PointerAlignment: Left
 AllowShortCaseLabelsOnASingleLine: true
 AccessModifierOffset: -4
+AttributeMacros:
+  - _CC_DEPRECATED

@@ -6,15 +6,11 @@
 #define CC_FORMAT_LOWER TEST_CC_FORMAT_LOWER
 #define CC_FORMAT_UPPER TEST_CC_FORMAT_UPPER
 
-#define DO_STRINGIFY2(x) #x
-#define DO_STRINGIFY1(x) DO_STRINGIFY2(x)
-#define STRINGIFY(x) DO_STRINGIFY1(x)
-
 static const char* otype_suffix(uint32_t otype) {
     // clang-format off
     switch (otype) {
 #define OTYPE_CASE(Name, ...)                                                                                          \
-    case _CC_N(Name): return " (" STRINGIFY(_CC_N(Name)) ")";
+    case _CC_N(Name): return " (" _CC_STRINGIFY(_CC_N(Name)) ")";
         _CC_N(LS_SPECIAL_OTYPES)(OTYPE_CASE, )
     default: return "";
 #undef OTYPE_CASE

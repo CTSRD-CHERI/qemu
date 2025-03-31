@@ -42,42 +42,101 @@
 #define SAIL_WRAPPER_CC_FORMAT_LOWER 128m
 #define SAIL_WRAPPER_CC_FORMAT_UPPER 128M
 
-/* CHERI-64 uses uint64_t, CHERI-128 uses lbits */
-typedef lbits sail_cap_bits;
-#define SAIL_COMPRESSION_INDIRECT_BITS
-static void create_sail_cap_bits(sail_cap_bits* bits) { create_lbits(bits); }
-static void kill_sail_cap_bits(sail_cap_bits* bits) { kill_lbits(bits); }
-static void pesbt_and_addr_to_sail_cap_bits(sail_cap_bits* out, uint64_t pesbt, uint64_t cursor) {
-    lbits sail_pesbt;
-    lbits sail_cursor;
-    CREATE_OF(lbits, fbits)(&sail_pesbt, pesbt, 64, true);
-    CREATE_OF(lbits, fbits)(&sail_cursor, cursor, 64, true);
-    CREATE(lbits)(out);
-    append(out, sail_pesbt, sail_cursor);
-    KILL(lbits)(&sail_pesbt);
-    KILL(lbits)(&sail_cursor);
-}
-static void cc_length_t_to_sail_cap_bits(sail_cap_bits* out, unsigned __int128 len) {
-    lbits len_high;
-    lbits len_low;
-    CREATE_OF(lbits, fbits)(&len_high, len >> 64, 1, true);
-    CREATE_OF(lbits, fbits)(&len_low, (uint64_t)len, 64, true);
-    append(out, len_high, len_low);
-    KILL(lbits)(&len_high);
-    KILL(lbits)(&len_low);
-}
-
-static inline uint64_t extract_bits(lbits op, uint64_t start, uint64_t len);
-static inline uint64_t extract_sail_cap_bits(sail_cap_bits* bits, uint64_t start, uint64_t len) {
-    return extract_bits(*bits, start, len);
-}
-
 #include "sail_wrapper_common.c"
+
+static inline uint64_t extract_low_bits(lbits bits) {
+    fbits bits_low = CONVERT_OF(fbits, lbits)(bits, true);
+    return (uint64_t)bits_low;
+}
+
+#define CHECK_FIELD_LENGTHS
+
+static inline void check_length(lbits bits, uint64_t length) {
+#ifdef CHECK_FIELD_LENGTHS
+    sail_int len;
+    CREATE(sail_int)(&len);
+    length_lbits(&len, bits);
+    assert(CONVERT_OF(mach_int, sail_int)(len) == length);
+    KILL(sail_int)(&len);
+#endif
+}
+
+// The Morello cap is just all the bits slammed together with no extra decode
+static lbits to_sail_cap(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag) {
+    lbits cap_without_tag;
+    pesbt_and_addr_to_sail_cap_bits(&cap_without_tag, mem_pesbt, mem_cursor);
+    lbits capbits;
+    CREATE(lbits)(&capbits);
+    lbits captag;
+    CREATE_OF(lbits, fbits)(&captag, tag ? 1 : 0, 1, true);
+    append(&capbits, captag, cap_without_tag);
+    KILL(lbits)(&captag);
+    KILL(lbits)(&cap_without_tag);
+
+    check_length(capbits, 129);
+    return capbits;
+}
+
+static lbits cap_t_to_sail_cap(const _cc_cap_t* c) { return to_sail_cap(c->cr_pesbt, c->_cr_cursor, c->cr_tag); }
+
+/* Exported API */
+static _cc_cap_t from_sail_cap(const lbits* sail_cap) {
+    _cc_cap_t result;
+    memset(&result, 0, sizeof(result));
+
+    // Now extract some fields
+    // Bounds (base and top) and exponent
+    struct sail_bounds_tuple bounds;
+    _CC_CONCAT(create_, sail_bounds_tuple)(&bounds);
+    sailgen_CapGetBounds(&bounds, *sail_cap);
+
+    check_length(bounds.ztup0, 65);
+    check_length(bounds.ztup1, 65);
+
+    result.cr_base = extract_bits(bounds.ztup0, 0, 64);
+    uint64_t top_hi = extract_bits(bounds.ztup1, 64, 1);
+    uint64_t top_lo = extract_low_bits(bounds.ztup1);
+    result._cr_top = (((_cc_length_t)top_hi) << 64) | (_cc_length_t)top_lo;
+    _CC_CONCAT(kill_, sail_bounds_tuple)(&bounds);
+
+    result.cr_bounds_valid = bounds.ztup2;
+    result.cr_exp = sailgen_CapGetExponent(*sail_cap);
+
+    // Address including flag bits
+    result._cr_cursor = sailgen_CapGetValue(*sail_cap);
+    _cc_N(set_permissions)(&result, sailgen_CapGetPermissions(*sail_cap));
+    _cc_N(update_otype)(&result, sailgen_CapGetObjectType(*sail_cap));
+    result.cr_tag = sailgen_CapGetTag(*sail_cap);
+
+    // Fix these extra fields not really present in sail
+    _cc_N(update_flags)(&result, 0);
+    _cc_N(update_uperms)(&result, 0);
+    result.cr_pesbt = extract_bits(*sail_cap, 64, 64);
+    return result;
+}
+
+_cc_cap_t _cc_sail(decode_mem)(uint64_t mem_pesbt, uint64_t mem_cursor, bool tag) {
+    lbits capbits = to_sail_cap(mem_pesbt, mem_cursor, tag);
+    _cc_cap_t result = from_sail_cap(&capbits);
+    KILL(lbits)(&capbits);
+    return result;
+}
+
+_cc_cap_t _cc_sail(decode_raw)(uint64_t pesbt, uint64_t cursor, bool tag) {
+    // There is no difference between raw and memory format for Morello
+    return _cc_sail(decode_mem)(pesbt, cursor, tag);
+}
+
+uint64_t sail_compress_morello(const _cc_cap_t* csp) {
+    lbits capbits = cap_t_to_sail_cap(csp);
+    uint64_t mem_pesbt = extract_bits(capbits, 64, 64);
+    KILL(lbits)(&capbits);
+    return mem_pesbt;
+}
 
 /* Exported API */
 struct cc128m_bounds_bits sail_extract_bounds_bits_128m(uint64_t pesbt) {
-    // We have to XOR the pesbt bits here since the Morello sail model does not invert on load/store.
-    lbits sailcap = to_sail_cap(pesbt ^ CC128M_NULL_XOR_MASK, 0, false);
+    lbits sailcap = to_sail_cap(pesbt, 0, false);
     struct cc128m_bounds_bits result = {.E = sailgen_CapGetExponent(sailcap),
                                         .B = sailgen_CapGetBottom(sailcap),
                                         .T = sailgen_CapGetTop(sailcap),
@@ -86,8 +145,9 @@ struct cc128m_bounds_bits sail_extract_bounds_bits_128m(uint64_t pesbt) {
     return result;
 }
 
-uint64_t sail_compress_128m_raw(const cc128m_cap_t* csp) { return sail_compress_common_raw(csp); }
-uint64_t sail_compress_128m_mem(const cc128m_cap_t* csp) { return sail_compress_common_mem(csp); }
+// There is no difference between raw and memory format for Morello
+uint64_t sail_compress_raw_128m(const cc128m_cap_t* csp) { return sail_compress_morello(csp); }
+uint64_t sail_compress_mem_128m(const cc128m_cap_t* csp) { return sail_compress_morello(csp); }
 
 bool sail_setbounds_128m(cc128m_cap_t* cap, cc128m_length_t req_len) {
     lbits sail_len;
@@ -131,3 +191,9 @@ _cc_cap_t sail_reset_capability_128m(void) {
     return from_sail_cap(&zCMAX);
     return result;
 }
+
+_cc_addr_t sail_null_pesbt_128m(void) {
+    return 0; // Morello does not invert capabilities when loading/storing to/from memory
+}
+
+_cc_addr_t sail_reset_pesbt_128m(void) { return extract_bits(zCMAX, 64, 64); }

@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2018-2020 Alex Richardson
- * All rights reserved.
  *
  * This software was developed by SRI International and the University of
  * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
@@ -34,11 +33,10 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+// This file defines the 64-bit CHERI compressed capability format for the CHERI ISA version 9.
 
-// The following macros are expected to be defined
 #define CC_FORMAT_LOWER 128
 #define CC_FORMAT_UPPER 128
-/* These should match the definitions in sail! */
 #define CC128_CAP_SIZE 16
 #define CC128_CAP_BITS 128
 #define CC128_ADDR_WIDTH 64
@@ -56,6 +54,9 @@
 /* Special otypes are allocated downwards from -1 */
 #define CC128_SPECIAL_OTYPE_VAL(subtract) (CC128_MAX_REPRESENTABLE_OTYPE - subtract##u)
 #define CC128_SPECIAL_OTYPE_VAL_SIGNED(subtract) (((int64_t)-1) - subtract##u)
+// ISAv9 always supports exactly one level bit (local/global).
+#define CC128_MANDATORY_LEVELS 1
+#define CC128_MAX_LEVELS CC64_MANDATORY_LEVELS
 
 /* Use __uint128 to represent 65 bit length */
 __extension__ typedef unsigned __int128 cc128_length_t;
@@ -63,6 +64,7 @@ __extension__ typedef signed __int128 cc128_offset_t;
 typedef uint64_t cc128_addr_t;
 typedef int64_t cc128_saddr_t;
 #include "cheri_compressed_cap_macros.h"
+typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 1, _CC_N(MODE_INT) = 0 } _CC_N(Mode);
 
 /* ignore ISO C restricts enumerator values to range of 'int' */
 #pragma GCC diagnostic push
@@ -118,11 +120,13 @@ _CC_STATIC_ASSERT((CC128_HIGHEST_PERM << 1) > CC128_FIELD_HWPERMS_MAX_VALUE, "al
 #define CC128_UPERMS_ALL (0xf)  /* [15...18] */
 #define CC128_UPERMS_SHFT (15)
 #define CC128_UPERMS_MEM_SHFT (12)
-#define CC128_MAX_UPERM (3)
+#define CC128_PERM_SW_ALL (CC128_UPERMS_ALL << CC128_UPERMS_SHFT)
+#define CC128_ENCODED_INFINITE_PERMS()                                                                                 \
+    (_CC_ENCODE_FIELD(CC128_UPERMS_ALL, UPERMS) | _CC_ENCODE_FIELD(CC128_PERMS_ALL, HWPERMS))
+#define CC128_PERMS_MASK (CC128_PERMS_ALL | CC128_PERM_SW_ALL)
 
 // We reserve 16 otypes
 enum _CC_N(OTypes) {
-    CC128_FIRST_NONRESERVED_OTYPE = 0,
     CC128_MAX_REPRESENTABLE_OTYPE = ((1u << CC128_OTYPE_BITS) - 1u),
     _CC_SPECIAL_OTYPE(OTYPE_UNSEALED, 0),
     _CC_SPECIAL_OTYPE(OTYPE_SENTRY, 1),
@@ -146,10 +150,23 @@ enum _CC_N(OTypes) {
 
 _CC_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
+// CHERI ISA v9 uses the "internal exponent" bit.
+#define CC128_ENCODE_IE(IE) _CC_ENCODE_FIELD(IE, INTERNAL_EXPONENT)
+#define CC128_EXTRACT_IE(pesbt) _CC_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT)
+// The exponent bits in memory are xored on load/store, so we encode the raw exponent value.
+#define CC128_ENCODE_EXPONENT(E) _CC_ENCODE_SPLIT_EXPONENT(E)
+#define CC128_EXTRACT_EXPONENT(pesbt) _CC_EXTRACT_SPLIT_EXPONENT(pesbt)
+#define CC128_RESERVED_FIELDS 1
+#define CC128_RESERVED_BITS CC128_FIELD_RESERVED_SIZE
+#define CC128_HAS_BASE_TOP_SPECIAL_CASES 0
+#define CC128_USES_V9_CORRECTION_FACTORS 1
+#define CC128_USES_LEN_MSB 0
+
 #include "cheri_compressed_cap_common.h"
+#include "cheri_compressed_cap_v9_common.h"
 
 // Sanity-check mask is the expected NULL encoding
-_CC_STATIC_ASSERT_SAME(CC128_NULL_XOR_MASK, UINT64_C(0x00001ffffc018004));
+_CC_STATIC_ASSERT_SAME(CC128_MEM_XOR_MASK, UINT64_C(0x00001ffffc018004));
 
 __attribute__((deprecated("Use cc128_compress_raw"))) static inline uint64_t
 compress_128cap_without_xor(const cc128_cap_t* csp) {
@@ -169,11 +186,6 @@ __attribute__((deprecated("Use cc128_decompress_mem"))) static inline void
 decompress_128cap(uint64_t pesbt, uint64_t cursor, _cc_cap_t* cdp) {
     cc128_decompress_mem(pesbt, cursor, cdp->cr_tag, cdp);
 }
-
-#define CC128_FIELD(name, last, start) _CC_FIELD(name, last, start)
-#define CC128_ENCODE_FIELD(value, name) _CC_ENCODE_FIELD(value, name)
-#define CC128_EXTRACT_FIELD(value, name) _CC_EXTRACT_FIELD(value, name)
-#define CC128_ENCODE_EBT_FIELD(value, name) _CC_ENCODE_EBT_FIELD(value, name)
 
 #undef CC_FORMAT_LOWER
 #undef CC_FORMAT_UPPER

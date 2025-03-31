@@ -1,7 +1,7 @@
 /*-
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * Copyright (c) 2020 Alex Richardson
+ * Copyright (c) 2025 Alex Richardson
  *
  * This software was developed by SRI International and the University of
  * Cambridge Computer Laboratory (Department of Computer Science and
@@ -32,36 +32,10 @@
 
 #include "contrib/sail.h"
 
-/* Provide the 128-specific APIs for sail_wrapper_common.c */
+/* Provide the RISC-V standard 128-bit APIs for sail_wrapper_common.c */
 
-#define SAIL_COMPRESSION_GENERATED_C_FILE "contrib/sail_compression_128.c"
-#define SAIL_INFINITE_CAP zdefault_cap
-#define sail_bounds_tuple ztuple_z8z5bv64zCz0z5bvz9
+#define SAIL_COMPRESSION_GENERATED_C_FILE "contrib/sail_compression_64r.c"
+#define SAIL_WRAPPER_CC_FORMAT_LOWER 64r
+#define SAIL_WRAPPER_CC_FORMAT_UPPER 64R
 
-#define SAIL_WRAPPER_CC_FORMAT_LOWER 128
-#define SAIL_WRAPPER_CC_FORMAT_UPPER 128
-#define SAIL_WRAPPER_CC_IS_V9 1
-
-#include "sail_wrapper_common.c"
-
-static inline void set_top_base_from_sail(const struct zCapability* sail, _cc_cap_t* c) {
-    // Would be nice to have a stable name for this tuple:
-    struct sail_bounds_tuple base_top;
-    _CC_CONCAT(create_, sail_bounds_tuple)(&base_top);
-    sailgen_getCapBoundsBits(&base_top, *sail);
-    c->cr_base = base_top.ztup0;
-    sail_int top_len;
-    CREATE(sail_int)(&top_len);
-    length_lbits(&top_len, base_top.ztup1);
-    assert(CONVERT_OF(mach_int, sail_int)(top_len) == 65);
-    KILL(sail_int)(&top_len);
-    fbits top_high = extract_bits(base_top.ztup1, 64, 1);
-    fbits top_low = CONVERT_OF(fbits, lbits)(base_top.ztup1, true);
-    c->_cr_top = (((cc128_length_t)top_high) << 64) | (cc128_length_t)top_low;
-    _CC_CONCAT(kill_, sail_bounds_tuple)(&base_top);
-}
-
-/* Exported API */
-struct cc128_bounds_bits sail_extract_bounds_bits_128(uint64_t pesbt) { return sail_extract_bounds_bits_common(pesbt); }
-cc128_addr_t sail_representable_mask_128(cc128_addr_t len) { return sailgen_getRepresentableAlignmentMask(len); }
-cc128_addr_t sail_representable_length_128(cc128_addr_t len) { return sailgen_getRepresentableLength(len); }
+#include "sail_wrapper_common_riscv.c"

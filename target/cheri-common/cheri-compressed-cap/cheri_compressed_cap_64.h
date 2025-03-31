@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2018-2020 Alex Richardson
- * All rights reserved.
  *
  * This software was developed by SRI International and the University of
  * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
@@ -34,11 +33,10 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+// This file defines the 32-bit CHERI compressed capability format for the CHERI ISA version 9.
 
-// The following macros are expected to be defined
 #define CC_FORMAT_LOWER 64
 #define CC_FORMAT_UPPER 64
-/* These should match the definitions in sail! */
 #define CC64_CAP_SIZE 8
 #define CC64_CAP_BITS 64
 #define CC64_ADDR_WIDTH 32
@@ -56,6 +54,9 @@
 /* Special otypes are allocated downwards from -1 */
 #define CC64_SPECIAL_OTYPE_VAL(subtract) (CC64_MAX_REPRESENTABLE_OTYPE - subtract##u)
 #define CC64_SPECIAL_OTYPE_VAL_SIGNED(subtract) (((int64_t)-1) - subtract##u)
+// ISAv9 always supports exactly one level bit (local/global).
+#define CC64_MANDATORY_LEVELS 1
+#define CC64_MAX_LEVELS CC64_MANDATORY_LEVELS
 
 /* Use uint64_t to represent 33 bit length */
 typedef uint64_t cc64_length_t;
@@ -63,6 +64,7 @@ typedef int64_t cc64_offset_t;
 typedef uint32_t cc64_addr_t;
 typedef int32_t cc64_saddr_t;
 #include "cheri_compressed_cap_macros.h"
+typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 1, _CC_N(MODE_INT) = 0 } _CC_N(Mode);
 
 /* ignore ISO C restricts enumerator values to range of 'int' */
 #pragma GCC diagnostic push
@@ -110,12 +112,15 @@ _CC_STATIC_ASSERT_SAME(CC64_FIELD_RESERVED_SIZE, 0);
 #define CC64_PERM_UNSEAL (1 << 9)
 #define CC64_PERM_ACCESS_SYS_REGS (1 << 10)
 #define CC64_PERM_SETCID (1 << 11)
+#define CC64_PERM_SW_ALL 0
 _CC_STATIC_ASSERT(CC64_PERM_SETCID < CC64_FIELD_HWPERMS_MAX_VALUE, "permissions not representable?");
 
-#define CC64_PERMS_ALL (0xfff) /* [0...11] */
-#define CC64_UPERMS_ALL (0)    /* [15...18] */
+#define CC64_PERMS_ALL (0xfff)
+#define CC64_UPERMS_ALL (0)
 #define CC64_UPERMS_SHFT (15)
-#define CC64_MAX_UPERM (0)
+#define CC64_ENCODED_INFINITE_PERMS()                                                                                  \
+    (_CC_ENCODE_FIELD(CC64_UPERMS_ALL, UPERMS) | _CC_ENCODE_FIELD(CC64_PERMS_ALL, HWPERMS))
+#define CC64_PERMS_MASK (CC64_PERMS_ALL | CC64_PERM_SW_ALL)
 
 // We reserve 16 otypes
 enum _CC_N(OTypes) {
@@ -134,15 +139,23 @@ enum _CC_N(OTypes) {
 
 _CC_STATIC_ASSERT_SAME(CC64_MANTISSA_WIDTH, CC64_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
+// CHERI ISA v9 uses the "internal exponent" bit.
+#define CC64_ENCODE_IE(IE) _CC_ENCODE_FIELD(IE, INTERNAL_EXPONENT)
+#define CC64_EXTRACT_IE(pesbt) _CC_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT)
+// The exponent bits in memory are xored on load/store, so we encode the raw exponent value.
+#define CC64_ENCODE_EXPONENT(E) _CC_ENCODE_SPLIT_EXPONENT(E)
+#define CC64_EXTRACT_EXPONENT(pesbt) _CC_EXTRACT_SPLIT_EXPONENT(pesbt)
+#define CC64_RESERVED_FIELDS 1
+#define CC64_RESERVED_BITS CC64_FIELD_RESERVED_SIZE
+#define CC64_HAS_BASE_TOP_SPECIAL_CASES 0
+#define CC64_USES_V9_CORRECTION_FACTORS 1
+#define CC64_USES_LEN_MSB 0
+
 #include "cheri_compressed_cap_common.h"
+#include "cheri_compressed_cap_v9_common.h"
 
 // Sanity-check mask is the expected NULL encoding
-_CC_STATIC_ASSERT_SAME(CC64_NULL_XOR_MASK, UINT32_C(0x7c302));
-
-#define CC64_FIELD(name, last, start) _CC_FIELD(name, last, start)
-#define CC64_ENCODE_FIELD(value, name) _CC_ENCODE_FIELD(value, name)
-#define CC64_EXTRACT_FIELD(value, name) _CC_EXTRACT_FIELD(value, name)
-#define CC64_ENCODE_EBT_FIELD(value, name) _CC_ENCODE_EBT_FIELD(value, name)
+_CC_STATIC_ASSERT_SAME(CC64_MEM_XOR_MASK, UINT32_C(0x7c302));
 
 #undef CC_FORMAT_LOWER
 #undef CC_FORMAT_UPPER

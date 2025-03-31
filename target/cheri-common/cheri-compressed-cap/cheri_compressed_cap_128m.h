@@ -2,7 +2,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  *
  * Copyright (c) 2018-2020 Alex Richardson
- * All rights reserved.
  *
  * This software was developed by SRI International and the University of
  * Cambridge Computer Laboratory under DARPA/AFRL contract FA8750-10-C-0237
@@ -34,6 +33,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+// This file defines the CHERI compressed capability format for the Arm Morello architecture.
 
 /* Notes on Morello Vs Other CHERI platforms:
  * The Morello Psuedo-code thinks of fields as inverted on each use, rather than being
@@ -57,10 +57,8 @@
  */
 #define CC_IS_MORELLO
 
-// The following macros are expected to be defined
 #define CC_FORMAT_LOWER 128m
 #define CC_FORMAT_UPPER 128M
-/* These should match the definitions in sail! */
 #define CC128M_CAP_SIZE 16
 #define CC128M_CAP_BITS 128
 #define CC128M_ADDR_WIDTH 64
@@ -79,6 +77,9 @@
 /* Special otypes are allocated upwards from 0 */
 #define CC128M_SPECIAL_OTYPE_VAL(val) (val##u)
 #define CC128M_SPECIAL_OTYPE_VAL_SIGNED(val) (val##u)
+// Morello always supports exactly one level bit (local/global).
+#define CC128M_MANDATORY_LEVELS 1
+#define CC128M_MAX_LEVELS CC64_MANDATORY_LEVELS
 
 /* Use __uint128 to represent 65 bit length */
 __extension__ typedef unsigned __int128 cc128m_length_t;
@@ -91,11 +92,10 @@ typedef int64_t cc128m_saddr_t;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
-    // Morello HW perms actually 127..116, and 111...100. But seperating the fields is just a headache, and would make
-    // other code more complex. Pretend that they are all HW Perms.
-    _CC_FIELD(HWPERMS, 127, 110),
-    _CC_FIELD(UPERMS, 111, 112),
-    // Should _CC_FIELD(UPERMS, 115, 112), if that wouldn't cause a double count because of above.
+    _CC_FIELD(ALL_PERMS, 127, 110),
+    _CC_FIELD(HWPERMS, 127, 110), // TODO: remove this, currently still used by QEMU
+    // Morello HW perms actually 127..116, and 111...100 with SW perms in the middle.
+    _CC_FIELD(UPERMS, 115, 112),
     _CC_FIELD(OTYPE, 109, 95),
     _CC_FIELD(EBT, 94, 64),
 // This is a bit dodgy. This enum only really works for non-address bits.
@@ -103,9 +103,10 @@ enum {
 // Should really be `_CC_FIELD(FLAGS, 63, 56)', if this stuff applied to the address
 #define MORELLO_FLAG_BITS 8
     _CC_FIELD(FLAGS, 64, 65),
-    _CC_FIELD(RESERVED, 64, 65),
 
-    _CC_FIELD(INTERNAL_EXPONENT, 94, 94),
+    _CC_FIELD(EXPONENT_ZERO, 94, 94),
+    // The FIELD_INTERNAL_EXPONENT_SIZE name is currently required by various static assertions.
+    _CC_N(FIELD_INTERNAL_EXPONENT_SIZE) = _CC_N(FIELD_EXPONENT_ZERO_SIZE),
     _CC_FIELD(TOP_ENCODED, 93, 80),
     _CC_FIELD(BOTTOM_ENCODED, 79, 64),
 
@@ -125,10 +126,14 @@ enum {
 #define CC128M_BOT_WIDTH CC128M_FIELD_EXP_ZERO_BOTTOM_SIZE
 #define CC128M_BOT_INTERNAL_EXP_WIDTH CC128M_FIELD_EXP_NONZERO_BOTTOM_SIZE
 #define CC128M_EXP_LOW_WIDTH CC128M_FIELD_EXPONENT_LOW_PART_SIZE
+#define CC128M_EXPONENT_WIDTH (CC128M_FIELD_EXPONENT_LOW_PART_SIZE + CC128M_FIELD_EXPONENT_HIGH_PART_SIZE)
 
 #define CC128M_PERM_GLOBAL (1 << 0)
 #define CC128M_PERM_EXECUTIVE (1 << 1)
 // Then 4 user types
+#define CC128M_UPERMS_ALL UINT64_C(0xf)
+#define CC128M_UPERMS_SHFT 2
+#define CC128M_PERM_SW_ALL (CC128M_UPERMS_ALL << CC128M_UPERMS_SHFT)
 #define CC128M_PERM_MUTABLE_LOAD (1 << 6)
 #define CC128M_PERM_SETCID (1 << 7)
 #define CC128M_PERM_BRANCH_SEALED_PAIR (1 << 8)
@@ -146,13 +151,15 @@ enum {
 
 #define CC128M_HIGHEST_PERM CC128M_PERM_LOAD
 
-_CC_STATIC_ASSERT(CC128M_HIGHEST_PERM < CC128M_FIELD_HWPERMS_MAX_VALUE, "permissions not representable?");
-_CC_STATIC_ASSERT((CC128M_HIGHEST_PERM << 1) > CC128M_FIELD_HWPERMS_MAX_VALUE, "all permission bits should be used");
+_CC_STATIC_ASSERT(CC128M_HIGHEST_PERM < CC128M_FIELD_ALL_PERMS_MAX_VALUE, "permissions not representable?");
+_CC_STATIC_ASSERT((CC128M_HIGHEST_PERM << 1) > CC128M_FIELD_ALL_PERMS_MAX_VALUE, "all permission bits should be used");
 
-#define CC128M_PERMS_ALL (0x3FFFF) /* [0...1,6..17] */
-#define CC128M_UPERMS_ALL (0x0)    /* [15...18] */
-#define CC128M_UPERMS_SHFT (0)
-#define CC128M_MAX_UPERM (3)
+#define CC128M_PERMS_MASK UINT64_C(0x3FFFF) /* Includes SW perms */
+#define CC128M_PERMS_ALL (CC128M_PERMS_MASK & ~CC128M_UPERMS_ALL)
+enum { _CC_N(PERMS_RESERVED_ONES) = 0 };
+#define CC128M_ENCODED_INFINITE_PERMS() _CC_ENCODE_FIELD(CC128M_PERMS_MASK, ALL_PERMS)
+_CC_STATIC_ASSERT_SAME(CC128M_PERMS_MASK, CC128M_FIELD_ALL_PERMS_MAX_VALUE);
+_CC_STATIC_ASSERT_SAME(CC128M_ENCODED_INFINITE_PERMS(), CC128M_PERMS_MASK << 46);
 
 /* Morello calls the special otypes LB, LPB and RB.
  * LPB is "load pair branch". It loads the first two caps pointed to and ccalls them.
@@ -162,7 +169,6 @@ _CC_STATIC_ASSERT((CC128M_HIGHEST_PERM << 1) > CC128M_FIELD_HWPERMS_MAX_VALUE, "
 
 // We reserve 3 otypes
 enum _CC_N(OTypes) {
-    CC128M_FIRST_NONRESERVED_OTYPE = 0,
     CC128M_MAX_REPRESENTABLE_OTYPE = ((1u << CC128M_OTYPE_BITS) - 1u),
     _CC_SPECIAL_OTYPE(OTYPE_UNSEALED, 0),
     _CC_SPECIAL_OTYPE(OTYPE_SENTRY, 1),
@@ -180,15 +186,47 @@ enum _CC_N(OTypes) {
 
 _CC_STATIC_ASSERT_SAME(CC128M_MANTISSA_WIDTH, CC128M_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
+// Morello uses an "exponent zero" flag instead of "internal exponent".
+#define CC128M_ENCODE_IE(value) _CC_ENCODE_FIELD(!(value), EXPONENT_ZERO)
+#define CC128M_EXTRACT_IE(pesbt) (!_CC_EXTRACT_FIELD(pesbt, EXPONENT_ZERO))
+// The exponent bits in memory are negated when decoding in the IE case.
+#define CC128M_ENCODE_EXPONENT(E) _CC_ENCODE_SPLIT_EXPONENT(~(E))
+#define CC128M_EXTRACT_EXPONENT(pesbt) ((~_CC_EXTRACT_SPLIT_EXPONENT(pesbt)) & _CC_BITMASK64(CC128M_EXPONENT_WIDTH))
+#define CC128M_RESERVED_FIELDS 0
+#define CC128M_RESERVED_BITS 0
+#define CC128M_HAS_BASE_TOP_SPECIAL_CASES 1
+#define CC128M_USES_V9_CORRECTION_FACTORS 1
+#define CC128M_USES_LEN_MSB 0
+
 #include "cheri_compressed_cap_common.h"
 
-// Sanity-check mask is the expected NULL encoding
-_CC_STATIC_ASSERT_SAME(CC128M_NULL_XOR_MASK, UINT64_C(0x0000000040070007));
+static inline _cc_addr_t _cc_N(get_all_permissions)(const _cc_cap_t* cap) {
+    return (_cc_addr_t)_CC_EXTRACT_FIELD(cap->cr_pesbt, ALL_PERMS);
+}
+static inline bool _cc_N(set_permissions)(_cc_cap_t* cap, _cc_addr_t permissions) {
+    _cc_api_requirement((permissions & _CC_N(PERMS_MASK)) == permissions, "invalid permissions");
+    cap->cr_pesbt = _CC_DEPOSIT_FIELD(cap->cr_pesbt, permissions, ALL_PERMS);
+    return true; // all permissions are representable
+}
 
-#define CC128M_FIELD(name, last, start) _CC_FIELD(name, last, start)
-#define CC128M_ENCODE_FIELD(value, name) _CC_ENCODE_FIELD(value, name)
-#define CC128M_EXTRACT_FIELD(value, name) _CC_EXTRACT_FIELD(value, name)
-#define CC128M_ENCODE_EBT_FIELD(value, name) _CC_ENCODE_EBT_FIELD(value, name)
+static inline uint8_t cc128m_get_reserved(const cc128m_cap_t* cap) {
+    (void)cap;
+    return 0;
+}
+
+static inline bool _cc_N(compute_base_top_special_cases)(_cc_bounds_bits bounds, _cc_addr_t* base_out,
+                                                         _cc_length_t* top_out, bool* valid) {
+    if (bounds.E > _CC_MAX_EXPONENT) {
+        *base_out = 0;
+        *top_out = _CC_N(MAX_TOP);
+        *valid = bounds.E == _CC_N(MAX_ENCODABLE_EXPONENT);
+        return true;
+    }
+    return false;
+}
+
+// Sanity-check mask is the expected NULL encoding
+_CC_STATIC_ASSERT_SAME(CC128M_MEM_XOR_MASK, UINT64_C(0));
 
 #undef CC_IS_MORELLO
 #undef CC_FORMAT_LOWER

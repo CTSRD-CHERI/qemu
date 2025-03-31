@@ -65,7 +65,9 @@
 /*  SUCH DAMAGE.                                                            */
 /****************************************************************************/
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include<assert.h>
 #include<inttypes.h>
 #include<stdbool.h>
@@ -75,6 +77,10 @@
 #include<time.h>
 
 #include"sail.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 // zero bits from high index, same semantics as bzhi intrinsic
 uint64_t bzhi_u64(uint64_t bits, uint64_t len)
@@ -133,10 +139,6 @@ bool eq_bit(const fbits a, const fbits b)
 
 /* ***** Sail booleans ***** */
 
-bool not(const bool b) {
-  return !b;
-}
-
 bool EQUAL(bool)(const bool a, const bool b) {
   return a == b;
 }
@@ -162,10 +164,10 @@ void RECREATE(sail_string)(sail_string *str)
   *str = istr;
 }
 
-void COPY(sail_string)(sail_string *str1, const sail_string str2)
+void COPY(sail_string)(sail_string *str1, const_sail_string str2)
 {
   size_t len = strlen(str2);
-  *str1 = realloc(*str1, len + 1);
+  *str1 = (sail_string)realloc(*str1, len + 1);
   *str1 = strcpy(*str1, str2);
 }
 
@@ -192,51 +194,51 @@ void hex_str_upper(sail_string *str, const mpz_t n)
   gmp_asprintf(str, "0x%ZX", n);
 }
 
-bool eq_string(const sail_string str1, const sail_string str2)
+bool eq_string(const_sail_string str1, const_sail_string str2)
 {
   return strcmp(str1, str2) == 0;
 }
 
-bool EQUAL(sail_string)(const sail_string str1, const sail_string str2)
+bool EQUAL(sail_string)(const_sail_string str1, const_sail_string str2)
 {
   return strcmp(str1, str2) == 0;
 }
 
 void undefined_string(sail_string *str, const unit u) {}
 
-void concat_str(sail_string *stro, const sail_string str1, const sail_string str2)
+void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2)
 {
-  *stro = realloc(*stro, strlen(str1) + strlen(str2) + 1);
+  *stro = (sail_string)realloc(*stro, strlen(str1) + strlen(str2) + 1);
   (*stro)[0] = '\0';
   strcat(*stro, str1);
   strcat(*stro, str2);
 }
 
-bool string_startswith(sail_string s, sail_string prefix)
+bool string_startswith(const_sail_string s, const_sail_string prefix)
 {
   return strstr(s, prefix) == s;
 }
 
-void string_length(sail_int *len, sail_string s)
+void string_length(sail_int *len, const_sail_string s)
 {
   mpz_set_ui(*len, strlen(s));
 }
 
-void string_drop(sail_string *dst, sail_string s, sail_int ns)
+void string_drop(sail_string *dst, const_sail_string s, sail_int ns)
 {
   size_t len = strlen(s);
   mach_int n = CREATE_OF(mach_int, sail_int)(ns);
   if (len >= n) {
-    *dst = realloc(*dst, (len - n) + 1);
+    *dst = (sail_string)realloc(*dst, (len - n) + 1);
     memcpy(*dst, s + n, len - n);
     (*dst)[len - n] = '\0';
   } else {
-    *dst = realloc(*dst, 1);
+    *dst = (sail_string)realloc(*dst, 1);
     **dst = '\0';
   }
 }
 
-void string_take(sail_string *dst, sail_string s, sail_int ns)
+void string_take(sail_string *dst, const_sail_string s, sail_int ns)
 {
   size_t len = strlen(s);
   mach_int n = CREATE_OF(mach_int, sail_int)(ns);
@@ -246,7 +248,7 @@ void string_take(sail_string *dst, sail_string s, sail_int ns)
   } else {
     to_copy = n;
   }
-  *dst = realloc(*dst, to_copy + 1);
+  *dst = (sail_string)realloc(*dst, to_copy + 1);
   memcpy(*dst, s, to_copy);
   (*dst)[to_copy] = '\0';
 }
@@ -258,7 +260,6 @@ uint64_t sail_int_get_ui(const mpz_t op)
   return mpz_get_ui(op);
 }
 
-inline
 bool EQUAL(mach_int)(const mach_int op1, const mach_int op2)
 {
   return op1 == op2;
@@ -266,109 +267,91 @@ bool EQUAL(mach_int)(const mach_int op1, const mach_int op2)
 
 #ifndef USE_INT128
 
-inline
 void COPY(sail_int)(sail_int *rop, const sail_int op)
 {
   mpz_set(*rop, op);
 }
 
-inline
 void CREATE(sail_int)(sail_int *rop)
 {
   mpz_init(*rop);
 }
 
-inline
 void RECREATE(sail_int)(sail_int *rop)
 {
   mpz_set_ui(*rop, 0);
 }
 
-inline
 void KILL(sail_int)(sail_int *rop)
 {
   mpz_clear(*rop);
 }
 
-inline
 void CREATE_OF(sail_int, mach_int)(sail_int *rop, mach_int op)
 {
   mpz_init_set_si(*rop, op);
 }
 
-inline
 mach_int CREATE_OF(mach_int, sail_int)(const sail_int op)
 {
   return mpz_get_ui(op);
 }
 
-inline
 void RECREATE_OF(sail_int, mach_int)(sail_int *rop, mach_int op)
 {
   mpz_set_si(*rop, op);
 }
 
-inline
-void CREATE_OF(sail_int, sail_string)(sail_int *rop, sail_string str)
+void CREATE_OF(sail_int, sail_string)(sail_int *rop, const_sail_string str)
 {
   mpz_init_set_str(*rop, str, 10);
 }
 
-inline
-void CONVERT_OF(sail_int, sail_string)(sail_int *rop, sail_string str)
+void CONVERT_OF(sail_int, sail_string)(sail_int *rop, const_sail_string str)
 {
   mpz_set_str(*rop, str, 10);
 }
 
-inline
-void RECREATE_OF(sail_int, sail_string)(mpz_t *rop, sail_string str)
+void RECREATE_OF(sail_int, sail_string)(mpz_t *rop, const_sail_string str)
 {
   mpz_set_str(*rop, str, 10);
 }
 
-inline
 mach_int CONVERT_OF(mach_int, sail_int)(const sail_int op)
 {
   return mpz_get_si(op);
 }
 
-inline
 void CONVERT_OF(sail_int, mach_int)(sail_int *rop, const mach_int op)
 {
   mpz_set_si(*rop, op);
 }
 
-inline
 bool eq_int(const sail_int op1, const sail_int op2)
 {
   return !abs(mpz_cmp(op1, op2));
 }
 
-inline
 bool EQUAL(sail_int)(const sail_int op1, const sail_int op2)
 {
   return !abs(mpz_cmp(op1, op2));
 }
 
-inline
 bool lt(const sail_int op1, const sail_int op2)
 {
   return mpz_cmp(op1, op2) < 0;
 }
 
-inline
 bool gt(const mpz_t op1, const mpz_t op2)
 {
   return mpz_cmp(op1, op2) > 0;
 }
 
-inline
 bool lteq(const mpz_t op1, const mpz_t op2)
 {
   return mpz_cmp(op1, op2) <= 0;
 }
 
-inline
 bool gteq(const mpz_t op1, const mpz_t op2)
 {
   return mpz_cmp(op1, op2) >= 0;
@@ -394,7 +377,6 @@ mach_int shr_mach_int(const mach_int op1, const mach_int op2)
   return op1 >> op2;
 }
 
-inline
 void undefined_int(sail_int *rop, const int n)
 {
   mpz_set_ui(*rop, (uint64_t) n);
@@ -405,19 +387,16 @@ void undefined_nat(sail_int *rop, const unit u)
   mpz_set_ui(*rop, 0);
 }
 
-inline
 void undefined_range(sail_int *rop, const sail_int l, const sail_int u)
 {
   mpz_set(*rop, l);
 }
 
-inline
 void add_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_add(*rop, op1, op2);
 }
 
-inline
 void sub_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_sub(*rop, op1, op2);
@@ -431,14 +410,11 @@ void sub_nat(sail_int *rop, const sail_int op1, const sail_int op2)
   }
 }
 
-inline
 void mult_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_mul(*rop, op1, op2);
 }
 
-
-inline
 void ediv_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   /* GMP doesn't have Euclidean division but we can emulate it using 
@@ -450,7 +426,6 @@ void ediv_int(sail_int *rop, const sail_int op1, const sail_int op2)
   }
 }
 
-inline
 void emod_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   /* The documentation isn't that explicit but I think this is 
@@ -458,25 +433,21 @@ void emod_int(sail_int *rop, const sail_int op1, const sail_int op2)
   mpz_mod(*rop, op1, op2);
 }
 
-inline
 void tdiv_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_tdiv_q(*rop, op1, op2);
 }
 
-inline
 void tmod_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_tdiv_r(*rop, op1, op2);
 }
 
-inline
 void fdiv_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_fdiv_q(*rop, op1, op2);
 }
 
-inline
 void fmod_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   mpz_fdiv_r(*rop, op1, op2);
@@ -500,19 +471,16 @@ void min_int(sail_int *rop, const sail_int op1, const sail_int op2)
   }
 }
 
-inline
 void neg_int(sail_int *rop, const sail_int op)
 {
   mpz_neg(*rop, op);
 }
 
-inline
 void abs_int(sail_int *rop, const sail_int op)
 {
   mpz_abs(*rop, op);
 }
 
-inline
 void pow_int(sail_int *rop, const sail_int op1, const sail_int op2)
 {
   uint64_t n = mpz_get_ui(op2);
@@ -545,7 +513,7 @@ bool EQUAL(ref_fbits)(const fbits *op1, const fbits *op2)
 
 void CREATE(lbits)(lbits *rop)
 {
-  rop->bits = sail_malloc(sizeof(mpz_t));
+  rop->bits = (mpz_t *)sail_malloc(sizeof(mpz_t));
   rop->len = 0;
   mpz_init(*rop->bits);
 }
@@ -570,7 +538,7 @@ void KILL(lbits)(lbits *rop)
 
 void CREATE_OF(lbits, fbits)(lbits *rop, const uint64_t op, const uint64_t len, const bool direction)
 {
-  rop->bits = sail_malloc(sizeof(mpz_t));
+  rop->bits = (mpz_t *)sail_malloc(sizeof(mpz_t));
   rop->len = len;
   mpz_init_set_ui(*rop->bits, op);
 }
@@ -604,7 +572,7 @@ void RECREATE_OF(lbits, fbits)(lbits *rop, const uint64_t op, const uint64_t len
 
 void CREATE_OF(lbits, sbits)(lbits *rop, const sbits op, const bool direction)
 {
-  rop->bits = sail_malloc(sizeof(mpz_t));
+  rop->bits = (mpz_t *)sail_malloc(sizeof(mpz_t));
   rop->len = op.len;
   mpz_init_set_ui(*rop->bits, op.bits);
 }
@@ -617,13 +585,11 @@ void RECREATE_OF(lbits, sbits)(lbits *rop, const sbits op, const bool direction)
 
 // Bitvector conversions
 
-inline
 fbits CONVERT_OF(fbits, lbits)(const lbits op, const bool direction)
 {
   return mpz_get_ui(*op.bits);
 }
 
-inline
 fbits CONVERT_OF(fbits, sbits)(const sbits op, const bool direction)
 {
   return op.bits;
@@ -642,7 +608,6 @@ void CONVERT_OF(lbits, sbits)(lbits *rop, const sbits op, const bool direction)
   mpz_set_ui(*rop->bits, op.bits & safe_rshift(UINT64_MAX, 64 - op.len));
 }
 
-inline
 sbits CONVERT_OF(sbits, fbits)(const fbits op, const uint64_t len, const bool direction)
 {
   sbits rop;
@@ -651,7 +616,6 @@ sbits CONVERT_OF(sbits, fbits)(const fbits op, const uint64_t len, const bool di
   return rop;
 }
 
-inline
 sbits CONVERT_OF(sbits, lbits)(const lbits op, const bool direction)
 {
   sbits rop;
@@ -882,6 +846,19 @@ bool neq_bits(const lbits op1, const lbits op2)
 }
 
 void vector_subrange_lbits(lbits *rop,
+                           const lbits op,
+                           const sail_int n_mpz,
+                           const sail_int m_mpz)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+  uint64_t m = mpz_get_ui(m_mpz);
+
+  rop->len = n - (m - 1ul);
+  mpz_fdiv_q_2exp(*rop->bits, *op.bits, m);
+  normalize_lbits(rop);
+}
+
+void vector_subrange_inc_lbits(lbits *rop,
 			       const lbits op,
 			       const sail_int n_mpz,
 			       const sail_int m_mpz)
@@ -889,8 +866,8 @@ void vector_subrange_lbits(lbits *rop,
   uint64_t n = mpz_get_ui(n_mpz);
   uint64_t m = mpz_get_ui(m_mpz);
 
-  rop->len = n - (m - 1ul);
-  mpz_fdiv_q_2exp(*rop->bits, *op.bits, m);
+  rop->len = m - (n - 1ul);
+  mpz_fdiv_q_2exp(*rop->bits, *op.bits, (op.len - 1) - m);
   normalize_lbits(rop);
 }
 
@@ -916,6 +893,12 @@ fbits bitvector_access(const lbits op, const sail_int n_mpz)
 {
   uint64_t n = mpz_get_ui(n_mpz);
   return (fbits) mpz_tstbit(*op.bits, n);
+}
+
+fbits bitvector_access_inc(const lbits op, const sail_int n_mpz)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+  return (fbits) mpz_tstbit(*op.bits, (op.len - 1) - n);
 }
 
 fbits update_fbits(const fbits op, const uint64_t n, const fbits bit)
@@ -1081,6 +1064,20 @@ void update_lbits(lbits *rop, const lbits op, const sail_int n_mpz, const uint64
   }
 }
 
+void update_lbits_inc(lbits *rop, const lbits op, const sail_int n_mpz, const uint64_t bit)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+
+  mpz_set(*rop->bits, *op.bits);
+  rop->len = op.len;
+
+  if (bit == UINT64_C(0)) {
+    mpz_clrbit(*rop->bits, (op.len - 1) - n);
+  } else {
+    mpz_setbit(*rop->bits, (op.len - 1) - n);
+  }
+}
+
 void vector_update_subrange_lbits(lbits *rop,
 				 const lbits op,
 				 const sail_int n_mpz,
@@ -1098,6 +1095,28 @@ void vector_update_subrange_lbits(lbits *rop,
       mpz_setbit(*rop->bits, i + m);
     } else {
       mpz_clrbit(*rop->bits, i + m);
+    }
+  }
+}
+
+void vector_update_subrange_inc_lbits(lbits *rop,
+                                      const lbits op,
+                                      const sail_int n_mpz,
+                                      const sail_int m_mpz,
+                                      const lbits slice)
+{
+  uint64_t n = mpz_get_ui(n_mpz);
+  uint64_t m = mpz_get_ui(m_mpz);
+
+  mpz_set(*rop->bits, *op.bits);
+  rop->len = op.len;
+
+  for (uint64_t i = 0; i < m - (n - 1ul); i++) {
+    uint64_t out_bit = ((op.len - 1) - m) + i;
+    if (mpz_tstbit(*slice.bits, (slice.len - 1) - i)) {
+      mpz_setbit(*rop->bits, out_bit);
+    } else {
+      mpz_clrbit(*rop->bits, out_bit);
     }
   }
 }
@@ -1130,6 +1149,20 @@ void slice(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int 
 
   for (uint64_t i = 0; i < len; i++) {
     if (mpz_tstbit(*op.bits, i + start)) mpz_setbit(*rop->bits, i);
+  }
+}
+
+void slice_inc(lbits *rop, const lbits op, const sail_int start_mpz, const sail_int len_mpz)
+{
+  assert(mpz_get_ui(start_mpz) + mpz_get_ui(len_mpz) <= op.len);
+  uint64_t start = mpz_get_ui(start_mpz);
+  uint64_t len = mpz_get_ui(len_mpz);
+
+  mpz_set_ui(*rop->bits, 0);
+  rop->len = len;
+
+  for (uint64_t i = 0; i < len; i++) {
+    if (mpz_tstbit(*op.bits, ((op.len - 1) - start) - i)) mpz_setbit(*rop->bits, (rop->len - 1) - i);
   }
 }
 
@@ -1363,44 +1396,55 @@ void div_real(real *rop, const real op1, const real op2)
 #define SQRT_PRECISION 30
 
 /*
- * sqrt_real first checks if op has the form n/1 - in which case, if n
- * is a perfect square (i.e. it's square root is an integer), then it
- * will return the exact square root using mpz_sqrt. If that's not the
- * case we use the Babylonian method to calculate the square root to
- * SQRT_PRECISION decimal places.
+ * sqrt_real first checks whether the numerator and denominator are both
+ * perfect squares (i.e. their square roots are integers), then it
+ * will return the exact square root. If that's not the case we use the
+ * Babylonian method to calculate the square root to SQRT_PRECISION decimal
+ * places.
  */
-void sqrt_real(real *rop, const real op)
+void sqrt_real(mpq_t *rop, const mpq_t op)
 {
-  /* First check if op is a perfect square and use mpz_sqrt if so */
-  if (mpz_cmp_ui(mpq_denref(op), 1) == 0 && mpz_perfect_square_p(mpq_numref(op))) {
-    mpz_sqrt(mpq_numref(*rop), mpq_numref(op));
-    mpz_set_ui(mpq_denref(*rop), 1);
-    return;
-  }
-
   mpq_t tmp;
   mpz_t tmp_z;
   mpq_t p; /* previous estimate, p */
   mpq_t n; /* next estimate, n */
-  /* convergence is the precision (in decimal places) we want to reach as a fraction 1/(10^precision) */
-  mpq_t convergence;
 
   mpq_init(tmp);
   mpz_init(tmp_z);
   mpq_init(p);
   mpq_init(n);
-  mpq_init(convergence);
 
   /* calculate an initial guess using mpz_sqrt */
-  mpz_cdiv_q(tmp_z, mpq_numref(op), mpq_denref(op));
-  mpz_sqrt(tmp_z, tmp_z);
-  mpq_set_z(p, tmp_z);
+  mpz_sqrt(tmp_z, mpq_numref(op));
+  mpq_set_num(p, tmp_z);
+  mpz_sqrt(tmp_z, mpq_denref(op));
+  mpq_set_den(p, tmp_z);
+
+  /* Check if op is a square */
+  mpq_mul(tmp, p, p);
+  if (mpq_cmp(tmp, op) == 0) {
+    mpq_set(*rop, p);
+
+    mpq_clear(tmp);
+    mpz_clear(tmp_z);
+    mpq_clear(p);
+    mpq_clear(n);
+    return;
+  }
+
 
   /* initialise convergence based on SQRT_PRECISION */
+  /* convergence is the precision (in decimal places) we want to reach as a fraction 1/(10^precision) */
+  mpq_t convergence;
+  mpq_init(convergence);
   mpz_set_ui(tmp_z, 10);
   mpz_pow_ui(tmp_z, tmp_z, SQRT_PRECISION);
   mpz_set_ui(mpq_numref(convergence), 1);
   mpq_set_den(convergence, tmp_z);
+  /* if op < 1 then we switch to checking relative precision for convergence */
+  if (mpq_cmp_ui(op, 1, 1) < 0) {
+      mpq_mul(convergence, op, convergence);
+  }
 
   while (true) {
     // n = (p + op / p) / 2
@@ -1501,7 +1545,7 @@ void real_power(real *rop, const real base, const sail_int exp)
   mpq_clear(b);
 }
 
-void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
+void CREATE_OF(real, sail_string)(real *rop, const_sail_string op)
 {
   int decimal;
   int total;
@@ -1519,7 +1563,7 @@ void CREATE_OF(real, sail_string)(real *rop, const sail_string op)
   mpq_add(*rop, *rop, sail_lib_tmp_real);
 }
 
-void CONVERT_OF(real, sail_string)(real *rop, const sail_string op)
+void CONVERT_OF(real, sail_string)(real *rop, const_sail_string op)
 {
   int decimal;
   int total;
@@ -1536,13 +1580,13 @@ void CONVERT_OF(real, sail_string)(real *rop, const sail_string op)
   mpq_add(*rop, *rop, sail_lib_tmp_real);
 }
 
-unit print_real(const sail_string str, const real op)
+unit print_real(const_sail_string str, const real op)
 {
   gmp_printf("%s%Qd\n", str, op);
   return UNIT;
 }
 
-unit prerr_real(const sail_string str, const real op)
+unit prerr_real(const_sail_string str, const real op)
 {
   gmp_fprintf(stderr, "%s%Qd\n", str, op);
   return UNIT;
@@ -1608,9 +1652,9 @@ void decimal_string_of_lbits(sail_string *str, const lbits op)
   gmp_asprintf(str, "%Z", *op.bits);
 }
 
-void parse_hex_bits(lbits *res, const mpz_t n, const sail_string hex)
+void parse_hex_bits(lbits *res, const mpz_t n, const_sail_string hex)
 {
-  if (strncmp(hex, "0x", 2) != 0) {
+  if (!valid_hex_bits(n, hex)) {
     goto failure;
   }
 
@@ -1630,12 +1674,49 @@ failure:
   mpz_set_ui(*res->bits, 0);
 }
 
-bool valid_hex_bits(const mpz_t n, const sail_string hex) {
+bool valid_hex_bits(const mpz_t n, const_sail_string hex) {
+  // The string must be prefixed by '0x'
   if (strncmp(hex, "0x", 2) != 0) {
     return false;
   }
 
-  for (int i = 2; i < strlen(hex); i++) {
+  size_t len = strlen(hex);
+
+  // There must be at least one character after the '0x'
+  if (len < 3) {
+    return false;
+  }
+
+  // Ignore any leading zeros
+  int non_zero = 2;
+  while (hex[non_zero] == '0' && non_zero < len - 1) {
+    non_zero++;
+  }
+
+  // Check how many bits we need for the first-non-zero (fnz) character.
+  int fnz_width;
+  char fnz = hex[non_zero];
+  if (fnz == '0') {
+    fnz_width = 0;
+  } else if (fnz == '1') {
+    fnz_width = 1;
+  } else if (fnz >= '2' && fnz <= '3') {
+    fnz_width = 2;
+  } else if (fnz >= '4' && fnz <= '7') {
+    fnz_width = 3;
+  } else {
+    fnz_width = 4;
+  }
+
+  // The width of the hex string is the width of the first non zero,
+  // plus 4 times the remaining hex digits
+  int hex_width = fnz_width + ((len - (non_zero + 1)) * 4);
+  if (mpz_cmp_si(n, hex_width) < 0) {
+    return false;
+  }
+
+  // All the non-zero characters must be valid hex digits
+  for (int i = non_zero; i < len; i++) {
     char c = hex[i];
     if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) {
       return false;
@@ -1645,9 +1726,9 @@ bool valid_hex_bits(const mpz_t n, const sail_string hex) {
   return true;
 }
 
-void fprint_bits(const sail_string pre,
+void fprint_bits(const_sail_string pre,
 		 const lbits op,
-		 const sail_string post,
+		 const_sail_string post,
 		 FILE *stream)
 {
   fputs(pre, stream);
@@ -1657,7 +1738,7 @@ void fprint_bits(const sail_string pre,
     mpz_t buf;
     mpz_init_set(buf, *op.bits);
 
-    char *hex = sail_malloc((op.len / 4) * sizeof(char));
+    char *hex = (char *)sail_malloc((op.len / 4) * sizeof(char));
 
     for (int i = 0; i < op.len / 4; ++i) {
       char c = (char) ((0xF & mpz_get_ui(buf)) + 0x30);
@@ -1681,43 +1762,43 @@ void fprint_bits(const sail_string pre,
   fputs(post, stream);
 }
 
-unit print_bits(const sail_string str, const lbits op)
+unit print_bits(const_sail_string str, const lbits op)
 {
   fprint_bits(str, op, "\n", stdout);
   return UNIT;
 }
 
-unit prerr_bits(const sail_string str, const lbits op)
+unit prerr_bits(const_sail_string str, const lbits op)
 {
   fprint_bits(str, op, "\n", stderr);
   return UNIT;
 }
 
-unit print(const sail_string str)
+unit print(const_sail_string str)
 {
   printf("%s", str);
   return UNIT;
 }
 
-unit print_endline(const sail_string str)
+unit print_endline(const_sail_string str)
 {
   printf("%s\n", str);
   return UNIT;
 }
 
-unit prerr(const sail_string str)
+unit prerr(const_sail_string str)
 {
   fprintf(stderr, "%s", str);
   return UNIT;
 }
 
-unit prerr_endline(const sail_string str)
+unit prerr_endline(const_sail_string str)
 {
   fprintf(stderr, "%s\n", str);
   return UNIT;
 }
 
-unit print_int(const sail_string str, const sail_int op)
+unit print_int(const_sail_string str, const sail_int op)
 {
   fputs(str, stdout);
   mpz_out_str(stdout, 10, op);
@@ -1725,7 +1806,7 @@ unit print_int(const sail_string str, const sail_int op)
   return UNIT;
 }
 
-unit prerr_int(const sail_string str, const sail_int op)
+unit prerr_int(const_sail_string str, const sail_int op)
 {
   fputs(str, stderr);
   mpz_out_str(stderr, 10, op);
@@ -1772,3 +1853,7 @@ void size_itself_int(sail_int *rop, const sail_int op)
 {
   mpz_set(*rop, op);
 }
+
+#ifdef __cplusplus
+}
+#endif
