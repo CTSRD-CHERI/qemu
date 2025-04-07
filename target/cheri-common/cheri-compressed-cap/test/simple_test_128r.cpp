@@ -39,12 +39,13 @@ TEST_CASE_M_AP_DECOMP(LVB_1, INT_MODE_ENCODED | ENC_X | ENC_R | ENC_W | ENC_C | 
 TEST_CASE_M_AP_DECOMP(LVB_1, ENC_X | ENC_R | ENC_W | ENC_EL, 0, CAP_AP_X | CAP_AP_R | CAP_AP_W | CAP_AP_EL)
 
 TEST_CASE("Reprentability with TOP>MAX_TOP", "[representable]") {
-    auto cap = TestAPICC::make_max_perms_cap(0xffff002d01ffc000, 0xffff002d02013ff6, 0xffff002d027fc000);
+    auto cap = TestAPICC::make_max_perms_cap(0xffff002d01ffc000, 0xffff002d02013ff6, 0xffff002d027fc000,
+                                             TestAPICC::MODE_INT, /*lvbits=*/0);
     CHECK(cap.cr_pesbt == 0x1f3f00003ff7ff9);
     CHECK(!TestAPICC::sail_precise_is_representable(cap, 0));
-    CHECK(!TestAPICC::fast_is_representable_new_addr(cap, 0));
+    CHECK(!_cc_N(_fast_is_representable_new_addr)(&cap, 0));
     // The following line used to assert with cdp->_cr_top <= ((cc128_length_t)1u << 64)
-    CHECK(!TestAPICC::precise_is_representable_new_addr(cap, 0));
+    CHECK(!_cc_N(_precise_is_representable_new_addr)(&cap, 0));
     // Decode a new capability with the same pesbt value and check that the bounds differ (and are > MAX_TOP)
     const _cc_cap_t cap2 = TestAPICC::decompress_raw(cap.cr_pesbt, 0, false);
     CHECK(cap2.base() != cap.base());
@@ -94,7 +95,7 @@ TEST_CASE("Malformed bounds return zero", "[bounds]") {
 
 TEST_CASE("bounds encoding exponent 0", "[bounds]") {
     /* params are base, cursor, top */
-    _cc_cap_t cap = CompressedCapCC::make_max_perms_cap(0x0, 0x10, 0x20);
+    _cc_cap_t cap = TestAPICC::make_max_perms_cap(0x0, 0x10, 0x20, TestAPICC::MODE_INT, /*lvbits=*/0);
 
     /*
      * EF == 1 -> exponent 0
@@ -111,7 +112,7 @@ TEST_CASE("bounds encoding exponent 0", "[bounds]") {
 }
 
 TEST_CASE("bounds encoding exponent > 0", "[bounds]") {
-    _cc_cap_t cap = CompressedCapCC::make_max_perms_cap(0x8000, 0x41DF, 0xA6400);
+    _cc_cap_t cap = TestAPICC::make_max_perms_cap(0x8000, 0x41DF, 0xA6400, TestAPICC::MODE_INT, /*lvbits=*/0);
 
     /*
      * EF == 0 -> internal exponent
@@ -144,4 +145,27 @@ TEST_CASE("max perms value", "[perms]") {
     CHECK(cap.all_permissions() & CC128R_PERM_READ);
     CHECK(cap.all_permissions() & CC128R_PERM_STORE_LEVEL);
     CHECK(cap.all_permissions() & CC128R_PERM_WRITE);
+}
+
+TEST_CASE("No longer using fast rep check", "[repr]") {
+    // The fast representability check is completely wrong for CC128R and is no longer used.
+    // These values were found via fuzzing: fast succeeds, precise fails:
+    const _cc_addr_t pesbt = 0x00000000002323;
+    const _cc_addr_t cursor = 0x2323232323230000;
+    const _cc_addr_t new_addr = 0x2b2333232323232b;
+    auto cap = TestAPICC::decompress_raw(pesbt, cursor, true);
+    auto sail_cap = TestAPICC::sail_decode_raw(pesbt, cursor, true);
+    CHECK(cap == sail_cap);
+    CHECK(cap.cr_bounds_valid);
+    CHECK(cap.base() == 0xc640000000000000);
+    CHECK(cap.top() == _CC_MAX_TOP);
+    CHECK(cap.cr_exp == 49);
+    CHECK(!_cc_N(_precise_is_representable_new_addr)(&cap, new_addr));
+    // The sail API always uses the precise check even in the sail_fast_is_representable
+    CHECK(!TestAPICC::sail_precise_is_representable(cap, new_addr));
+    CHECK(!cc128r_is_representable_with_addr(&cap, new_addr, true));
+    CHECK(!cc128r_is_representable_with_addr(&cap, new_addr, false));
+    // TODO: should not expose the fast rep check for cc128r, for now just have it be the same as precise
+    CHECK(!_cc_N(_fast_is_representable_new_addr)(&cap, new_addr));
+    CHECK(!TestAPICC::sail_fast_is_representable(cap, new_addr));
 }

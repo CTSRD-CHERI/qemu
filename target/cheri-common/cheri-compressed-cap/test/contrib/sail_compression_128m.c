@@ -1,10 +1,11 @@
 #include "sail.h"
+#include "sail_config.h"
 #include "rts.h"
 #include "elf.h"
-void (*sail_rts_set_coverage_file)(const char *) = NULL;
 #ifdef __cplusplus
 extern "C" {
 #endif
+void (*sail_rts_set_coverage_file)(const char *) = NULL;
 
 // enum write_kind
 enum zwrite_kind { zWrite_plain, zWrite_conditional, zWrite_release, zWrite_exclusive, zWrite_exclusive_release, zWrite_RISCV_release, zWrite_RISCV_strong_release, zWrite_RISCV_conditional, zWrite_RISCV_conditional_release, zWrite_RISCV_conditional_strong_release, zWrite_X86_locked };
@@ -56,7 +57,7 @@ struct zexception {
     struct { sail_string zError_See; };
     struct { unit zError_Undefined; };
     struct { unit zError_Unpredictable; };
-  };
+  } variants;
 };
 
 static void CREATE(zexception)(struct zexception *op) {
@@ -69,142 +70,144 @@ static void RECREATE(zexception)(struct zexception *op) {
 
 static void KILL(zexception)(struct zexception *op) {
   if (op->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&op->zError_ImplementationDefined);
+    KILL(sail_string)(&op->variants.zError_ImplementationDefined);
   } else if (op->kind == Kind_zError_See) {
-    KILL(sail_string)(&op->zError_See);
+    KILL(sail_string)(&op->variants.zError_See);
   } else {}
 }
 
 static void COPY(zexception)(struct zexception *rop, struct zexception op) {
   if (rop->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&rop->zError_ImplementationDefined);
+    KILL(sail_string)(&rop->variants.zError_ImplementationDefined);
   } else if (rop->kind == Kind_zError_See) {
-    KILL(sail_string)(&rop->zError_See);
+    KILL(sail_string)(&rop->variants.zError_See);
   } else {};
   rop->kind = op.kind;
   if (op.kind == Kind_zError_ConstrainedUnpredictable) {
-    rop->zError_ConstrainedUnpredictable = op.zError_ConstrainedUnpredictable;
+    rop->variants.zError_ConstrainedUnpredictable = op.variants.zError_ConstrainedUnpredictable;
   } else if (op.kind == Kind_zError_ExceptionTaken) {
-    rop->zError_ExceptionTaken = op.zError_ExceptionTaken;
+    rop->variants.zError_ExceptionTaken = op.variants.zError_ExceptionTaken;
   } else if (op.kind == Kind_zError_ImplementationDefined) {
-    CREATE(sail_string)(&rop->zError_ImplementationDefined); COPY(sail_string)(&rop->zError_ImplementationDefined, op.zError_ImplementationDefined);
+    CREATE(sail_string)(&rop->variants.zError_ImplementationDefined); COPY(sail_string)(&rop->variants.zError_ImplementationDefined, op.variants.zError_ImplementationDefined);
   } else if (op.kind == Kind_zError_ReservedEncoding) {
-    rop->zError_ReservedEncoding = op.zError_ReservedEncoding;
+    rop->variants.zError_ReservedEncoding = op.variants.zError_ReservedEncoding;
   } else if (op.kind == Kind_zError_SError) {
-    rop->zError_SError = op.zError_SError;
+    rop->variants.zError_SError = op.variants.zError_SError;
   } else if (op.kind == Kind_zError_See) {
-    CREATE(sail_string)(&rop->zError_See); COPY(sail_string)(&rop->zError_See, op.zError_See);
+    CREATE(sail_string)(&rop->variants.zError_See); COPY(sail_string)(&rop->variants.zError_See, op.variants.zError_See);
   } else if (op.kind == Kind_zError_Undefined) {
-    rop->zError_Undefined = op.zError_Undefined;
+    rop->variants.zError_Undefined = op.variants.zError_Undefined;
   } else if (op.kind == Kind_zError_Unpredictable) {
-    rop->zError_Unpredictable = op.zError_Unpredictable;
+    rop->variants.zError_Unpredictable = op.variants.zError_Unpredictable;
   }
 }
 
 static bool EQUAL(zexception)(struct zexception op1, struct zexception op2) {
   if (op1.kind == Kind_zError_ConstrainedUnpredictable && op2.kind == Kind_zError_ConstrainedUnpredictable) {
-    return EQUAL(unit)(op1.zError_ConstrainedUnpredictable, op2.zError_ConstrainedUnpredictable);
+    return EQUAL(unit)(op1.variants.zError_ConstrainedUnpredictable, op2.variants.zError_ConstrainedUnpredictable);
   } else if (op1.kind == Kind_zError_ExceptionTaken && op2.kind == Kind_zError_ExceptionTaken) {
-    return EQUAL(unit)(op1.zError_ExceptionTaken, op2.zError_ExceptionTaken);
+    return EQUAL(unit)(op1.variants.zError_ExceptionTaken, op2.variants.zError_ExceptionTaken);
   } else if (op1.kind == Kind_zError_ImplementationDefined && op2.kind == Kind_zError_ImplementationDefined) {
-    return EQUAL(sail_string)(op1.zError_ImplementationDefined, op2.zError_ImplementationDefined);
+    return EQUAL(sail_string)(op1.variants.zError_ImplementationDefined, op2.variants.zError_ImplementationDefined);
   } else if (op1.kind == Kind_zError_ReservedEncoding && op2.kind == Kind_zError_ReservedEncoding) {
-    return EQUAL(unit)(op1.zError_ReservedEncoding, op2.zError_ReservedEncoding);
+    return EQUAL(unit)(op1.variants.zError_ReservedEncoding, op2.variants.zError_ReservedEncoding);
   } else if (op1.kind == Kind_zError_SError && op2.kind == Kind_zError_SError) {
-    return EQUAL(unit)(op1.zError_SError, op2.zError_SError);
+    return EQUAL(unit)(op1.variants.zError_SError, op2.variants.zError_SError);
   } else if (op1.kind == Kind_zError_See && op2.kind == Kind_zError_See) {
-    return EQUAL(sail_string)(op1.zError_See, op2.zError_See);
+    return EQUAL(sail_string)(op1.variants.zError_See, op2.variants.zError_See);
   } else if (op1.kind == Kind_zError_Undefined && op2.kind == Kind_zError_Undefined) {
-    return EQUAL(unit)(op1.zError_Undefined, op2.zError_Undefined);
+    return EQUAL(unit)(op1.variants.zError_Undefined, op2.variants.zError_Undefined);
   } else if (op1.kind == Kind_zError_Unpredictable && op2.kind == Kind_zError_Unpredictable) {
-    return EQUAL(unit)(op1.zError_Unpredictable, op2.zError_Unpredictable);
+    return EQUAL(unit)(op1.variants.zError_Unpredictable, op2.variants.zError_Unpredictable);
   } else return false;
 }
 
 static void sailgen_Error_ConstrainedUnpredictable(struct zexception *rop, unit op) {
   if (rop->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&rop->zError_ImplementationDefined);
+    KILL(sail_string)(&rop->variants.zError_ImplementationDefined);
   } else if (rop->kind == Kind_zError_See) {
-    KILL(sail_string)(&rop->zError_See);
+    KILL(sail_string)(&rop->variants.zError_See);
   } else {}
   rop->kind = Kind_zError_ConstrainedUnpredictable;
-  rop->zError_ConstrainedUnpredictable = op;
+  rop->variants.zError_ConstrainedUnpredictable = op;
 }
 
 static void sailgen_Error_ExceptionTaken(struct zexception *rop, unit op) {
   if (rop->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&rop->zError_ImplementationDefined);
+    KILL(sail_string)(&rop->variants.zError_ImplementationDefined);
   } else if (rop->kind == Kind_zError_See) {
-    KILL(sail_string)(&rop->zError_See);
+    KILL(sail_string)(&rop->variants.zError_See);
   } else {}
   rop->kind = Kind_zError_ExceptionTaken;
-  rop->zError_ExceptionTaken = op;
+  rop->variants.zError_ExceptionTaken = op;
 }
 
 static void sailgen_Error_ImplementationDefined(struct zexception *rop, const_sail_string op) {
   if (rop->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&rop->zError_ImplementationDefined);
+    KILL(sail_string)(&rop->variants.zError_ImplementationDefined);
   } else if (rop->kind == Kind_zError_See) {
-    KILL(sail_string)(&rop->zError_See);
+    KILL(sail_string)(&rop->variants.zError_See);
   } else {}
   rop->kind = Kind_zError_ImplementationDefined;
-  CREATE(sail_string)(&rop->zError_ImplementationDefined);
-  COPY(sail_string)(&rop->zError_ImplementationDefined, op);
+  CREATE(sail_string)(&rop->variants.zError_ImplementationDefined);
+  COPY(sail_string)(&rop->variants.zError_ImplementationDefined, op);
 }
 
 static void sailgen_Error_ReservedEncoding(struct zexception *rop, unit op) {
   if (rop->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&rop->zError_ImplementationDefined);
+    KILL(sail_string)(&rop->variants.zError_ImplementationDefined);
   } else if (rop->kind == Kind_zError_See) {
-    KILL(sail_string)(&rop->zError_See);
+    KILL(sail_string)(&rop->variants.zError_See);
   } else {}
   rop->kind = Kind_zError_ReservedEncoding;
-  rop->zError_ReservedEncoding = op;
+  rop->variants.zError_ReservedEncoding = op;
 }
 
 static void sailgen_Error_SError(struct zexception *rop, unit op) {
   if (rop->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&rop->zError_ImplementationDefined);
+    KILL(sail_string)(&rop->variants.zError_ImplementationDefined);
   } else if (rop->kind == Kind_zError_See) {
-    KILL(sail_string)(&rop->zError_See);
+    KILL(sail_string)(&rop->variants.zError_See);
   } else {}
   rop->kind = Kind_zError_SError;
-  rop->zError_SError = op;
+  rop->variants.zError_SError = op;
 }
 
 static void sailgen_Error_See(struct zexception *rop, const_sail_string op) {
   if (rop->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&rop->zError_ImplementationDefined);
+    KILL(sail_string)(&rop->variants.zError_ImplementationDefined);
   } else if (rop->kind == Kind_zError_See) {
-    KILL(sail_string)(&rop->zError_See);
+    KILL(sail_string)(&rop->variants.zError_See);
   } else {}
   rop->kind = Kind_zError_See;
-  CREATE(sail_string)(&rop->zError_See);
-  COPY(sail_string)(&rop->zError_See, op);
+  CREATE(sail_string)(&rop->variants.zError_See);
+  COPY(sail_string)(&rop->variants.zError_See, op);
 }
 
 static void sailgen_Error_Undefined(struct zexception *rop, unit op) {
   if (rop->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&rop->zError_ImplementationDefined);
+    KILL(sail_string)(&rop->variants.zError_ImplementationDefined);
   } else if (rop->kind == Kind_zError_See) {
-    KILL(sail_string)(&rop->zError_See);
+    KILL(sail_string)(&rop->variants.zError_See);
   } else {}
   rop->kind = Kind_zError_Undefined;
-  rop->zError_Undefined = op;
+  rop->variants.zError_Undefined = op;
 }
 
 static void sailgen_Error_Unpredictable(struct zexception *rop, unit op) {
   if (rop->kind == Kind_zError_ImplementationDefined) {
-    KILL(sail_string)(&rop->zError_ImplementationDefined);
+    KILL(sail_string)(&rop->variants.zError_ImplementationDefined);
   } else if (rop->kind == Kind_zError_See) {
-    KILL(sail_string)(&rop->zError_See);
+    KILL(sail_string)(&rop->variants.zError_See);
   } else {}
   rop->kind = Kind_zError_Unpredictable;
-  rop->zError_Unpredictable = op;
+  rop->variants.zError_Unpredictable = op;
 }
 
 struct zexception *current_exception = NULL;
+
 bool have_exception = false;
+
 sail_string *throw_location = NULL;
 
 // enum cache_op_kind
@@ -576,6 +579,9 @@ static bool EQUAL(zCompareOp)(enum zCompareOp op1, enum zCompareOp op2) {
 
 static enum zCompareOp UNDEFINED(zCompareOp)(unit u) { return zCompareOp_GT; }
 
+// type abbreviation Capability
+typedef lbits zCapability;
+
 // enum BranchType
 enum zBranchType { zBranchType_DIRCALL, zBranchType_INDCALL, zBranchType_ERET, zBranchType_DBGEXIT, zBranchType_RET, zBranchType_DIR, zBranchType_INDIR, zBranchType_EXCEPTION, zBranchType_RESET, zBranchType_UNKNOWN };
 
@@ -603,22 +609,6 @@ static bool EQUAL(zAccType)(enum zAccType op1, enum zAccType op2) {
 
 static enum zAccType UNDEFINED(zAccType)(unit u) { return zAccType_NORMAL; }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 static bool sailgen_neq_int(sail_int, sail_int);
 
 static bool sailgen_neq_int(sail_int zx, sail_int zy)
@@ -629,21 +619,12 @@ static bool sailgen_neq_int(sail_int zx, sail_int zy)
   bool zgaz30;
   zgaz30 = eq_int(zx, zy);
   zcbz30 = not(zgaz30);
-
 end_function_1: ;
   return zcbz30;
 end_block_exception_2: ;
 
   return false;
 }
-
-
-
-
-
-
-
-
 
 static void sailgen___id(sail_int *rop, sail_int);
 
@@ -659,18 +640,6 @@ end_block_exception_5: ;
 end_function_287: ;
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
 static bool sailgen_neq_bits(lbits zx, lbits zy)
 {
   __label__ end_function_7, end_block_exception_8;
@@ -679,43 +648,12 @@ static bool sailgen_neq_bits(lbits zx, lbits zy)
   bool zgaz31;
   zgaz31 = eq_bits(zx, zy);
   zcbz32 = not(zgaz31);
-
 end_function_7: ;
   return zcbz32;
 end_block_exception_8: ;
 
   return false;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 static void sailgen_sail_ones(lbits *rop, sail_int);
 
@@ -745,14 +683,6 @@ static void finish_sailgen_sail_ones(void)
 {    KILL(lbits)(&zghz30);
 }
 
-
-
-
-
-
-
-
-
 static bool sailgen_eq_bits_int(lbits, sail_int);
 
 sail_int zghz31;
@@ -781,8 +711,6 @@ end_block_exception_14: ;
 static void finish_sailgen_eq_bits_int(void)
 {    KILL(sail_int)(&zghz31);
 }
-
-
 
 static void sailgen_Ones(lbits *rop, sail_int);
 
@@ -871,12 +799,6 @@ static void finish_sailgen_integer_subrange(void)
   KILL(sail_int)(&zghz32);
 }
 
-
-
-
-
-
-
 static void sailgen_Slice_int(lbits *rop, sail_int, sail_int, sail_int);
 
 static void sailgen_Slice_int(lbits *zcbz39, sail_int zi, sail_int zl, sail_int zn)
@@ -941,7 +863,6 @@ static void create_letbind_0(void) {
   uint64_t zgsz31;
   zgsz31 = UINT64_C(0b01);
   zEL1 = zgsz31;
-
 let_end_33: ;
 }
 static void kill_letbind_0(void) {
@@ -954,7 +875,6 @@ static void create_letbind_1(void) {
   uint64_t zgsz32;
   zgsz32 = UINT64_C(0b10);
   zEL2 = zgsz32;
-
 let_end_34: ;
 }
 static void kill_letbind_1(void) {
@@ -967,7 +887,6 @@ static void create_letbind_2(void) {
   uint64_t zgsz33;
   zgsz33 = UINT64_C(0b11);
   zEL3 = zgsz33;
-
 let_end_35: ;
 }
 static void kill_letbind_2(void) {
@@ -1041,7 +960,6 @@ static void create_letbind_3(void) {
   uint64_t zgsz36;
   zgsz36 = UINT64_C(0b00);
   zEL0 = zgsz36;
-
 let_end_39: ;
 }
 static void kill_letbind_3(void) {
@@ -1177,7 +1095,6 @@ static void create_letbind_4(void) {
   int64_t zgsz37;
   zgsz37 = INT64_C(56);
   zCAP_FLAGS_LO_BIT = zgsz37;
-
 let_end_40: ;
 }
 static void kill_letbind_4(void) {
@@ -1190,7 +1107,6 @@ static void create_letbind_5(void) {
   int64_t zgsz38;
   zgsz38 = INT64_C(63);
   zCAP_VALUE_HI_BIT = zgsz38;
-
 let_end_41: ;
 }
 static void kill_letbind_5(void) {
@@ -1203,7 +1119,6 @@ static void create_letbind_6(void) {
   int64_t zgsz39;
   zgsz39 = INT64_C(0);
   zCAP_VALUE_LO_BIT = zgsz39;
-
 let_end_42: ;
 }
 static void kill_letbind_6(void) {
@@ -1231,9 +1146,7 @@ static void create_letbind_7(void) {
     KILL(sail_int)(&zgsz3669);
   }
   zgsz310 = (zgaz36 + INT64_C(1));
-
   zCAP_VALUE_NUM_BITS = zgsz310;
-
 let_end_43: ;
 }
 static void kill_letbind_7(void) {
@@ -1246,7 +1159,6 @@ static void create_letbind_8(void) {
   int64_t zgsz311;
   zgsz311 = INT64_C(79);
   zCAP_BASE_HI_BIT = zgsz311;
-
 let_end_44: ;
 }
 static void kill_letbind_8(void) {
@@ -1259,7 +1171,6 @@ static void create_letbind_9(void) {
   int64_t zgsz312;
   zgsz312 = INT64_C(64);
   zCAP_BASE_LO_BIT = zgsz312;
-
 let_end_45: ;
 }
 static void kill_letbind_9(void) {
@@ -1287,9 +1198,7 @@ static void create_letbind_10(void) {
     KILL(sail_int)(&zgsz3672);
   }
   zgsz313 = (zgaz37 + INT64_C(1));
-
   zCAP_MW = zgsz313;
-
 let_end_46: ;
 }
 static void kill_letbind_10(void) {
@@ -1355,7 +1264,6 @@ static void create_letbind_11(void) {
   int64_t zgsz314;
   zgsz314 = INT64_C(66);
   zCAP_BASE_EXP_HI_BIT = zgsz314;
-
 let_end_52: ;
 }
 static void kill_letbind_11(void) {
@@ -1368,7 +1276,6 @@ static void create_letbind_12(void) {
   int64_t zgsz315;
   zgsz315 = INT64_C(82);
   zCAP_LIMIT_EXP_HI_BIT = zgsz315;
-
 let_end_53: ;
 }
 static void kill_letbind_12(void) {
@@ -1381,7 +1288,6 @@ static void create_letbind_13(void) {
   int64_t zgsz316;
   zgsz316 = INT64_C(80);
   zCAP_LIMIT_LO_BIT = zgsz316;
-
 let_end_54: ;
 }
 static void kill_letbind_13(void) {
@@ -1394,7 +1300,6 @@ static void create_letbind_14(void) {
   int64_t zgsz317;
   zgsz317 = INT64_C(94);
   zCAP_IE_BIT = zgsz317;
-
 let_end_55: ;
 }
 static void kill_letbind_14(void) {
@@ -1533,7 +1438,6 @@ static int64_t sailgen_CapGetExponent(lbits zc)
     goto end_function_62;
   end_cleanup_64: ;
   }
-
 end_function_62: ;
   return zcbz314;
 end_block_exception_67: ;
@@ -1611,7 +1515,6 @@ static void create_letbind_15(void) {
   int64_t zgsz319;
   zgsz319 = (zCAP_VALUE_NUM_BITS + INT64_C(1));
   zCAP_BOUND_NUM_BITS = zgsz319;
-
 let_end_73: ;
 }
 static void kill_letbind_15(void) {
@@ -1690,7 +1593,6 @@ static void create_letbind_18(void) {
   int64_t zgsz322;
   zgsz322 = INT64_C(63);
   zCAP_MAX_ENCODEABLE_EXPONENT = zgsz322;
-
 let_end_76: ;
 }
 static void kill_letbind_18(void) {
@@ -1718,9 +1620,7 @@ static void create_letbind_19(void) {
     KILL(sail_int)(&zgsz3696);
   }
   zgsz323 = (zgaz320 + INT64_C(2));
-
   zCAP_MAX_EXPONENT = zgsz323;
-
 let_end_77: ;
 }
 static void kill_letbind_19(void) {
@@ -1807,7 +1707,6 @@ static void create_letbind_20(void) {
   int64_t zgsz324;
   zgsz324 = INT64_C(67);
   zCAP_BASE_MANTISSA_LO_BIT = zgsz324;
-
 let_end_83: ;
 }
 static void kill_letbind_20(void) {
@@ -1884,7 +1783,6 @@ static uint64_t sailgen_CapGetBottom(lbits zc)
     goto end_function_85;
   end_cleanup_87: ;
   }
-
 end_function_85: ;
   return zcbz317;
 end_block_exception_90: ;
@@ -1911,7 +1809,6 @@ static void create_letbind_21(void) {
   int64_t zgsz325;
   zgsz325 = INT64_C(93);
   zCAP_LIMIT_HI_BIT = zgsz325;
-
 let_end_91: ;
 }
 static void kill_letbind_21(void) {
@@ -1924,7 +1821,6 @@ static void create_letbind_22(void) {
   int64_t zgsz326;
   zgsz326 = INT64_C(83);
   zCAP_LIMIT_MANTISSA_LO_BIT = zgsz326;
-
 let_end_92: ;
 }
 static void kill_letbind_22(void) {
@@ -2214,16 +2110,8 @@ static uint64_t sailgen_CapGetTop(lbits zc)
   zcbz319 = zt;
   goto cleanup_100;
   /* unreachable after return */
-
-
-
-
   goto end_cleanup_101;
 cleanup_100: ;
-
-
-
-
   goto end_function_99;
 end_cleanup_101: ;
 end_function_99: ;
@@ -2304,7 +2192,6 @@ static bool sailgen_CapIsExponentOutOfRange(lbits zc)
 case_105: ;
   sail_match_failure("CapIsExponentOutOfRange");
 finish_match_104: ;
-
 end_function_106: ;
   return zcbz320;
 end_block_exception_109: ;
@@ -3269,7 +3156,6 @@ case_117: ;
 finish_match_116: ;
   COPY(ztuple_z8z5bvzCz0z5bvzCz0z5boolz9)((*(&zcbz322)), zgsz334);
   KILL(ztuple_z8z5bvzCz0z5bvzCz0z5boolz9)(&zgsz334);
-
 end_function_128: ;
   goto end_function_281;
 end_block_exception_135: ;
@@ -3548,14 +3434,8 @@ static bool sailgen_CapBoundsEqual(lbits za, lbits zb)
   zcbz323 = zgaz3108;
   goto cleanup_142;
   /* unreachable after return */
-
-
-
   goto end_cleanup_143;
 cleanup_142: ;
-
-
-
   goto end_function_141;
 end_cleanup_143: ;
 end_function_141: ;
@@ -3649,7 +3529,6 @@ static void create_letbind_23(void) {
   int64_t zgsz385;
   zgsz385 = INT64_C(128);
   zCAP_TAG_BIT = zgsz385;
-
 let_end_150: ;
 }
 static void kill_letbind_23(void) {
@@ -3761,7 +3640,6 @@ static void create_letbind_24(void) {
   int64_t zgsz388;
   zgsz388 = INT64_C(109);
   zCAP_OTYPE_HI_BIT = zgsz388;
-
 let_end_161: ;
 }
 static void kill_letbind_24(void) {
@@ -3774,7 +3652,6 @@ static void create_letbind_25(void) {
   int64_t zgsz389;
   zgsz389 = INT64_C(95);
   zCAP_OTYPE_LO_BIT = zgsz389;
-
 let_end_162: ;
 }
 static void kill_letbind_25(void) {
@@ -3907,7 +3784,6 @@ static void create_letbind_26(void) {
   int64_t zgsz390;
   zgsz390 = INT64_C(63);
   zCAP_FLAGS_HI_BIT = zgsz390;
-
 let_end_173: ;
 }
 static void kill_letbind_26(void) {
@@ -3959,7 +3835,6 @@ static void create_letbind_27(void) {
   uint64_t zgsz391;
   zgsz391 = UINT64_C(0b10110);
   zM32_Monitor = zgsz391;
-
 let_end_174: ;
 }
 static void kill_letbind_27(void) {
@@ -3972,7 +3847,6 @@ static void create_letbind_28(void) {
   uint64_t zgsz392;
   zgsz392 = UINT64_C(0x0000000000000002);
   zCAP_PERM_EXECUTIVE = zgsz392;
-
 let_end_175: ;
 }
 static void kill_letbind_28(void) {
@@ -3985,7 +3859,6 @@ static void create_letbind_29(void) {
   int64_t zgsz393;
   zgsz393 = INT64_C(127);
   zCAP_PERMS_HI_BIT = zgsz393;
-
 let_end_176: ;
 }
 static void kill_letbind_29(void) {
@@ -3998,7 +3871,6 @@ static void create_letbind_30(void) {
   int64_t zgsz394;
   zgsz394 = INT64_C(110);
   zCAP_PERMS_LO_BIT = zgsz394;
-
 let_end_177: ;
 }
 static void kill_letbind_30(void) {
@@ -4026,9 +3898,7 @@ static void create_letbind_31(void) {
     KILL(sail_int)(&zgsz3851);
   }
   zgsz395 = (zgaz3119 + INT64_C(1));
-
   zCAP_PERMS_NUM_BITS = zgsz395;
-
 let_end_178: ;
 }
 static void kill_letbind_31(void) {
@@ -4114,7 +3984,6 @@ static void create_letbind_32(void) {
   uint64_t zgsz396;
   zgsz396 = UINT64_C(0x0000000000008000);
   zCAP_PERM_EXECUTE = zgsz396;
-
 let_end_184: ;
 }
 static void kill_letbind_32(void) {
@@ -4127,7 +3996,6 @@ static void create_letbind_33(void) {
   uint64_t zgsz397;
   zgsz397 = UINT64_C(0x0000000000000200);
   zCAP_PERM_SYSTEM = zgsz397;
-
 let_end_185: ;
 }
 static void kill_letbind_33(void) {
@@ -4362,7 +4230,6 @@ static void create_letbind_34(void) {
   uint64_t zgsz398;
   zgsz398 = UINT64_C(0b110011);
   zDebugHalt_SoftwareAccess = zgsz398;
-
 let_end_186: ;
 }
 static void kill_letbind_34(void) {
@@ -5143,7 +5010,6 @@ static void create_letbind_35(void) {
   uint64_t zgsz399;
   zgsz399 = UINT64_C(0b00);
   zMemAttr_NC = zgsz399;
-
 let_end_187: ;
 }
 static void kill_letbind_35(void) {
@@ -5156,7 +5022,6 @@ static void create_letbind_36(void) {
   uint64_t zgsz3100;
   zgsz3100 = UINT64_C(0b10);
   zMemAttr_WT = zgsz3100;
-
 let_end_188: ;
 }
 static void kill_letbind_36(void) {
@@ -5169,7 +5034,6 @@ static void create_letbind_37(void) {
   uint64_t zgsz3101;
   zgsz3101 = UINT64_C(0b11);
   zMemAttr_WB = zgsz3101;
-
 let_end_189: ;
 }
 static void kill_letbind_37(void) {
@@ -5182,7 +5046,6 @@ static void create_letbind_38(void) {
   uint64_t zgsz3102;
   zgsz3102 = UINT64_C(0b00);
   zMemHint_No = zgsz3102;
-
 let_end_190: ;
 }
 static void kill_letbind_38(void) {
@@ -5195,7 +5058,6 @@ static void create_letbind_39(void) {
   uint64_t zgsz3103;
   zgsz3103 = UINT64_C(0b10);
   zMemHint_RA = zgsz3103;
-
 let_end_191: ;
 }
 static void kill_letbind_39(void) {
@@ -5208,7 +5070,6 @@ static void create_letbind_40(void) {
   uint64_t zgsz3104;
   zgsz3104 = UINT64_C(0b11);
   zMemHint_RWA = zgsz3104;
-
 let_end_192: ;
 }
 static void kill_letbind_40(void) {
@@ -5320,7 +5181,6 @@ static void create_letbind_41(void) {
   uint64_t zgsz3105;
   zgsz3105 = UINT64_C(0x0000);
   zDefaultPARTID = zgsz3105;
-
 let_end_193: ;
 }
 static void kill_letbind_41(void) {
@@ -5333,7 +5193,6 @@ static void create_letbind_42(void) {
   uint64_t zgsz3106;
   zgsz3106 = UINT64_C(0x00);
   zDefaultPMG = zgsz3106;
-
 let_end_194: ;
 }
 static void kill_letbind_42(void) {
@@ -5346,7 +5205,6 @@ static void create_letbind_43(void) {
   int64_t zgsz3107;
   zgsz3107 = INT64_C(16);
   zCAPABILITY_DBYTES = zgsz3107;
-
 let_end_195: ;
 }
 static void kill_letbind_43(void) {
@@ -5359,7 +5217,6 @@ static void create_letbind_44(void) {
   int64_t zgsz3108;
   zgsz3108 = INT64_C(4);
   zLOG2_CAPABILITY_DBYTES = zgsz3108;
-
 let_end_196: ;
 }
 static void kill_letbind_44(void) {
@@ -5372,7 +5229,6 @@ static void create_letbind_45(void) {
   uint64_t zgsz3109;
   zgsz3109 = UINT64_C(0b000111);
   zDebugHalt_Breakpoint = zgsz3109;
-
 let_end_197: ;
 }
 static void kill_letbind_45(void) {
@@ -5385,7 +5241,6 @@ static void create_letbind_46(void) {
   uint64_t zgsz3110;
   zgsz3110 = UINT64_C(0b101011);
   zDebugHalt_Watchpoint = zgsz3110;
-
 let_end_198: ;
 }
 static void kill_letbind_46(void) {
@@ -5398,7 +5253,6 @@ static void create_letbind_47(void) {
   uint64_t zgsz3111;
   zgsz3111 = UINT64_C(0b101111);
   zDebugHalt_HaltInstruction = zgsz3111;
-
 let_end_199: ;
 }
 static void kill_letbind_47(void) {
@@ -5411,7 +5265,6 @@ static void create_letbind_48(void) {
   uint64_t zgsz3112;
   zgsz3112 = UINT64_C(0xFFFFFFFFFFFFFFFF);
   zCAP_NO_SEALING = zgsz3112;
-
 let_end_200: ;
 }
 static void kill_letbind_48(void) {
@@ -5424,7 +5277,6 @@ static void create_letbind_49(void) {
   uint64_t zgsz3113;
   zgsz3113 = UINT64_C(0x0000000000000001);
   zCAP_SEAL_TYPE_RB = zgsz3113;
-
 let_end_201: ;
 }
 static void kill_letbind_49(void) {
@@ -5437,7 +5289,6 @@ static void create_letbind_50(void) {
   uint64_t zgsz3114;
   zgsz3114 = UINT64_C(0x0000000000000002);
   zCAP_SEAL_TYPE_LPB = zgsz3114;
-
 let_end_202: ;
 }
 static void kill_letbind_50(void) {
@@ -5450,7 +5301,6 @@ static void create_letbind_51(void) {
   uint64_t zgsz3115;
   zgsz3115 = UINT64_C(0x0000000000000003);
   zCAP_SEAL_TYPE_LB = zgsz3115;
-
 let_end_203: ;
 }
 static void kill_letbind_51(void) {
@@ -5463,7 +5313,6 @@ static void create_letbind_52(void) {
   int64_t zgsz3116;
   zgsz3116 = INT64_C(3);
   zCAP_MAX_FIXED_SEAL_TYPE = zgsz3116;
-
 let_end_204: ;
 }
 static void kill_letbind_52(void) {
@@ -5476,7 +5325,6 @@ static void create_letbind_53(void) {
   uint64_t zgsz3117;
   zgsz3117 = UINT64_C(0x0000000000020000);
   zCAP_PERM_LOAD = zgsz3117;
-
 let_end_205: ;
 }
 static void kill_letbind_53(void) {
@@ -5489,7 +5337,6 @@ static void create_letbind_54(void) {
   uint64_t zgsz3118;
   zgsz3118 = UINT64_C(0x0000000000010000);
   zCAP_PERM_STORE = zgsz3118;
-
 let_end_206: ;
 }
 static void kill_letbind_54(void) {
@@ -5502,7 +5349,6 @@ static void create_letbind_55(void) {
   uint64_t zgsz3119;
   zgsz3119 = UINT64_C(0x0000000000004000);
   zCAP_PERM_LOAD_CAP = zgsz3119;
-
 let_end_207: ;
 }
 static void kill_letbind_55(void) {
@@ -5515,7 +5361,6 @@ static void create_letbind_56(void) {
   uint64_t zgsz3120;
   zgsz3120 = UINT64_C(0x0000000000002000);
   zCAP_PERM_STORE_CAP = zgsz3120;
-
 let_end_208: ;
 }
 static void kill_letbind_56(void) {
@@ -5528,7 +5373,6 @@ static void create_letbind_57(void) {
   uint64_t zgsz3121;
   zgsz3121 = UINT64_C(0x0000000000001000);
   zCAP_PERM_STORE_LOCAL = zgsz3121;
-
 let_end_209: ;
 }
 static void kill_letbind_57(void) {
@@ -5541,7 +5385,6 @@ static void create_letbind_58(void) {
   uint64_t zgsz3122;
   zgsz3122 = UINT64_C(0x0000000000000800);
   zCAP_PERM_SEAL = zgsz3122;
-
 let_end_210: ;
 }
 static void kill_letbind_58(void) {
@@ -5554,7 +5397,6 @@ static void create_letbind_59(void) {
   uint64_t zgsz3123;
   zgsz3123 = UINT64_C(0x0000000000000400);
   zCAP_PERM_UNSEAL = zgsz3123;
-
 let_end_211: ;
 }
 static void kill_letbind_59(void) {
@@ -5567,7 +5409,6 @@ static void create_letbind_60(void) {
   uint64_t zgsz3124;
   zgsz3124 = UINT64_C(0x0000000000000100);
   zCAP_PERM_BRANCH_SEALED_PAIR = zgsz3124;
-
 let_end_212: ;
 }
 static void kill_letbind_60(void) {
@@ -5580,7 +5421,6 @@ static void create_letbind_61(void) {
   uint64_t zgsz3125;
   zgsz3125 = UINT64_C(0x0000000000000040);
   zCAP_PERM_MUTABLE_LOAD = zgsz3125;
-
 let_end_213: ;
 }
 static void kill_letbind_61(void) {
@@ -5593,7 +5433,6 @@ static void create_letbind_62(void) {
   uint64_t zgsz3126;
   zgsz3126 = UINT64_C(0x0000000000000001);
   zCAP_PERM_GLOBAL = zgsz3126;
-
 let_end_214: ;
 }
 static void kill_letbind_62(void) {
@@ -5606,7 +5445,6 @@ static void create_letbind_63(void) {
   uint64_t zgsz3127;
   zgsz3127 = UINT64_C(0x0000000000000000);
   zCAP_PERM_NONE = zgsz3127;
-
 let_end_215: ;
 }
 static void kill_letbind_63(void) {
@@ -5634,9 +5472,7 @@ static void create_letbind_64(void) {
     KILL(sail_int)(&zgsz3857);
   }
   zgsz3128 = (zgaz3121 + INT64_C(1));
-
   zCAP_OTYPE_NUM_BITS = zgsz3128;
-
 let_end_216: ;
 }
 static void kill_letbind_64(void) {
@@ -5649,7 +5485,6 @@ static void create_letbind_65(void) {
   int64_t zgsz3129;
   zgsz3129 = (zCAP_VALUE_NUM_BITS + INT64_C(1));
   zCAP_LENGTH_NUM_BITS = zgsz3129;
-
 let_end_217: ;
 }
 static void kill_letbind_65(void) {
@@ -5705,7 +5540,6 @@ static void create_letbind_67(void) {
   uint64_t zgsz3131;
   zgsz3131 = UINT64_C(0x4);
   z__exclusive_granule_sizze = zgsz3131;
-
 let_end_219: ;
 }
 static void kill_letbind_67(void) {
@@ -5718,7 +5552,6 @@ static void create_letbind_68(void) {
   uint64_t zgsz3132;
   zgsz3132 = UINT64_C(0x1);
   zCFG_ID_AA64PFR0_EL1_MPAM = zgsz3132;
-
 let_end_220: ;
 }
 static void kill_letbind_68(void) {
@@ -6121,16 +5954,6 @@ static bool sailgen_CapIsRepresentableFast(lbits zc, uint64_t zincrement_name__a
 case_228: ;
   sail_match_failure("CapIsRepresentableFast");
 finish_match_227: ;
-
-
-
-
-
-
-
-
-
-
 end_function_229: ;
   return zcbz331;
 end_block_exception_238: ;
@@ -6208,7 +6031,6 @@ static void create_letbind_69(void) {
     KILL(sail_int)(&zgsz3903);
   }
   zCAPABILITY_DBITS = zgsz3136;
-
 let_end_239: ;
 }
 static void kill_letbind_69(void) {
@@ -7778,16 +7600,6 @@ case_260: ;
   sail_match_failure("CapSetBounds");
 finish_match_259: ;
   COPY(lbits)((*(&zcbz334)), zghz3255);
-
-
-
-
-
-
-
-
-
-
 end_function_263: ;
   goto end_function_278;
 end_block_exception_266: ;
@@ -8026,7 +7838,6 @@ static void sailgen_doCSetBounds(lbits *zcbz335, lbits zinput, lbits zreq_len)
   bool zgaz3242;
   zgaz3242 = sailgen_CapIsSealed(zinput);
   if (zgaz3242) {  sailgen_CapWithTagClear((*(&zcbz335)), zghz3435);  } else {  COPY(lbits)((*(&zcbz335)), zghz3435);  }
-
 end_function_269: ;
   goto end_function_277;
 end_block_exception_270: ;
@@ -8094,13 +7905,7 @@ static unit sailgen_main(unit zgsz3201)
   bool zrep;
   zrep = sailgen_CapIsRepresentableFast(zTestCap, UINT64_C(0x0000000000000000));
   zcbz336 = UNIT;
-
-
   KILL(ztuple_z8z5bvzCz0z5bvzCz0z5boolz9)(&zbits6);
-
-
-
-
 end_function_272: ;
   return zcbz336;
 end_block_exception_273: ;
@@ -8306,13 +8111,6 @@ static void startup_sailgen_initializze_registers(void)
 
   CREATE(lbits)(&zghz3530);
 }
-
-
-
-
-
-
-
 
 static unit sailgen_initializze_registers(unit zgsz3205)
 {
@@ -10882,7 +10680,6 @@ end_block_exception_276: ;
 static void finish_sailgen_initializze_registers(void)
 {
   KILL(lbits)(&zghz3530);
-
   KILL(lbits)(&zghz3528);
   KILL(lbits)(&zghz3527);
   KILL(lbits)(&zghz3526);
@@ -10973,6 +10770,8 @@ static void finish_sailgen_initializze_registers(void)
   KILL(lbits)(&zghz3441);
   KILL(lbits)(&zghz3440);
 }
+
+
 
 static void model_init(void)
 {
@@ -11161,77 +10960,6 @@ static void model_init(void)
 
 static void model_fini(void)
 {
-  kill_letbind_70();
-  kill_letbind_69();
-  kill_letbind_68();
-  kill_letbind_67();
-  kill_letbind_66();
-  kill_letbind_65();
-  kill_letbind_64();
-  kill_letbind_63();
-  kill_letbind_62();
-  kill_letbind_61();
-  kill_letbind_60();
-  kill_letbind_59();
-  kill_letbind_58();
-  kill_letbind_57();
-  kill_letbind_56();
-  kill_letbind_55();
-  kill_letbind_54();
-  kill_letbind_53();
-  kill_letbind_52();
-  kill_letbind_51();
-  kill_letbind_50();
-  kill_letbind_49();
-  kill_letbind_48();
-  kill_letbind_47();
-  kill_letbind_46();
-  kill_letbind_45();
-  kill_letbind_44();
-  kill_letbind_43();
-  kill_letbind_42();
-  kill_letbind_41();
-  kill_letbind_40();
-  kill_letbind_39();
-  kill_letbind_38();
-  kill_letbind_37();
-  kill_letbind_36();
-  kill_letbind_35();
-  kill_letbind_34();
-  kill_letbind_33();
-  kill_letbind_32();
-  kill_letbind_31();
-  kill_letbind_30();
-  kill_letbind_29();
-  kill_letbind_28();
-  kill_letbind_27();
-  kill_letbind_26();
-  kill_letbind_25();
-  kill_letbind_24();
-  kill_letbind_23();
-  kill_letbind_22();
-  kill_letbind_21();
-  kill_letbind_20();
-  kill_letbind_19();
-  kill_letbind_18();
-  kill_letbind_17();
-  kill_letbind_16();
-  kill_letbind_15();
-  kill_letbind_14();
-  kill_letbind_13();
-  kill_letbind_12();
-  kill_letbind_11();
-  kill_letbind_10();
-  kill_letbind_9();
-  kill_letbind_8();
-  kill_letbind_7();
-  kill_letbind_6();
-  kill_letbind_5();
-  kill_letbind_4();
-  kill_letbind_3();
-  kill_letbind_2();
-  kill_letbind_1();
-  kill_letbind_0();
   KILL(sail_int)(&zSEE);
   KILL(lbits)(&zPCC);
   KILL(lbits)(&z_R00);
@@ -11307,6 +11035,77 @@ static void model_fini(void)
   KILL(zz5vecz8z5bvz9)(&z_V);
   KILL(lbits)(&zSP_EL3);
   KILL(lbits)(&zTestCap);
+  kill_letbind_70();
+  kill_letbind_69();
+  kill_letbind_68();
+  kill_letbind_67();
+  kill_letbind_66();
+  kill_letbind_65();
+  kill_letbind_64();
+  kill_letbind_63();
+  kill_letbind_62();
+  kill_letbind_61();
+  kill_letbind_60();
+  kill_letbind_59();
+  kill_letbind_58();
+  kill_letbind_57();
+  kill_letbind_56();
+  kill_letbind_55();
+  kill_letbind_54();
+  kill_letbind_53();
+  kill_letbind_52();
+  kill_letbind_51();
+  kill_letbind_50();
+  kill_letbind_49();
+  kill_letbind_48();
+  kill_letbind_47();
+  kill_letbind_46();
+  kill_letbind_45();
+  kill_letbind_44();
+  kill_letbind_43();
+  kill_letbind_42();
+  kill_letbind_41();
+  kill_letbind_40();
+  kill_letbind_39();
+  kill_letbind_38();
+  kill_letbind_37();
+  kill_letbind_36();
+  kill_letbind_35();
+  kill_letbind_34();
+  kill_letbind_33();
+  kill_letbind_32();
+  kill_letbind_31();
+  kill_letbind_30();
+  kill_letbind_29();
+  kill_letbind_28();
+  kill_letbind_27();
+  kill_letbind_26();
+  kill_letbind_25();
+  kill_letbind_24();
+  kill_letbind_23();
+  kill_letbind_22();
+  kill_letbind_21();
+  kill_letbind_20();
+  kill_letbind_19();
+  kill_letbind_18();
+  kill_letbind_17();
+  kill_letbind_16();
+  kill_letbind_15();
+  kill_letbind_14();
+  kill_letbind_13();
+  kill_letbind_12();
+  kill_letbind_11();
+  kill_letbind_10();
+  kill_letbind_9();
+  kill_letbind_8();
+  kill_letbind_7();
+  kill_letbind_6();
+  kill_letbind_5();
+  kill_letbind_4();
+  kill_letbind_3();
+  kill_letbind_2();
+  kill_letbind_1();
+  kill_letbind_0();
   finish_sailgen_sail_ones();
   finish_sailgen_eq_bits_int();
   finish_sailgen_integer_subrange();
@@ -11357,6 +11156,24 @@ static int model_main(int argc, char *argv[])
   model_fini();
   model_pre_exit();
   return EXIT_SUCCESS;
+}
+
+unit (*const SAIL_TESTS[])(unit) = {
+  NULL
+};
+
+const char* const SAIL_TEST_NAMES[] = {
+};
+
+static void model_test(void)
+{
+  for (size_t i = 0; SAIL_TESTS[i] != NULL; ++i) {
+    model_init();
+    printf("Testing %s\n", SAIL_TEST_NAMES[i]);
+    SAIL_TESTS[i](UNIT);
+    printf("Pass\n");
+    model_fini();
+  }
 }
 
 

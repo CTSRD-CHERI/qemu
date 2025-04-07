@@ -28,7 +28,7 @@ static _cc_cap_t sail_cap_to_cap_t(const struct zCapability* sail) {
     _cc_N(update_uperms)(&c, sail->zuperms);
     _cc_N(update_otype)(&c, sail->zotype);
     _cc_N(update_flags)(&c, sailgen_getCapFlags(*sail));
-    _cc_N(update_reserved)(&c, sail->zreserved);
+    c.cr_pesbt = _CC_DEPOSIT_FIELD(c.cr_pesbt, sail->zreserved, RESERVED);
     c.cr_tag = sail->ztag;
     c.cr_exp = sail->zE;
     c.cr_bounds_valid = true; // This field is only ever false for Morello.
@@ -76,7 +76,7 @@ static struct zCapability cap_t_to_sail_cap(const _cc_cap_t* c) {
     result = znull_cap;
     result = sailgen_setCapPerms(result, _cc_N(get_perms)(c));
     result.ztag = c->cr_tag;
-    result.zreserved = _cc_N(get_reserved)(c);
+    result.zreserved = _CC_EXTRACT_FIELD(c->cr_pesbt, RESERVED);
     result.zaddress = c->_cr_cursor;
     result.zuperms = _cc_N(get_uperms)(c);
     result.zotype = _cc_N(get_otype)(c);

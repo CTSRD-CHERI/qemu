@@ -42,7 +42,7 @@ TEST_CASE("Compressed NULL cap encodes to zeroes", "[nullcap]") {
     CHECK_FIELD(decompressed, software_permissions, 0);
     CHECK_FIELD(decompressed, permissions, 0);
     CHECK((decompressed.cr_pesbt & _CC_N(FIELD_EBT_MASK64)) == (_CC_N(NULL_PESBT) & _CC_N(FIELD_EBT_MASK64)));
-    CHECK(_cc_N(get_reserved)(&decompressed) == 0); // reserved bits
+    CHECK(_cc_N(reserved_bits_valid)(&decompressed)); // reserved bits
     CHECK(decompressed.length() == _CC_N(NULL_LENGTH));
     CHECK(decompressed.top() == _CC_N(NULL_TOP));
     CHECK_FIELD(decompressed, type, _CC_N(OTYPE_UNSEALED));
@@ -142,13 +142,13 @@ TEST_CASE("Check reset PESBT matches sail", "[sail]") {
 static inline TestAPICC::cap_t checkFastRepCheckSucceeds(const _cc_cap_t& cap, _cc_addr_t new_addr,
                                                          bool set_addr_should_retain_tag = true) {
     bool sail_fast_rep = TestAPICC::sail_fast_is_representable(cap, new_addr);
-    bool cc_fast_rep = TestAPICC::fast_is_representable_new_addr(cap, new_addr);
+    bool cc_fast_rep = _cc_N(_fast_is_representable_new_addr)(&cap, new_addr);
     CHECK(sail_fast_rep == cc_fast_rep);
     CHECK(cc_fast_rep);
     // It should also be representable if we do the full check since the bounds interpretation does not change.
-    // NB: Unlike precise_is_representable_new_addr, fast_is_representable_new_addr does not look at cr_bounds_valid.
+    // NB: Unlike _precise_is_representable_new_addr, _fast_is_representable_new_addr does not look at cr_bounds_valid.
     if (cap.cr_bounds_valid) {
-        CHECK(TestAPICC::precise_is_representable_new_addr(cap, new_addr));
+        CHECK(_cc_N(_precise_is_representable_new_addr)(&cap, new_addr));
     }
     // Check that creating a new capability with same pesbt and new address decodes to the same bounds
     TestAPICC::cap_t new_cap_with_other_cursor = TestAPICC::decompress_raw(cap.cr_pesbt, new_addr, false);
@@ -187,11 +187,11 @@ static inline void checkRepCheckFails(_cc_addr_t pesbt, _cc_addr_t addr, _cc_add
     CHECK(cap.base() == expected_base);
     CHECK(cap.top() == expected_top);
     bool sail_fast_rep = TestAPICC::sail_fast_is_representable(cap, new_addr);
-    bool cc_fast_rep = TestAPICC::fast_is_representable_new_addr(cap, new_addr);
+    bool cc_fast_rep = _cc_N(_fast_is_representable_new_addr)(&cap, new_addr);
     CHECK(sail_fast_rep == cc_fast_rep);
     CHECK(!cc_fast_rep);
     // It should also not be representable if we do the full check since the bounds interpretation changes.
-    CHECK(!TestAPICC::precise_is_representable_new_addr(cap, new_addr));
+    CHECK(!_cc_N(_precise_is_representable_new_addr)(&cap, new_addr));
     // Check that creating a new capability with same pesbt and new address decodes to different bounds
     TestAPICC::cap_t new_cap_with_other_cursor = TestAPICC::decompress_raw(pesbt, new_addr, false);
     CHECK((new_cap_with_other_cursor.base() != expected_base || new_cap_with_other_cursor.top() != expected_top));
@@ -362,4 +362,71 @@ TEST_CASE("removing ASR should not affect mode", "[perms]") {
     }
 }
 
+#endif
+
+TEST_CASE("get level from max perms", "[perms]") {
+    const TestAPICC::cap_t max_cap = TestAPICC::make_max_perms_cap(0, 0, _CC_MAX_TOP);
+    CHECK(max_cap.level() == _CC_N(MAX_LEVEL_VALUE));
+    const TestAPICC::cap_t null_cap = TestAPICC::make_null_derived_cap(0);
+    CHECK(null_cap.level() == 0);
+}
+
+#if _CC_N(MAX_LEVEL_BITS) != _CC_N(MANDATORY_LEVEL_BITS)
+TEST_CASE("get level from max perms (no levels)", "[perms]") {
+    const TestAPICC::cap_t max_cap_no_levels = TestAPICC::make_max_perms_cap(0, 0, _CC_MAX_TOP, TestAPICC::MODE_INT, 0);
+    CHECK(max_cap_no_levels.level() == 1); // When levels are not supported always report 1
+    const TestAPICC::cap_t null_cap_no_levels = TestAPICC::make_null_derived_cap(0, 0);
+    CHECK(null_cap_no_levels.level() == 1);
+}
+#endif
+
+TEST_CASE("Update level", "[perms]") {
+    TestAPICC::cap_t cap = TestAPICC::make_max_perms_cap(0, 0, _CC_MAX_TOP);
+    CHECK(cap.level() == _CC_N(MAX_LEVEL_VALUE));
+    _cc_N(update_level)(&cap, 0);
+    CHECK(cap.level() == 0);
+    _cc_N(update_level)(&cap, 1);
+    CHECK(cap.level() == 1);
+#ifndef NDEBUG
+    // Setting reserved-zero permissions should be rejected
+    CHECK_THROWS_MATCHES(_cc_N(update_level)(&cap, 7), std::invalid_argument, Message("invalid level"));
+#if _CC_N(MAX_LEVEL_BITS) == _CC_N(MANDATORY_LEVEL_BITS)
+    // For RISC-V we can update the level on sealed caps, for V9 and morello this is not possible
+    _cc_N(update_otype)(&cap, _CC_N(OTYPE_SENTRY));
+    CHECK_THROWS_MATCHES(_cc_N(update_level)(&cap, 0), std::invalid_argument,
+                         Message("cannot update level on sealed caps"));
+#endif
+#endif
+}
+
+TEST_CASE("Update level using set_perms API", "[perms]") {
+#if _CC_N(MAX_LEVEL_BITS) == _CC_N(MANDATORY_LEVEL_BITS)
+    _cc_addr_t level_perm = _CC_N(PERM_GLOBAL);
+#else
+    _cc_addr_t level_perm = _CC_N(PERM_LEVEL);
+#endif
+    // CHECK that we can change the level use the permissions API as well
+    TestAPICC::cap_t cap = TestAPICC::make_max_perms_cap(0, 0, _CC_MAX_TOP);
+    CHECK(cap.level() == _CC_N(MAX_LEVEL_VALUE));
+    CHECK((cap.permissions() & level_perm) != 0);
+    _cc_N(set_permissions)(&cap, cap.permissions() & ~level_perm);
+    CHECK(cap.level() == 0);
+    CHECK((cap.permissions() & level_perm) == 0);
+}
+
+#if _CC_N(MAX_LEVEL_BITS) != _CC_N(MANDATORY_LEVEL_BITS)
+TEST_CASE("update level (no levels)", "[perms]") {
+    TestAPICC::cap_t cap_no_levels = TestAPICC::make_max_perms_cap(0, 0, _CC_MAX_TOP, TestAPICC::MODE_INT, 0);
+    CHECK(_cc_N(get_lvbits)(&cap_no_levels) == 0);
+    CHECK(cap_no_levels.level() == 1); // When levels are not supported always report 1
+    // No-op change to level is ok
+    _cc_N(update_level)(&cap_no_levels, 1);
+    CHECK(cap_no_levels.level() == 1);
+#ifndef NDEBUG
+    // Setting level to a value other than 1 should be rejected
+    CHECK_THROWS_MATCHES(_cc_N(update_level)(&cap_no_levels, 0), std::invalid_argument,
+                         Message("cannot change level when levels are reserved"));
+    CHECK_THROWS_MATCHES(_cc_N(update_level)(&cap_no_levels, 2), std::invalid_argument, Message("invalid level"));
+#endif
+}
 #endif

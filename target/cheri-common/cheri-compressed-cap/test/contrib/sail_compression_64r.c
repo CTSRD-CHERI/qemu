@@ -1,63 +1,14 @@
 #include "sail.h"
+#include "sail_config.h"
 #include "rts.h"
 #include "elf.h"
-void (*sail_rts_set_coverage_file)(const char *) = NULL;
 #ifdef __cplusplus
 extern "C" {
 #endif
+void (*sail_rts_set_coverage_file)(const char *) = NULL;
 
-// union option<o>
-enum kind_zoptionzIozK { Kind_zNonezIozK, Kind_zSomezIozK };
-
-struct zoptionzIozK {
-  enum kind_zoptionzIozK kind;
-  union {
-    struct { unit zNonezIozK; };
-    struct { bool zSomezIozK; };
-  };
-};
-
-static void CREATE(zoptionzIozK)(struct zoptionzIozK *op) {
-  op->kind = Kind_zNonezIozK;
-}
-
-static void RECREATE(zoptionzIozK)(struct zoptionzIozK *op) {
-
-}
-
-static void KILL(zoptionzIozK)(struct zoptionzIozK *op) {
-  {}
-}
-
-static void COPY(zoptionzIozK)(struct zoptionzIozK *rop, struct zoptionzIozK op) {
-  {};
-  rop->kind = op.kind;
-  if (op.kind == Kind_zNonezIozK) {
-    rop->zNonezIozK = op.zNonezIozK;
-  } else if (op.kind == Kind_zSomezIozK) {
-    rop->zSomezIozK = op.zSomezIozK;
-  }
-}
-
-static bool EQUAL(zoptionzIozK)(struct zoptionzIozK op1, struct zoptionzIozK op2) {
-  if (op1.kind == Kind_zNonezIozK && op2.kind == Kind_zNonezIozK) {
-    return EQUAL(unit)(op1.zNonezIozK, op2.zNonezIozK);
-  } else if (op1.kind == Kind_zSomezIozK && op2.kind == Kind_zSomezIozK) {
-    return EQUAL(bool)(op1.zSomezIozK, op2.zSomezIozK);
-  } else return false;
-}
-
-static void sailgen_NonezIozK(struct zoptionzIozK *rop, unit op) {
-  {}
-  rop->kind = Kind_zNonezIozK;
-  rop->zNonezIozK = op;
-}
-
-static void sailgen_SomezIozK(struct zoptionzIozK *rop, bool op) {
-  {}
-  rop->kind = Kind_zSomezIozK;
-  rop->zSomezIozK = op;
-}
+// type abbreviation xlenbits
+typedef uint64_t zxlenbits;
 
 // union option<b>
 enum kind_zoptionzIbzK { Kind_zNonezIbzK, Kind_zSomezIbzK };
@@ -67,7 +18,7 @@ struct zoptionzIbzK {
   union {
     struct { unit zNonezIbzK; };
     struct { lbits zSomezIbzK; };
-  };
+  } variants;
 };
 
 static void CREATE(zoptionzIbzK)(struct zoptionzIbzK *op) {
@@ -80,45 +31,45 @@ static void RECREATE(zoptionzIbzK)(struct zoptionzIbzK *op) {
 
 static void KILL(zoptionzIbzK)(struct zoptionzIbzK *op) {
   if (op->kind == Kind_zSomezIbzK) {
-    KILL(lbits)(&op->zSomezIbzK);
+    KILL(lbits)(&op->variants.zSomezIbzK);
   }
 }
 
 static void COPY(zoptionzIbzK)(struct zoptionzIbzK *rop, struct zoptionzIbzK op) {
   if (rop->kind == Kind_zSomezIbzK) {
-    KILL(lbits)(&rop->zSomezIbzK);
+    KILL(lbits)(&rop->variants.zSomezIbzK);
   };
   rop->kind = op.kind;
   if (op.kind == Kind_zNonezIbzK) {
-    rop->zNonezIbzK = op.zNonezIbzK;
+    rop->variants.zNonezIbzK = op.variants.zNonezIbzK;
   } else if (op.kind == Kind_zSomezIbzK) {
-    CREATE(lbits)(&rop->zSomezIbzK); COPY(lbits)(&rop->zSomezIbzK, op.zSomezIbzK);
+    CREATE(lbits)(&rop->variants.zSomezIbzK); COPY(lbits)(&rop->variants.zSomezIbzK, op.variants.zSomezIbzK);
   }
 }
 
 static bool EQUAL(zoptionzIbzK)(struct zoptionzIbzK op1, struct zoptionzIbzK op2) {
   if (op1.kind == Kind_zNonezIbzK && op2.kind == Kind_zNonezIbzK) {
-    return EQUAL(unit)(op1.zNonezIbzK, op2.zNonezIbzK);
+    return EQUAL(unit)(op1.variants.zNonezIbzK, op2.variants.zNonezIbzK);
   } else if (op1.kind == Kind_zSomezIbzK && op2.kind == Kind_zSomezIbzK) {
-    return EQUAL(lbits)(op1.zSomezIbzK, op2.zSomezIbzK);
+    return EQUAL(lbits)(op1.variants.zSomezIbzK, op2.variants.zSomezIbzK);
   } else return false;
 }
 
 static void sailgen_NonezIbzK(struct zoptionzIbzK *rop, unit op) {
   if (rop->kind == Kind_zSomezIbzK) {
-    KILL(lbits)(&rop->zSomezIbzK);
+    KILL(lbits)(&rop->variants.zSomezIbzK);
   }
   rop->kind = Kind_zNonezIbzK;
-  rop->zNonezIbzK = op;
+  rop->variants.zNonezIbzK = op;
 }
 
 static void sailgen_SomezIbzK(struct zoptionzIbzK *rop, lbits op) {
   if (rop->kind == Kind_zSomezIbzK) {
-    KILL(lbits)(&rop->zSomezIbzK);
+    KILL(lbits)(&rop->variants.zSomezIbzK);
   }
   rop->kind = Kind_zSomezIbzK;
-  CREATE(lbits)(&rop->zSomezIbzK);
-  COPY(lbits)(&rop->zSomezIbzK, op);
+  CREATE(lbits)(&rop->variants.zSomezIbzK);
+  COPY(lbits)(&rop->variants.zSomezIbzK, op);
 }
 
 // struct tuple_(%i, %i)
@@ -159,7 +110,7 @@ struct zoptionzIz8izCiz9zK {
   union {
     struct { unit zNonezIz8izCiz9zK; };
     struct { struct ztuple_z8z5izCz0z5iz9 zSomezIz8izCiz9zK; };
-  };
+  } variants;
 };
 
 static void CREATE(zoptionzIz8izCiz9zK)(struct zoptionzIz8izCiz9zK *op) {
@@ -172,45 +123,45 @@ static void RECREATE(zoptionzIz8izCiz9zK)(struct zoptionzIz8izCiz9zK *op) {
 
 static void KILL(zoptionzIz8izCiz9zK)(struct zoptionzIz8izCiz9zK *op) {
   if (op->kind == Kind_zSomezIz8izCiz9zK) {
-    KILL(ztuple_z8z5izCz0z5iz9)(&op->zSomezIz8izCiz9zK);
+    KILL(ztuple_z8z5izCz0z5iz9)(&op->variants.zSomezIz8izCiz9zK);
   }
 }
 
 static void COPY(zoptionzIz8izCiz9zK)(struct zoptionzIz8izCiz9zK *rop, struct zoptionzIz8izCiz9zK op) {
   if (rop->kind == Kind_zSomezIz8izCiz9zK) {
-    KILL(ztuple_z8z5izCz0z5iz9)(&rop->zSomezIz8izCiz9zK);
+    KILL(ztuple_z8z5izCz0z5iz9)(&rop->variants.zSomezIz8izCiz9zK);
   };
   rop->kind = op.kind;
   if (op.kind == Kind_zNonezIz8izCiz9zK) {
-    rop->zNonezIz8izCiz9zK = op.zNonezIz8izCiz9zK;
+    rop->variants.zNonezIz8izCiz9zK = op.variants.zNonezIz8izCiz9zK;
   } else if (op.kind == Kind_zSomezIz8izCiz9zK) {
-    CREATE(ztuple_z8z5izCz0z5iz9)(&rop->zSomezIz8izCiz9zK); COPY(ztuple_z8z5izCz0z5iz9)(&rop->zSomezIz8izCiz9zK, op.zSomezIz8izCiz9zK);
+    CREATE(ztuple_z8z5izCz0z5iz9)(&rop->variants.zSomezIz8izCiz9zK); COPY(ztuple_z8z5izCz0z5iz9)(&rop->variants.zSomezIz8izCiz9zK, op.variants.zSomezIz8izCiz9zK);
   }
 }
 
 static bool EQUAL(zoptionzIz8izCiz9zK)(struct zoptionzIz8izCiz9zK op1, struct zoptionzIz8izCiz9zK op2) {
   if (op1.kind == Kind_zNonezIz8izCiz9zK && op2.kind == Kind_zNonezIz8izCiz9zK) {
-    return EQUAL(unit)(op1.zNonezIz8izCiz9zK, op2.zNonezIz8izCiz9zK);
+    return EQUAL(unit)(op1.variants.zNonezIz8izCiz9zK, op2.variants.zNonezIz8izCiz9zK);
   } else if (op1.kind == Kind_zSomezIz8izCiz9zK && op2.kind == Kind_zSomezIz8izCiz9zK) {
-    return EQUAL(ztuple_z8z5izCz0z5iz9)(op1.zSomezIz8izCiz9zK, op2.zSomezIz8izCiz9zK);
+    return EQUAL(ztuple_z8z5izCz0z5iz9)(op1.variants.zSomezIz8izCiz9zK, op2.variants.zSomezIz8izCiz9zK);
   } else return false;
 }
 
 static void sailgen_NonezIz8izCiz9zK(struct zoptionzIz8izCiz9zK *rop, unit op) {
   if (rop->kind == Kind_zSomezIz8izCiz9zK) {
-    KILL(ztuple_z8z5izCz0z5iz9)(&rop->zSomezIz8izCiz9zK);
+    KILL(ztuple_z8z5izCz0z5iz9)(&rop->variants.zSomezIz8izCiz9zK);
   }
   rop->kind = Kind_zNonezIz8izCiz9zK;
-  rop->zNonezIz8izCiz9zK = op;
+  rop->variants.zNonezIz8izCiz9zK = op;
 }
 
 static void sailgen_SomezIz8izCiz9zK(struct zoptionzIz8izCiz9zK *rop, struct ztuple_z8z5izCz0z5iz9 op) {
   if (rop->kind == Kind_zSomezIz8izCiz9zK) {
-    KILL(ztuple_z8z5izCz0z5iz9)(&rop->zSomezIz8izCiz9zK);
+    KILL(ztuple_z8z5izCz0z5iz9)(&rop->variants.zSomezIz8izCiz9zK);
   }
   rop->kind = Kind_zSomezIz8izCiz9zK;
-  CREATE(ztuple_z8z5izCz0z5iz9)(&rop->zSomezIz8izCiz9zK);
-  COPY(ztuple_z8z5izCz0z5iz9)(&rop->zSomezIz8izCiz9zK, op);
+  CREATE(ztuple_z8z5izCz0z5iz9)(&rop->variants.zSomezIz8izCiz9zK);
+  COPY(ztuple_z8z5izCz0z5iz9)(&rop->variants.zSomezIz8izCiz9zK, op);
 }
 
 // struct tuple_(%bv, %bv)
@@ -251,7 +202,7 @@ struct zoptionzIz8bzCbz9zK {
   union {
     struct { unit zNonezIz8bzCbz9zK; };
     struct { struct ztuple_z8z5bvzCz0z5bvz9 zSomezIz8bzCbz9zK; };
-  };
+  } variants;
 };
 
 static void CREATE(zoptionzIz8bzCbz9zK)(struct zoptionzIz8bzCbz9zK *op) {
@@ -264,45 +215,45 @@ static void RECREATE(zoptionzIz8bzCbz9zK)(struct zoptionzIz8bzCbz9zK *op) {
 
 static void KILL(zoptionzIz8bzCbz9zK)(struct zoptionzIz8bzCbz9zK *op) {
   if (op->kind == Kind_zSomezIz8bzCbz9zK) {
-    KILL(ztuple_z8z5bvzCz0z5bvz9)(&op->zSomezIz8bzCbz9zK);
+    KILL(ztuple_z8z5bvzCz0z5bvz9)(&op->variants.zSomezIz8bzCbz9zK);
   }
 }
 
 static void COPY(zoptionzIz8bzCbz9zK)(struct zoptionzIz8bzCbz9zK *rop, struct zoptionzIz8bzCbz9zK op) {
   if (rop->kind == Kind_zSomezIz8bzCbz9zK) {
-    KILL(ztuple_z8z5bvzCz0z5bvz9)(&rop->zSomezIz8bzCbz9zK);
+    KILL(ztuple_z8z5bvzCz0z5bvz9)(&rop->variants.zSomezIz8bzCbz9zK);
   };
   rop->kind = op.kind;
   if (op.kind == Kind_zNonezIz8bzCbz9zK) {
-    rop->zNonezIz8bzCbz9zK = op.zNonezIz8bzCbz9zK;
+    rop->variants.zNonezIz8bzCbz9zK = op.variants.zNonezIz8bzCbz9zK;
   } else if (op.kind == Kind_zSomezIz8bzCbz9zK) {
-    CREATE(ztuple_z8z5bvzCz0z5bvz9)(&rop->zSomezIz8bzCbz9zK); COPY(ztuple_z8z5bvzCz0z5bvz9)(&rop->zSomezIz8bzCbz9zK, op.zSomezIz8bzCbz9zK);
+    CREATE(ztuple_z8z5bvzCz0z5bvz9)(&rop->variants.zSomezIz8bzCbz9zK); COPY(ztuple_z8z5bvzCz0z5bvz9)(&rop->variants.zSomezIz8bzCbz9zK, op.variants.zSomezIz8bzCbz9zK);
   }
 }
 
 static bool EQUAL(zoptionzIz8bzCbz9zK)(struct zoptionzIz8bzCbz9zK op1, struct zoptionzIz8bzCbz9zK op2) {
   if (op1.kind == Kind_zNonezIz8bzCbz9zK && op2.kind == Kind_zNonezIz8bzCbz9zK) {
-    return EQUAL(unit)(op1.zNonezIz8bzCbz9zK, op2.zNonezIz8bzCbz9zK);
+    return EQUAL(unit)(op1.variants.zNonezIz8bzCbz9zK, op2.variants.zNonezIz8bzCbz9zK);
   } else if (op1.kind == Kind_zSomezIz8bzCbz9zK && op2.kind == Kind_zSomezIz8bzCbz9zK) {
-    return EQUAL(ztuple_z8z5bvzCz0z5bvz9)(op1.zSomezIz8bzCbz9zK, op2.zSomezIz8bzCbz9zK);
+    return EQUAL(ztuple_z8z5bvzCz0z5bvz9)(op1.variants.zSomezIz8bzCbz9zK, op2.variants.zSomezIz8bzCbz9zK);
   } else return false;
 }
 
 static void sailgen_NonezIz8bzCbz9zK(struct zoptionzIz8bzCbz9zK *rop, unit op) {
   if (rop->kind == Kind_zSomezIz8bzCbz9zK) {
-    KILL(ztuple_z8z5bvzCz0z5bvz9)(&rop->zSomezIz8bzCbz9zK);
+    KILL(ztuple_z8z5bvzCz0z5bvz9)(&rop->variants.zSomezIz8bzCbz9zK);
   }
   rop->kind = Kind_zNonezIz8bzCbz9zK;
-  rop->zNonezIz8bzCbz9zK = op;
+  rop->variants.zNonezIz8bzCbz9zK = op;
 }
 
 static void sailgen_SomezIz8bzCbz9zK(struct zoptionzIz8bzCbz9zK *rop, struct ztuple_z8z5bvzCz0z5bvz9 op) {
   if (rop->kind == Kind_zSomezIz8bzCbz9zK) {
-    KILL(ztuple_z8z5bvzCz0z5bvz9)(&rop->zSomezIz8bzCbz9zK);
+    KILL(ztuple_z8z5bvzCz0z5bvz9)(&rop->variants.zSomezIz8bzCbz9zK);
   }
   rop->kind = Kind_zSomezIz8bzCbz9zK;
-  CREATE(ztuple_z8z5bvzCz0z5bvz9)(&rop->zSomezIz8bzCbz9zK);
-  COPY(ztuple_z8z5bvzCz0z5bvz9)(&rop->zSomezIz8bzCbz9zK, op);
+  CREATE(ztuple_z8z5bvzCz0z5bvz9)(&rop->variants.zSomezIz8bzCbz9zK);
+  COPY(ztuple_z8z5bvzCz0z5bvz9)(&rop->variants.zSomezIz8bzCbz9zK, op);
 }
 
 // union exception
@@ -310,7 +261,7 @@ enum kind_zexception { Kind_z__dummy_exnz3 };
 
 struct zexception {
   enum kind_zexception kind;
-  union {struct { unit z__dummy_exnz3; };};
+  union {struct { unit z__dummy_exnz3; };} variants;
 };
 
 static void CREATE(zexception)(struct zexception *op) {
@@ -329,24 +280,26 @@ static void COPY(zexception)(struct zexception *rop, struct zexception op) {
   {};
   rop->kind = op.kind;
   if (op.kind == Kind_z__dummy_exnz3) {
-    rop->z__dummy_exnz3 = op.z__dummy_exnz3;
+    rop->variants.z__dummy_exnz3 = op.variants.z__dummy_exnz3;
   }
 }
 
 static bool EQUAL(zexception)(struct zexception op1, struct zexception op2) {
   if (op1.kind == Kind_z__dummy_exnz3 && op2.kind == Kind_z__dummy_exnz3) {
-    return EQUAL(unit)(op1.z__dummy_exnz3, op2.z__dummy_exnz3);
+    return EQUAL(unit)(op1.variants.z__dummy_exnz3, op2.variants.z__dummy_exnz3);
   } else return false;
 }
 
 static void sailgen___dummy_exnz3(struct zexception *rop, unit op) {
   {}
   rop->kind = Kind_z__dummy_exnz3;
-  rop->z__dummy_exnz3 = op;
+  rop->variants.z__dummy_exnz3 = op;
 }
 
 struct zexception *current_exception = NULL;
+
 bool have_exception = false;
+
 sail_string *throw_location = NULL;
 
 // enum ExecutionMode
@@ -385,6 +338,7 @@ struct zCapability {
   uint64_t zT;
   uint64_t zaddress;
   uint64_t zap_m;
+  uint64_t zcl;
   bool zinternal_exponent;
   uint64_t zreserved_0;
   uint64_t zreserved_1;
@@ -399,6 +353,7 @@ static void COPY(zCapability)(struct zCapability *rop, const struct zCapability 
   rop->zT = op.zT;
   rop->zaddress = op.zaddress;
   rop->zap_m = op.zap_m;
+  rop->zcl = op.zcl;
   rop->zinternal_exponent = op.zinternal_exponent;
   rop->zreserved_0 = op.zreserved_0;
   rop->zreserved_1 = op.zreserved_1;
@@ -408,8 +363,17 @@ static void COPY(zCapability)(struct zCapability *rop, const struct zCapability 
 }
 
 static bool EQUAL(zCapability)(struct zCapability op1, struct zCapability op2) {
-  return EQUAL(fbits)(op1.zB, op2.zB) && EQUAL(mach_int)(op1.zE, op2.zE) && EQUAL(fbits)(op1.zT, op2.zT) && EQUAL(fbits)(op1.zaddress, op2.zaddress) && EQUAL(fbits)(op1.zap_m, op2.zap_m) && EQUAL(bool)(op1.zinternal_exponent, op2.zinternal_exponent) && EQUAL(fbits)(op1.zreserved_0, op2.zreserved_0) && EQUAL(fbits)(op1.zreserved_1, op2.zreserved_1) && EQUAL(fbits)(op1.zsd_perms, op2.zsd_perms) && EQUAL(bool)(op1.zsealed, op2.zsealed) && EQUAL(bool)(op1.ztag, op2.ztag);
+  return EQUAL(fbits)(op1.zB, op2.zB) && EQUAL(mach_int)(op1.zE, op2.zE) && EQUAL(fbits)(op1.zT, op2.zT) && EQUAL(fbits)(op1.zaddress, op2.zaddress) && EQUAL(fbits)(op1.zap_m, op2.zap_m) && EQUAL(fbits)(op1.zcl, op2.zcl) && EQUAL(bool)(op1.zinternal_exponent, op2.zinternal_exponent) && EQUAL(fbits)(op1.zreserved_0, op2.zreserved_0) && EQUAL(fbits)(op1.zreserved_1, op2.zreserved_1) && EQUAL(fbits)(op1.zsd_perms, op2.zsd_perms) && EQUAL(bool)(op1.zsealed, op2.zsealed) && EQUAL(bool)(op1.ztag, op2.ztag);
 }
+
+// type abbreviation CapLenInt
+typedef int64_t zCapLenInt;
+
+// type abbreviation CapLenBits
+typedef uint64_t zCapLenBits;
+
+// type abbreviation CapExponent
+typedef int64_t zCapExponent;
 
 // enum CapEx
 enum zCapEx { zCapEx_TagViolation, zCapEx_SealViolation, zCapEx_PermissionViolation, zCapEx_InvalidAddressViolation, zCapEx_LengthViolation };
@@ -429,6 +393,12 @@ static bool EQUAL(zCapCheckType)(enum zCapCheckType op1, enum zCapCheckType op2)
 
 static enum zCapCheckType UNDEFINED(zCapCheckType)(unit u) { return zCapCheckType_Inst; }
 
+// type abbreviation CapBits
+typedef uint64_t zCapBits;
+
+// type abbreviation CapAddrBits
+typedef uint64_t zCapAddrBits;
+
 // enum CPtrCmpOp
 enum zCPtrCmpOp { zCEQ, zCNE, zCLT, zCLE, zCLTU, zCLEU, zCEXEQ, zCNEXEQ };
 
@@ -442,8 +412,10 @@ static enum zCPtrCmpOp UNDEFINED(zCPtrCmpOp)(unit u) { return zCEQ; }
 struct zArchPerms {
   bool zASR;
   bool zC;
+  bool zEL;
   bool zLM;
   bool zR;
+  bool zSL;
   bool zW;
   bool zX;
 };
@@ -451,14 +423,16 @@ struct zArchPerms {
 static void COPY(zArchPerms)(struct zArchPerms *rop, const struct zArchPerms op) {
   rop->zASR = op.zASR;
   rop->zC = op.zC;
+  rop->zEL = op.zEL;
   rop->zLM = op.zLM;
   rop->zR = op.zR;
+  rop->zSL = op.zSL;
   rop->zW = op.zW;
   rop->zX = op.zX;
 }
 
 static bool EQUAL(zArchPerms)(struct zArchPerms op1, struct zArchPerms op2) {
-  return EQUAL(bool)(op1.zASR, op2.zASR) && EQUAL(bool)(op1.zC, op2.zC) && EQUAL(bool)(op1.zLM, op2.zLM) && EQUAL(bool)(op1.zR, op2.zR) && EQUAL(bool)(op1.zW, op2.zW) && EQUAL(bool)(op1.zX, op2.zX);
+  return EQUAL(bool)(op1.zASR, op2.zASR) && EQUAL(bool)(op1.zC, op2.zC) && EQUAL(bool)(op1.zEL, op2.zEL) && EQUAL(bool)(op1.zLM, op2.zLM) && EQUAL(bool)(op1.zR, op2.zR) && EQUAL(bool)(op1.zSL, op2.zSL) && EQUAL(bool)(op1.zW, op2.zW) && EQUAL(bool)(op1.zX, op2.zX);
 }
 
 // union option<RArchPerms>
@@ -469,7 +443,7 @@ struct zoptionzIRArchPermszK {
   union {
     struct { unit zNonezIRArchPermszK; };
     struct { struct zArchPerms zSomezIRArchPermszK; };
-  };
+  } variants;
 };
 
 static void CREATE(zoptionzIRArchPermszK)(struct zoptionzIRArchPermszK *op) {
@@ -488,30 +462,30 @@ static void COPY(zoptionzIRArchPermszK)(struct zoptionzIRArchPermszK *rop, struc
   {};
   rop->kind = op.kind;
   if (op.kind == Kind_zNonezIRArchPermszK) {
-    rop->zNonezIRArchPermszK = op.zNonezIRArchPermszK;
+    rop->variants.zNonezIRArchPermszK = op.variants.zNonezIRArchPermszK;
   } else if (op.kind == Kind_zSomezIRArchPermszK) {
-    rop->zSomezIRArchPermszK = op.zSomezIRArchPermszK;
+    rop->variants.zSomezIRArchPermszK = op.variants.zSomezIRArchPermszK;
   }
 }
 
 static bool EQUAL(zoptionzIRArchPermszK)(struct zoptionzIRArchPermszK op1, struct zoptionzIRArchPermszK op2) {
   if (op1.kind == Kind_zNonezIRArchPermszK && op2.kind == Kind_zNonezIRArchPermszK) {
-    return EQUAL(unit)(op1.zNonezIRArchPermszK, op2.zNonezIRArchPermszK);
+    return EQUAL(unit)(op1.variants.zNonezIRArchPermszK, op2.variants.zNonezIRArchPermszK);
   } else if (op1.kind == Kind_zSomezIRArchPermszK && op2.kind == Kind_zSomezIRArchPermszK) {
-    return EQUAL(zArchPerms)(op1.zSomezIRArchPermszK, op2.zSomezIRArchPermszK);
+    return EQUAL(zArchPerms)(op1.variants.zSomezIRArchPermszK, op2.variants.zSomezIRArchPermszK);
   } else return false;
 }
 
 static void sailgen_NonezIRArchPermszK(struct zoptionzIRArchPermszK *rop, unit op) {
   {}
   rop->kind = Kind_zNonezIRArchPermszK;
-  rop->zNonezIRArchPermszK = op;
+  rop->variants.zNonezIRArchPermszK = op;
 }
 
 static void sailgen_SomezIRArchPermszK(struct zoptionzIRArchPermszK *rop, struct zArchPerms op) {
   {}
   rop->kind = Kind_zSomezIRArchPermszK;
-  rop->zSomezIRArchPermszK = op;
+  rop->variants.zSomezIRArchPermszK = op;
 }
 
 // struct tuple_(%struct zArchPerms, %enum zExecutionMode)
@@ -537,7 +511,7 @@ struct zoptionzIz8RArchPermszCEExecutionModez5z9zK {
   union {
     struct { unit zNonezIz8RArchPermszCEExecutionModez5z9zK; };
     struct { struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zSomezIz8RArchPermszCEExecutionModez5z9zK; };
-  };
+  } variants;
 };
 
 static void CREATE(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(struct zoptionzIz8RArchPermszCEExecutionModez5z9zK *op) {
@@ -556,81 +530,31 @@ static void COPY(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(struct zoptionzIz8
   {};
   rop->kind = op.kind;
   if (op.kind == Kind_zNonezIz8RArchPermszCEExecutionModez5z9zK) {
-    rop->zNonezIz8RArchPermszCEExecutionModez5z9zK = op.zNonezIz8RArchPermszCEExecutionModez5z9zK;
+    rop->variants.zNonezIz8RArchPermszCEExecutionModez5z9zK = op.variants.zNonezIz8RArchPermszCEExecutionModez5z9zK;
   } else if (op.kind == Kind_zSomezIz8RArchPermszCEExecutionModez5z9zK) {
-    rop->zSomezIz8RArchPermszCEExecutionModez5z9zK = op.zSomezIz8RArchPermszCEExecutionModez5z9zK;
+    rop->variants.zSomezIz8RArchPermszCEExecutionModez5z9zK = op.variants.zSomezIz8RArchPermszCEExecutionModez5z9zK;
   }
 }
 
 static bool EQUAL(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(struct zoptionzIz8RArchPermszCEExecutionModez5z9zK op1, struct zoptionzIz8RArchPermszCEExecutionModez5z9zK op2) {
   if (op1.kind == Kind_zNonezIz8RArchPermszCEExecutionModez5z9zK && op2.kind == Kind_zNonezIz8RArchPermszCEExecutionModez5z9zK) {
-    return EQUAL(unit)(op1.zNonezIz8RArchPermszCEExecutionModez5z9zK, op2.zNonezIz8RArchPermszCEExecutionModez5z9zK);
+    return EQUAL(unit)(op1.variants.zNonezIz8RArchPermszCEExecutionModez5z9zK, op2.variants.zNonezIz8RArchPermszCEExecutionModez5z9zK);
   } else if (op1.kind == Kind_zSomezIz8RArchPermszCEExecutionModez5z9zK && op2.kind == Kind_zSomezIz8RArchPermszCEExecutionModez5z9zK) {
-    return EQUAL(ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9)(op1.zSomezIz8RArchPermszCEExecutionModez5z9zK, op2.zSomezIz8RArchPermszCEExecutionModez5z9zK);
+    return EQUAL(ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9)(op1.variants.zSomezIz8RArchPermszCEExecutionModez5z9zK, op2.variants.zSomezIz8RArchPermszCEExecutionModez5z9zK);
   } else return false;
 }
 
 static void sailgen_NonezIz8RArchPermszCEExecutionModez5z9zK(struct zoptionzIz8RArchPermszCEExecutionModez5z9zK *rop, unit op) {
   {}
   rop->kind = Kind_zNonezIz8RArchPermszCEExecutionModez5z9zK;
-  rop->zNonezIz8RArchPermszCEExecutionModez5z9zK = op;
+  rop->variants.zNonezIz8RArchPermszCEExecutionModez5z9zK = op;
 }
 
 static void sailgen_SomezIz8RArchPermszCEExecutionModez5z9zK(struct zoptionzIz8RArchPermszCEExecutionModez5z9zK *rop, struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 op) {
   {}
   rop->kind = Kind_zSomezIz8RArchPermszCEExecutionModez5z9zK;
-  rop->zSomezIz8RArchPermszCEExecutionModez5z9zK = op;
+  rop->variants.zSomezIz8RArchPermszCEExecutionModez5z9zK = op;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 static bool sailgen_neq_int(sail_int, sail_int);
 
@@ -642,37 +566,12 @@ static bool sailgen_neq_int(sail_int zx, sail_int zy)
   bool zgaz30;
   zgaz30 = eq_int(zx, zy);
   zcbz30 = not(zgaz30);
-
 end_function_1: ;
   return zcbz30;
 end_block_exception_2: ;
 
   return false;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 static bool sailgen_neq_bits(lbits zx, lbits zy)
 {
@@ -682,41 +581,12 @@ static bool sailgen_neq_bits(lbits zx, lbits zy)
   bool zgaz31;
   zgaz31 = eq_bits(zx, zy);
   zcbz31 = not(zgaz31);
-
 end_function_4: ;
   return zcbz31;
 end_block_exception_5: ;
 
   return false;
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 static void sailgen_sail_ones(lbits *rop, sail_int);
 
@@ -728,16 +598,16 @@ static void startup_sailgen_sail_ones(void)
 
 static void sailgen_sail_ones(lbits *zcbz32, sail_int zn)
 {
-  __label__ end_function_7, end_block_exception_8, end_function_713;
+  __label__ end_function_7, end_block_exception_8, end_function_677;
 
   RECREATE(lbits)(&zghz30);
   zeros(&zghz30, zn);
   not_bits((*(&zcbz32)), zghz30);
 end_function_7: ;
-  goto end_function_713;
+  goto end_function_677;
 end_block_exception_8: ;
-  goto end_function_713;
-end_function_713: ;
+  goto end_function_677;
+end_function_677: ;
 }
 
 
@@ -745,12 +615,6 @@ end_function_713: ;
 static void finish_sailgen_sail_ones(void)
 {    KILL(lbits)(&zghz30);
 }
-
-
-
-
-
-
 
 static bool sailgen_neq_anythingzItzK(fbits, fbits);
 
@@ -760,9 +624,8 @@ static bool sailgen_neq_anythingzItzK(fbits zx, fbits zy)
 
   bool zcbz33;
   bool zgaz33;
-  zgaz33 = eq_fbits(zx, zy);
+  zgaz33 = eq_fbits(zy, zx);
   zcbz33 = not(zgaz33);
-
 end_function_10: ;
   return zcbz33;
 end_block_exception_11: ;
@@ -780,7 +643,6 @@ static fbits sailgen_not_bit(fbits zb)
   bool zgaz34;
   zgaz34 = eq_bit(zb, UINT64_C(1));
   if (zgaz34) {  zcbz34 = UINT64_C(0);  } else {  zcbz34 = UINT64_C(1);  }
-
 end_function_13: ;
   return zcbz34;
 end_block_exception_14: ;
@@ -788,7 +650,7 @@ end_block_exception_14: ;
   return UINT64_C(0);
 }
 
-
+static bool sailgen_not(bool);
 
 static bool sailgen_not(bool zb)
 {
@@ -803,48 +665,46 @@ end_block_exception_17: ;
   return false;
 }
 
-
-
 static void sailgen_zzero_extend(lbits *rop, sail_int, lbits);
 
 static void sailgen_zzero_extend(lbits *zcbz36, sail_int zm, lbits zv)
 {
-  __label__ end_function_19, end_block_exception_20, end_function_712;
+  __label__ end_function_19, end_block_exception_20, end_function_676;
 
   zero_extend((*(&zcbz36)), zv, zm);
 end_function_19: ;
-  goto end_function_712;
+  goto end_function_676;
 end_block_exception_20: ;
-  goto end_function_712;
-end_function_712: ;
+  goto end_function_676;
+end_function_676: ;
 }
 
 static void sailgen_zzeros_implicit(lbits *rop, sail_int);
 
 static void sailgen_zzeros_implicit(lbits *zcbz37, sail_int zn)
 {
-  __label__ end_function_22, end_block_exception_23, end_function_711;
+  __label__ end_function_22, end_block_exception_23, end_function_675;
 
   zeros((*(&zcbz37)), zn);
 end_function_22: ;
-  goto end_function_711;
+  goto end_function_675;
 end_block_exception_23: ;
-  goto end_function_711;
-end_function_711: ;
+  goto end_function_675;
+end_function_675: ;
 }
 
 static void sailgen_ones(lbits *rop, sail_int);
 
 static void sailgen_ones(lbits *zcbz38, sail_int zn)
 {
-  __label__ end_function_25, end_block_exception_26, end_function_710;
+  __label__ end_function_25, end_block_exception_26, end_function_674;
 
   sailgen_sail_ones((*(&zcbz38)), zn);
 end_function_25: ;
-  goto end_function_710;
+  goto end_function_674;
 end_block_exception_26: ;
-  goto end_function_710;
-end_function_710: ;
+  goto end_function_674;
+end_function_674: ;
 }
 
 static uint64_t sailgen_bool_bits_forwards(bool);
@@ -861,10 +721,7 @@ static uint64_t sailgen_bool_bits_forwards(bool zargz3)
     zp0z3 = zargz3;
     bool zgsz32;
     zgsz32 = eq_bool(zp0z3, true);
-    if (!(zgsz32)) {
-
-      goto case_30;
-    }
+    if (!(zgsz32)) {  goto case_30;  }
     zcbz39 = UINT64_C(0b1);
     goto finish_match_28;
   }
@@ -874,10 +731,7 @@ case_30: ;
     zuz30 = zargz3;
     bool zgsz31;
     zgsz31 = eq_bool(zuz30, false);
-    if (!(zgsz31)) {
-
-      goto case_29;
-    }
+    if (!(zgsz31)) {  goto case_29;  }
     zcbz39 = UINT64_C(0b0);
     goto finish_match_28;
   }
@@ -902,10 +756,7 @@ static uint64_t sailgen_bool_bits_forwards_infallible(bool zargz3)
     zp0z3 = zargz3;
     bool zgsz35;
     zgsz35 = eq_bool(zp0z3, true);
-    if (!(zgsz35)) {
-
-      goto case_35;
-    }
+    if (!(zgsz35)) {  goto case_35;  }
     zcbz310 = UINT64_C(0b1);
     goto finish_match_33;
   }
@@ -915,10 +766,7 @@ case_35: ;
     zuz31 = zargz3;
     bool zgsz34;
     zgsz34 = eq_bool(zuz31, false);
-    if (!(zgsz34)) {
-
-      goto case_34;
-    }
+    if (!(zgsz34)) {  goto case_34;  }
     zcbz310 = UINT64_C(0b0);
     goto finish_match_33;
   }
@@ -941,10 +789,7 @@ static bool sailgen_bool_bits_backwards(uint64_t zargz3)
     zb__0 = zargz3;
     bool zgsz38;
     zgsz38 = (zb__0 == UINT64_C(0b1));
-    if (!(zgsz38)) {
-
-      goto case_41;
-    }
+    if (!(zgsz38)) {  goto case_41;  }
     zcbz311 = true;
     goto finish_match_39;
   }
@@ -974,10 +819,7 @@ static bool sailgen_bool_bits_backwards_infallible(uint64_t zargz3)
     zb__0 = zargz3;
     bool zgsz311;
     zgsz311 = (zb__0 == UINT64_C(0b1));
-    if (!(zgsz311)) {
-
-      goto case_46;
-    }
+    if (!(zgsz311)) {  goto case_46;  }
     zcbz312 = true;
     goto finish_match_44;
   }
@@ -1005,7 +847,7 @@ static void startup_sailgen_to_bits(void)
 
 static void sailgen_to_bits(lbits *zcbz313, sail_int zl, sail_int zn)
 {
-  __label__ end_function_50, end_block_exception_51, end_function_709;
+  __label__ end_function_50, end_block_exception_51, end_function_673;
 
   {
     RECREATE(sail_int)(&zghz31);
@@ -1013,10 +855,10 @@ static void sailgen_to_bits(lbits *zcbz313, sail_int zl, sail_int zn)
     get_slice_int((*(&zcbz313)), zl, zn, zghz31);
   }
 end_function_50: ;
-  goto end_function_709;
+  goto end_function_673;
 end_block_exception_51: ;
-  goto end_function_709;
-end_function_709: ;
+  goto end_function_673;
+end_function_673: ;
 }
 
 
@@ -1097,68 +939,61 @@ static void finish_sailgen_z8operatorz0zK_uz9(void)
   KILL(sail_int)(&zghz34);
 }
 
-
-
-static int64_t zlog2_xlen_bytes;
+static int64_t zlog2_xlen;
 static void create_letbind_0(void) {
 
 
   int64_t zgsz312;
-  zgsz312 = INT64_C(2);
-  zlog2_xlen_bytes = zgsz312;
-
+  zgsz312 = INT64_C(5);
+  zlog2_xlen = zgsz312;
 let_end_58: ;
 }
 static void kill_letbind_0(void) {
 }
 
-static int64_t zflen_bytes;
+static int64_t zlog2_xlen_bytes;
 static void create_letbind_1(void) {
 
 
   int64_t zgsz313;
-  zgsz313 = INT64_C(4);
-  zflen_bytes = zgsz313;
-
+  zgsz313 = INT64_C(2);
+  zlog2_xlen_bytes = zgsz313;
 let_end_59: ;
 }
 static void kill_letbind_1(void) {
 }
 
-static int64_t zflen;
+static int64_t zxlen_bytes;
 static void create_letbind_2(void) {
 
 
   int64_t zgsz314;
-  zgsz314 = INT64_C(32);
-  zflen = zgsz314;
-
+  zgsz314 = INT64_C(4);
+  zxlen_bytes = zgsz314;
 let_end_60: ;
 }
 static void kill_letbind_2(void) {
 }
 
-static int64_t zxlen_bytes;
+static int64_t zxlen;
 static void create_letbind_3(void) {
 
 
   int64_t zgsz315;
-  zgsz315 = INT64_C(4);
-  zxlen_bytes = zgsz315;
-
+  zgsz315 = INT64_C(32);
+  zxlen = zgsz315;
 let_end_61: ;
 }
 static void kill_letbind_3(void) {
 }
 
-static int64_t zxlen;
+static int64_t zasidlen;
 static void create_letbind_4(void) {
 
 
   int64_t zgsz316;
-  zgsz316 = INT64_C(32);
-  zxlen = zgsz316;
-
+  zgsz316 = INT64_C(9);
+  zasidlen = zgsz316;
 let_end_62: ;
 }
 static void kill_letbind_4(void) {
@@ -1177,7 +1012,7 @@ static void startup_sailgen_MAX(void)
 
 static void sailgen_MAX(sail_int *zcbz316, sail_int zn)
 {
-  __label__ end_function_64, end_block_exception_65, end_function_708;
+  __label__ end_function_64, end_block_exception_65, end_function_672;
 
   RECREATE(sail_int)(&zghz36);
   pow2(&zghz36, zn);
@@ -1187,10 +1022,10 @@ static void sailgen_MAX(sail_int *zcbz316, sail_int zn)
     sub_int((*(&zcbz316)), zghz36, zghz37);
   }
 end_function_64: ;
-  goto end_function_708;
+  goto end_function_672;
 end_block_exception_65: ;
-  goto end_function_708;
-end_function_708: ;
+  goto end_function_672;
+end_function_672: ;
 }
 
 
@@ -1200,8 +1035,6 @@ static void finish_sailgen_MAX(void)
   KILL(sail_int)(&zghz37);
   KILL(sail_int)(&zghz36);
 }
-
-
 
 static uint64_t sailgen_execution_mode_encdec_forwards(enum zExecutionMode);
 
@@ -1271,10 +1104,7 @@ static enum zExecutionMode sailgen_execution_mode_encdec_backwards(uint64_t zarg
     zb__0 = zargz3;
     bool zgsz325;
     zgsz325 = (zb__0 == UINT64_C(0b1));
-    if (!(zgsz325)) {
-
-      goto case_80;
-    }
+    if (!(zgsz325)) {  goto case_80;  }
     zcbz319 = zIntPtrMode;
     goto finish_match_78;
   }
@@ -1304,10 +1134,7 @@ static enum zExecutionMode sailgen_execution_mode_encdec_backwards_infallible(ui
     zb__0 = zargz3;
     bool zgsz328;
     zgsz328 = (zb__0 == UINT64_C(0b1));
-    if (!(zgsz328)) {
-
-      goto case_85;
-    }
+    if (!(zgsz328)) {  goto case_85;  }
     zcbz320 = zIntPtrMode;
     goto finish_match_83;
   }
@@ -1363,14 +1190,14 @@ static void create_letbind_5(void) {
   struct zArchPerms zgsz333;
   zgsz333.zASR = false;
   zgsz333.zC = false;
+  zgsz333.zEL = false;
   zgsz333.zLM = false;
   zgsz333.zR = false;
+  zgsz333.zSL = false;
   zgsz333.zW = false;
   zgsz333.zX = false;
   zgsz334 = zgsz333;
-
   znull_perms = zgsz334;
-
 let_end_95: ;
 }
 static void kill_letbind_5(void) {
@@ -1383,7 +1210,6 @@ static void create_letbind_6(void) {
   int64_t zgsz335;
   zgsz335 = INT64_C(3);
   zlog2_cap_sizze = zgsz335;
-
 let_end_96: ;
 }
 static void kill_letbind_6(void) {
@@ -1396,7 +1222,6 @@ static void create_letbind_7(void) {
   int64_t zgsz336;
   zgsz336 = INT64_C(2);
   zcap_sd_perms_width = zgsz336;
-
 let_end_97: ;
 }
 static void kill_letbind_7(void) {
@@ -1409,7 +1234,6 @@ static void create_letbind_8(void) {
   int64_t zgsz337;
   zgsz337 = INT64_C(1);
   zcap_reserved_1_width = zgsz337;
-
 let_end_98: ;
 }
 static void kill_letbind_8(void) {
@@ -1420,9 +1244,8 @@ static void create_letbind_9(void) {
 
 
   int64_t zgsz338;
-  zgsz338 = INT64_C(3);
+  zgsz338 = INT64_C(2);
   zcap_reserved_0_width = zgsz338;
-
 let_end_99: ;
 }
 static void kill_letbind_9(void) {
@@ -1435,7 +1258,6 @@ static void create_letbind_10(void) {
   int64_t zgsz339;
   zgsz339 = INT64_C(10);
   zcap_mantissa_width = zgsz339;
-
 let_end_100: ;
 }
 static void kill_letbind_10(void) {
@@ -1448,7 +1270,6 @@ static void create_letbind_11(void) {
   int64_t zgsz340;
   zgsz340 = INT64_C(5);
   zcap_E_width = zgsz340;
-
 let_end_101: ;
 }
 static void kill_letbind_11(void) {
@@ -1461,7 +1282,6 @@ static void create_letbind_12(void) {
   int64_t zgsz341;
   zgsz341 = INT64_C(5);
   zcap_AP_M_width = zgsz341;
-
 let_end_102: ;
 }
 static void kill_letbind_12(void) {
@@ -1474,7 +1294,6 @@ static void create_letbind_13(void) {
   bool zgsz342;
   zgsz342 = true;
   zcap_use_L8 = zgsz342;
-
 let_end_103: ;
 }
 static void kill_letbind_13(void) {
@@ -1497,8 +1316,8 @@ static struct zEncMetadata sailgen_Mk_EncMetadata(uint64_t zv)
 end_function_105: ;
   return zghz38;
 end_block_exception_106: ;
-  struct zEncMetadata zcbz385 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz385;
+  struct zEncMetadata zcbz386 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz386;
 }
 
 
@@ -1517,7 +1336,6 @@ static uint64_t sailgen__get_EncMetadata_AP_M(struct zEncMetadata zv)
   uint64_t zgaz310;
   zgaz310 = zv.zbits;
   zcbz323 = (safe_rshift(UINT64_MAX, 64 - 5) & (zgaz310 >> INT64_C(25)));
-
 end_function_108: ;
   return zcbz323;
 end_block_exception_109: ;
@@ -1569,12 +1387,11 @@ static struct zEncMetadata sailgen__update_EncMetadata_AP_M(struct zEncMetadata 
   }
   zghz39 = zv;
   zghz39.zbits = zgaz312;
-
 end_function_111: ;
   return zghz39;
 end_block_exception_112: ;
-  struct zEncMetadata zcbz386 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz386;
+  struct zEncMetadata zcbz387 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz387;
 }
 
 
@@ -1586,7 +1403,6 @@ static void finish_sailgen__update_EncMetadata_AP_M(void)
   KILL(sail_int)(&zghz312);
   KILL(sail_int)(&zghz311);
   KILL(lbits)(&zghz310);
-
 }
 
 static uint64_t sailgen__get_EncMetadata_BE(struct zEncMetadata);
@@ -1599,7 +1415,6 @@ static uint64_t sailgen__get_EncMetadata_BE(struct zEncMetadata zv)
   uint64_t zgaz313;
   zgaz313 = zv.zbits;
   zcbz325 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz313 >> INT64_C(0)));
-
 end_function_114: ;
   return zcbz325;
 end_block_exception_115: ;
@@ -1651,12 +1466,11 @@ static struct zEncMetadata sailgen__update_EncMetadata_BE(struct zEncMetadata zv
   }
   zghz315 = zv;
   zghz315.zbits = zgaz315;
-
 end_function_117: ;
   return zghz315;
 end_block_exception_118: ;
-  struct zEncMetadata zcbz387 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz387;
+  struct zEncMetadata zcbz388 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz388;
 }
 
 
@@ -1668,7 +1482,6 @@ static void finish_sailgen__update_EncMetadata_BE(void)
   KILL(sail_int)(&zghz318);
   KILL(sail_int)(&zghz317);
   KILL(lbits)(&zghz316);
-
 }
 
 static uint64_t sailgen__get_EncMetadata_Bm(struct zEncMetadata);
@@ -1681,7 +1494,6 @@ static uint64_t sailgen__get_EncMetadata_Bm(struct zEncMetadata zv)
   uint64_t zgaz316;
   zgaz316 = zv.zbits;
   zcbz327 = (safe_rshift(UINT64_MAX, 64 - 8) & (zgaz316 >> INT64_C(2)));
-
 end_function_120: ;
   return zcbz327;
 end_block_exception_121: ;
@@ -1733,12 +1545,11 @@ static struct zEncMetadata sailgen__update_EncMetadata_Bm(struct zEncMetadata zv
   }
   zghz321 = zv;
   zghz321.zbits = zgaz318;
-
 end_function_123: ;
   return zghz321;
 end_block_exception_124: ;
-  struct zEncMetadata zcbz388 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz388;
+  struct zEncMetadata zcbz389 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz389;
 }
 
 
@@ -1750,20 +1561,18 @@ static void finish_sailgen__update_EncMetadata_Bm(void)
   KILL(sail_int)(&zghz324);
   KILL(sail_int)(&zghz323);
   KILL(lbits)(&zghz322);
-
 }
 
-static uint64_t sailgen__get_EncMetadata_CT(struct zEncMetadata);
+static uint64_t sailgen__get_EncMetadata_CL(struct zEncMetadata);
 
-static uint64_t sailgen__get_EncMetadata_CT(struct zEncMetadata zv)
+static uint64_t sailgen__get_EncMetadata_CL(struct zEncMetadata zv)
 {
   __label__ end_function_126, end_block_exception_127;
 
   uint64_t zcbz329;
   uint64_t zgaz319;
   zgaz319 = zv.zbits;
-  zcbz329 = (safe_rshift(UINT64_MAX, 64 - 1) & (zgaz319 >> INT64_C(20)));
-
+  zcbz329 = (safe_rshift(UINT64_MAX, 64 - 1) & (zgaz319 >> INT64_C(24)));
 end_function_126: ;
   return zcbz329;
 end_block_exception_127: ;
@@ -1771,7 +1580,7 @@ end_block_exception_127: ;
   return UINT64_C(0xdeadc0de);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_CT(struct zEncMetadata, uint64_t);
+static struct zEncMetadata sailgen__update_EncMetadata_CL(struct zEncMetadata, uint64_t);
 
 struct zEncMetadata zghz327;
 lbits zghz328;
@@ -1780,7 +1589,7 @@ sail_int zghz330;
 lbits zghz331;
 lbits zghz332;
 
-static void startup_sailgen__update_EncMetadata_CT(void)
+static void startup_sailgen__update_EncMetadata_CL(void)
 {
 
   CREATE(lbits)(&zghz328);
@@ -1790,7 +1599,7 @@ static void startup_sailgen__update_EncMetadata_CT(void)
   CREATE(lbits)(&zghz332);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_CT(struct zEncMetadata zv, uint64_t zx)
+static struct zEncMetadata sailgen__update_EncMetadata_CL(struct zEncMetadata zv, uint64_t zx)
 {
   __label__ end_function_129, end_block_exception_130;
 
@@ -1803,9 +1612,9 @@ static struct zEncMetadata sailgen__update_EncMetadata_CT(struct zEncMetadata zv
       RECREATE(lbits)(&zghz328);
       CONVERT_OF(lbits, fbits)(&zghz328, zgaz320, UINT64_C(32) , true);
       RECREATE(sail_int)(&zghz329);
-      CONVERT_OF(sail_int, mach_int)(&zghz329, INT64_C(20));
+      CONVERT_OF(sail_int, mach_int)(&zghz329, INT64_C(24));
       RECREATE(sail_int)(&zghz330);
-      CONVERT_OF(sail_int, mach_int)(&zghz330, INT64_C(20));
+      CONVERT_OF(sail_int, mach_int)(&zghz330, INT64_C(24));
       RECREATE(lbits)(&zghz331);
       CONVERT_OF(lbits, fbits)(&zghz331, zx, UINT64_C(1) , true);
       RECREATE(lbits)(&zghz332);
@@ -1815,37 +1624,34 @@ static struct zEncMetadata sailgen__update_EncMetadata_CT(struct zEncMetadata zv
   }
   zghz327 = zv;
   zghz327.zbits = zgaz321;
-
 end_function_129: ;
   return zghz327;
 end_block_exception_130: ;
-  struct zEncMetadata zcbz389 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz389;
+  struct zEncMetadata zcbz390 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz390;
 }
 
 
 
-static void finish_sailgen__update_EncMetadata_CT(void)
+static void finish_sailgen__update_EncMetadata_CL(void)
 {
   KILL(lbits)(&zghz332);
   KILL(lbits)(&zghz331);
   KILL(sail_int)(&zghz330);
   KILL(sail_int)(&zghz329);
   KILL(lbits)(&zghz328);
-
 }
 
-static uint64_t sailgen__get_EncMetadata_EF(struct zEncMetadata);
+static uint64_t sailgen__get_EncMetadata_CT(struct zEncMetadata);
 
-static uint64_t sailgen__get_EncMetadata_EF(struct zEncMetadata zv)
+static uint64_t sailgen__get_EncMetadata_CT(struct zEncMetadata zv)
 {
   __label__ end_function_132, end_block_exception_133;
 
   uint64_t zcbz331;
   uint64_t zgaz322;
   zgaz322 = zv.zbits;
-  zcbz331 = (safe_rshift(UINT64_MAX, 64 - 1) & (zgaz322 >> INT64_C(19)));
-
+  zcbz331 = (safe_rshift(UINT64_MAX, 64 - 1) & (zgaz322 >> INT64_C(20)));
 end_function_132: ;
   return zcbz331;
 end_block_exception_133: ;
@@ -1853,7 +1659,7 @@ end_block_exception_133: ;
   return UINT64_C(0xdeadc0de);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_EF(struct zEncMetadata, uint64_t);
+static struct zEncMetadata sailgen__update_EncMetadata_CT(struct zEncMetadata, uint64_t);
 
 struct zEncMetadata zghz333;
 lbits zghz334;
@@ -1862,7 +1668,7 @@ sail_int zghz336;
 lbits zghz337;
 lbits zghz338;
 
-static void startup_sailgen__update_EncMetadata_EF(void)
+static void startup_sailgen__update_EncMetadata_CT(void)
 {
 
   CREATE(lbits)(&zghz334);
@@ -1872,7 +1678,7 @@ static void startup_sailgen__update_EncMetadata_EF(void)
   CREATE(lbits)(&zghz338);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_EF(struct zEncMetadata zv, uint64_t zx)
+static struct zEncMetadata sailgen__update_EncMetadata_CT(struct zEncMetadata zv, uint64_t zx)
 {
   __label__ end_function_135, end_block_exception_136;
 
@@ -1885,9 +1691,9 @@ static struct zEncMetadata sailgen__update_EncMetadata_EF(struct zEncMetadata zv
       RECREATE(lbits)(&zghz334);
       CONVERT_OF(lbits, fbits)(&zghz334, zgaz323, UINT64_C(32) , true);
       RECREATE(sail_int)(&zghz335);
-      CONVERT_OF(sail_int, mach_int)(&zghz335, INT64_C(19));
+      CONVERT_OF(sail_int, mach_int)(&zghz335, INT64_C(20));
       RECREATE(sail_int)(&zghz336);
-      CONVERT_OF(sail_int, mach_int)(&zghz336, INT64_C(19));
+      CONVERT_OF(sail_int, mach_int)(&zghz336, INT64_C(20));
       RECREATE(lbits)(&zghz337);
       CONVERT_OF(lbits, fbits)(&zghz337, zx, UINT64_C(1) , true);
       RECREATE(lbits)(&zghz338);
@@ -1897,37 +1703,34 @@ static struct zEncMetadata sailgen__update_EncMetadata_EF(struct zEncMetadata zv
   }
   zghz333 = zv;
   zghz333.zbits = zgaz324;
-
 end_function_135: ;
   return zghz333;
 end_block_exception_136: ;
-  struct zEncMetadata zcbz390 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz390;
+  struct zEncMetadata zcbz391 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz391;
 }
 
 
 
-static void finish_sailgen__update_EncMetadata_EF(void)
+static void finish_sailgen__update_EncMetadata_CT(void)
 {
   KILL(lbits)(&zghz338);
   KILL(lbits)(&zghz337);
   KILL(sail_int)(&zghz336);
   KILL(sail_int)(&zghz335);
   KILL(lbits)(&zghz334);
-
 }
 
-static uint64_t sailgen__get_EncMetadata_L8(struct zEncMetadata);
+static uint64_t sailgen__get_EncMetadata_EF(struct zEncMetadata);
 
-static uint64_t sailgen__get_EncMetadata_L8(struct zEncMetadata zv)
+static uint64_t sailgen__get_EncMetadata_EF(struct zEncMetadata zv)
 {
   __label__ end_function_138, end_block_exception_139;
 
   uint64_t zcbz333;
   uint64_t zgaz325;
   zgaz325 = zv.zbits;
-  zcbz333 = (safe_rshift(UINT64_MAX, 64 - 1) & (zgaz325 >> INT64_C(18)));
-
+  zcbz333 = (safe_rshift(UINT64_MAX, 64 - 1) & (zgaz325 >> INT64_C(19)));
 end_function_138: ;
   return zcbz333;
 end_block_exception_139: ;
@@ -1935,7 +1738,7 @@ end_block_exception_139: ;
   return UINT64_C(0xdeadc0de);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_L8(struct zEncMetadata, uint64_t);
+static struct zEncMetadata sailgen__update_EncMetadata_EF(struct zEncMetadata, uint64_t);
 
 struct zEncMetadata zghz339;
 lbits zghz340;
@@ -1944,7 +1747,7 @@ sail_int zghz342;
 lbits zghz343;
 lbits zghz344;
 
-static void startup_sailgen__update_EncMetadata_L8(void)
+static void startup_sailgen__update_EncMetadata_EF(void)
 {
 
   CREATE(lbits)(&zghz340);
@@ -1954,7 +1757,7 @@ static void startup_sailgen__update_EncMetadata_L8(void)
   CREATE(lbits)(&zghz344);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_L8(struct zEncMetadata zv, uint64_t zx)
+static struct zEncMetadata sailgen__update_EncMetadata_EF(struct zEncMetadata zv, uint64_t zx)
 {
   __label__ end_function_141, end_block_exception_142;
 
@@ -1967,9 +1770,9 @@ static struct zEncMetadata sailgen__update_EncMetadata_L8(struct zEncMetadata zv
       RECREATE(lbits)(&zghz340);
       CONVERT_OF(lbits, fbits)(&zghz340, zgaz326, UINT64_C(32) , true);
       RECREATE(sail_int)(&zghz341);
-      CONVERT_OF(sail_int, mach_int)(&zghz341, INT64_C(18));
+      CONVERT_OF(sail_int, mach_int)(&zghz341, INT64_C(19));
       RECREATE(sail_int)(&zghz342);
-      CONVERT_OF(sail_int, mach_int)(&zghz342, INT64_C(18));
+      CONVERT_OF(sail_int, mach_int)(&zghz342, INT64_C(19));
       RECREATE(lbits)(&zghz343);
       CONVERT_OF(lbits, fbits)(&zghz343, zx, UINT64_C(1) , true);
       RECREATE(lbits)(&zghz344);
@@ -1979,37 +1782,34 @@ static struct zEncMetadata sailgen__update_EncMetadata_L8(struct zEncMetadata zv
   }
   zghz339 = zv;
   zghz339.zbits = zgaz327;
-
 end_function_141: ;
   return zghz339;
 end_block_exception_142: ;
-  struct zEncMetadata zcbz391 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz391;
+  struct zEncMetadata zcbz392 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz392;
 }
 
 
 
-static void finish_sailgen__update_EncMetadata_L8(void)
+static void finish_sailgen__update_EncMetadata_EF(void)
 {
   KILL(lbits)(&zghz344);
   KILL(lbits)(&zghz343);
   KILL(sail_int)(&zghz342);
   KILL(sail_int)(&zghz341);
   KILL(lbits)(&zghz340);
-
 }
 
-static uint64_t sailgen__get_EncMetadata_SDP(struct zEncMetadata);
+static uint64_t sailgen__get_EncMetadata_L8(struct zEncMetadata);
 
-static uint64_t sailgen__get_EncMetadata_SDP(struct zEncMetadata zv)
+static uint64_t sailgen__get_EncMetadata_L8(struct zEncMetadata zv)
 {
   __label__ end_function_144, end_block_exception_145;
 
   uint64_t zcbz335;
   uint64_t zgaz328;
   zgaz328 = zv.zbits;
-  zcbz335 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz328 >> INT64_C(30)));
-
+  zcbz335 = (safe_rshift(UINT64_MAX, 64 - 1) & (zgaz328 >> INT64_C(18)));
 end_function_144: ;
   return zcbz335;
 end_block_exception_145: ;
@@ -2017,7 +1817,7 @@ end_block_exception_145: ;
   return UINT64_C(0xdeadc0de);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_SDP(struct zEncMetadata, uint64_t);
+static struct zEncMetadata sailgen__update_EncMetadata_L8(struct zEncMetadata, uint64_t);
 
 struct zEncMetadata zghz345;
 lbits zghz346;
@@ -2026,7 +1826,7 @@ sail_int zghz348;
 lbits zghz349;
 lbits zghz350;
 
-static void startup_sailgen__update_EncMetadata_SDP(void)
+static void startup_sailgen__update_EncMetadata_L8(void)
 {
 
   CREATE(lbits)(&zghz346);
@@ -2036,7 +1836,7 @@ static void startup_sailgen__update_EncMetadata_SDP(void)
   CREATE(lbits)(&zghz350);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_SDP(struct zEncMetadata zv, uint64_t zx)
+static struct zEncMetadata sailgen__update_EncMetadata_L8(struct zEncMetadata zv, uint64_t zx)
 {
   __label__ end_function_147, end_block_exception_148;
 
@@ -2049,11 +1849,11 @@ static struct zEncMetadata sailgen__update_EncMetadata_SDP(struct zEncMetadata z
       RECREATE(lbits)(&zghz346);
       CONVERT_OF(lbits, fbits)(&zghz346, zgaz329, UINT64_C(32) , true);
       RECREATE(sail_int)(&zghz347);
-      CONVERT_OF(sail_int, mach_int)(&zghz347, INT64_C(31));
+      CONVERT_OF(sail_int, mach_int)(&zghz347, INT64_C(18));
       RECREATE(sail_int)(&zghz348);
-      CONVERT_OF(sail_int, mach_int)(&zghz348, INT64_C(30));
+      CONVERT_OF(sail_int, mach_int)(&zghz348, INT64_C(18));
       RECREATE(lbits)(&zghz349);
-      CONVERT_OF(lbits, fbits)(&zghz349, zx, UINT64_C(2) , true);
+      CONVERT_OF(lbits, fbits)(&zghz349, zx, UINT64_C(1) , true);
       RECREATE(lbits)(&zghz350);
       vector_update_subrange_lbits(&zghz350, zghz346, zghz347, zghz348, zghz349);
       zgaz330 = CONVERT_OF(fbits, lbits)(zghz350, true);
@@ -2061,37 +1861,34 @@ static struct zEncMetadata sailgen__update_EncMetadata_SDP(struct zEncMetadata z
   }
   zghz345 = zv;
   zghz345.zbits = zgaz330;
-
 end_function_147: ;
   return zghz345;
 end_block_exception_148: ;
-  struct zEncMetadata zcbz392 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz392;
+  struct zEncMetadata zcbz393 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz393;
 }
 
 
 
-static void finish_sailgen__update_EncMetadata_SDP(void)
+static void finish_sailgen__update_EncMetadata_L8(void)
 {
   KILL(lbits)(&zghz350);
   KILL(lbits)(&zghz349);
   KILL(sail_int)(&zghz348);
   KILL(sail_int)(&zghz347);
   KILL(lbits)(&zghz346);
-
 }
 
-static uint64_t sailgen__get_EncMetadata_TE(struct zEncMetadata);
+static uint64_t sailgen__get_EncMetadata_SDP(struct zEncMetadata);
 
-static uint64_t sailgen__get_EncMetadata_TE(struct zEncMetadata zv)
+static uint64_t sailgen__get_EncMetadata_SDP(struct zEncMetadata zv)
 {
   __label__ end_function_150, end_block_exception_151;
 
   uint64_t zcbz337;
   uint64_t zgaz331;
   zgaz331 = zv.zbits;
-  zcbz337 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz331 >> INT64_C(10)));
-
+  zcbz337 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz331 >> INT64_C(30)));
 end_function_150: ;
   return zcbz337;
 end_block_exception_151: ;
@@ -2099,7 +1896,7 @@ end_block_exception_151: ;
   return UINT64_C(0xdeadc0de);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_TE(struct zEncMetadata, uint64_t);
+static struct zEncMetadata sailgen__update_EncMetadata_SDP(struct zEncMetadata, uint64_t);
 
 struct zEncMetadata zghz351;
 lbits zghz352;
@@ -2108,7 +1905,7 @@ sail_int zghz354;
 lbits zghz355;
 lbits zghz356;
 
-static void startup_sailgen__update_EncMetadata_TE(void)
+static void startup_sailgen__update_EncMetadata_SDP(void)
 {
 
   CREATE(lbits)(&zghz352);
@@ -2118,7 +1915,7 @@ static void startup_sailgen__update_EncMetadata_TE(void)
   CREATE(lbits)(&zghz356);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_TE(struct zEncMetadata zv, uint64_t zx)
+static struct zEncMetadata sailgen__update_EncMetadata_SDP(struct zEncMetadata zv, uint64_t zx)
 {
   __label__ end_function_153, end_block_exception_154;
 
@@ -2131,9 +1928,9 @@ static struct zEncMetadata sailgen__update_EncMetadata_TE(struct zEncMetadata zv
       RECREATE(lbits)(&zghz352);
       CONVERT_OF(lbits, fbits)(&zghz352, zgaz332, UINT64_C(32) , true);
       RECREATE(sail_int)(&zghz353);
-      CONVERT_OF(sail_int, mach_int)(&zghz353, INT64_C(11));
+      CONVERT_OF(sail_int, mach_int)(&zghz353, INT64_C(31));
       RECREATE(sail_int)(&zghz354);
-      CONVERT_OF(sail_int, mach_int)(&zghz354, INT64_C(10));
+      CONVERT_OF(sail_int, mach_int)(&zghz354, INT64_C(30));
       RECREATE(lbits)(&zghz355);
       CONVERT_OF(lbits, fbits)(&zghz355, zx, UINT64_C(2) , true);
       RECREATE(lbits)(&zghz356);
@@ -2143,37 +1940,34 @@ static struct zEncMetadata sailgen__update_EncMetadata_TE(struct zEncMetadata zv
   }
   zghz351 = zv;
   zghz351.zbits = zgaz333;
-
 end_function_153: ;
   return zghz351;
 end_block_exception_154: ;
-  struct zEncMetadata zcbz393 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz393;
+  struct zEncMetadata zcbz394 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz394;
 }
 
 
 
-static void finish_sailgen__update_EncMetadata_TE(void)
+static void finish_sailgen__update_EncMetadata_SDP(void)
 {
   KILL(lbits)(&zghz356);
   KILL(lbits)(&zghz355);
   KILL(sail_int)(&zghz354);
   KILL(sail_int)(&zghz353);
   KILL(lbits)(&zghz352);
-
 }
 
-static uint64_t sailgen__get_EncMetadata_Tm(struct zEncMetadata);
+static uint64_t sailgen__get_EncMetadata_TE(struct zEncMetadata);
 
-static uint64_t sailgen__get_EncMetadata_Tm(struct zEncMetadata zv)
+static uint64_t sailgen__get_EncMetadata_TE(struct zEncMetadata zv)
 {
   __label__ end_function_156, end_block_exception_157;
 
   uint64_t zcbz339;
   uint64_t zgaz334;
   zgaz334 = zv.zbits;
-  zcbz339 = (safe_rshift(UINT64_MAX, 64 - 6) & (zgaz334 >> INT64_C(12)));
-
+  zcbz339 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz334 >> INT64_C(10)));
 end_function_156: ;
   return zcbz339;
 end_block_exception_157: ;
@@ -2181,7 +1975,7 @@ end_block_exception_157: ;
   return UINT64_C(0xdeadc0de);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_Tm(struct zEncMetadata, uint64_t);
+static struct zEncMetadata sailgen__update_EncMetadata_TE(struct zEncMetadata, uint64_t);
 
 struct zEncMetadata zghz357;
 lbits zghz358;
@@ -2190,7 +1984,7 @@ sail_int zghz360;
 lbits zghz361;
 lbits zghz362;
 
-static void startup_sailgen__update_EncMetadata_Tm(void)
+static void startup_sailgen__update_EncMetadata_TE(void)
 {
 
   CREATE(lbits)(&zghz358);
@@ -2200,7 +1994,7 @@ static void startup_sailgen__update_EncMetadata_Tm(void)
   CREATE(lbits)(&zghz362);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_Tm(struct zEncMetadata zv, uint64_t zx)
+static struct zEncMetadata sailgen__update_EncMetadata_TE(struct zEncMetadata zv, uint64_t zx)
 {
   __label__ end_function_159, end_block_exception_160;
 
@@ -2213,11 +2007,11 @@ static struct zEncMetadata sailgen__update_EncMetadata_Tm(struct zEncMetadata zv
       RECREATE(lbits)(&zghz358);
       CONVERT_OF(lbits, fbits)(&zghz358, zgaz335, UINT64_C(32) , true);
       RECREATE(sail_int)(&zghz359);
-      CONVERT_OF(sail_int, mach_int)(&zghz359, INT64_C(17));
+      CONVERT_OF(sail_int, mach_int)(&zghz359, INT64_C(11));
       RECREATE(sail_int)(&zghz360);
-      CONVERT_OF(sail_int, mach_int)(&zghz360, INT64_C(12));
+      CONVERT_OF(sail_int, mach_int)(&zghz360, INT64_C(10));
       RECREATE(lbits)(&zghz361);
-      CONVERT_OF(lbits, fbits)(&zghz361, zx, UINT64_C(6) , true);
+      CONVERT_OF(lbits, fbits)(&zghz361, zx, UINT64_C(2) , true);
       RECREATE(lbits)(&zghz362);
       vector_update_subrange_lbits(&zghz362, zghz358, zghz359, zghz360, zghz361);
       zgaz336 = CONVERT_OF(fbits, lbits)(zghz362, true);
@@ -2225,37 +2019,34 @@ static struct zEncMetadata sailgen__update_EncMetadata_Tm(struct zEncMetadata zv
   }
   zghz357 = zv;
   zghz357.zbits = zgaz336;
-
 end_function_159: ;
   return zghz357;
 end_block_exception_160: ;
-  struct zEncMetadata zcbz394 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz394;
+  struct zEncMetadata zcbz395 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz395;
 }
 
 
 
-static void finish_sailgen__update_EncMetadata_Tm(void)
+static void finish_sailgen__update_EncMetadata_TE(void)
 {
   KILL(lbits)(&zghz362);
   KILL(lbits)(&zghz361);
   KILL(sail_int)(&zghz360);
   KILL(sail_int)(&zghz359);
   KILL(lbits)(&zghz358);
-
 }
 
-static uint64_t sailgen__get_EncMetadata_reserved_0(struct zEncMetadata);
+static uint64_t sailgen__get_EncMetadata_Tm(struct zEncMetadata);
 
-static uint64_t sailgen__get_EncMetadata_reserved_0(struct zEncMetadata zv)
+static uint64_t sailgen__get_EncMetadata_Tm(struct zEncMetadata zv)
 {
   __label__ end_function_162, end_block_exception_163;
 
   uint64_t zcbz341;
   uint64_t zgaz337;
   zgaz337 = zv.zbits;
-  zcbz341 = (safe_rshift(UINT64_MAX, 64 - 3) & (zgaz337 >> INT64_C(21)));
-
+  zcbz341 = (safe_rshift(UINT64_MAX, 64 - 6) & (zgaz337 >> INT64_C(12)));
 end_function_162: ;
   return zcbz341;
 end_block_exception_163: ;
@@ -2263,7 +2054,7 @@ end_block_exception_163: ;
   return UINT64_C(0xdeadc0de);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_reserved_0(struct zEncMetadata, uint64_t);
+static struct zEncMetadata sailgen__update_EncMetadata_Tm(struct zEncMetadata, uint64_t);
 
 struct zEncMetadata zghz363;
 lbits zghz364;
@@ -2272,7 +2063,7 @@ sail_int zghz366;
 lbits zghz367;
 lbits zghz368;
 
-static void startup_sailgen__update_EncMetadata_reserved_0(void)
+static void startup_sailgen__update_EncMetadata_Tm(void)
 {
 
   CREATE(lbits)(&zghz364);
@@ -2282,7 +2073,7 @@ static void startup_sailgen__update_EncMetadata_reserved_0(void)
   CREATE(lbits)(&zghz368);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_reserved_0(struct zEncMetadata zv, uint64_t zx)
+static struct zEncMetadata sailgen__update_EncMetadata_Tm(struct zEncMetadata zv, uint64_t zx)
 {
   __label__ end_function_165, end_block_exception_166;
 
@@ -2295,11 +2086,11 @@ static struct zEncMetadata sailgen__update_EncMetadata_reserved_0(struct zEncMet
       RECREATE(lbits)(&zghz364);
       CONVERT_OF(lbits, fbits)(&zghz364, zgaz338, UINT64_C(32) , true);
       RECREATE(sail_int)(&zghz365);
-      CONVERT_OF(sail_int, mach_int)(&zghz365, INT64_C(23));
+      CONVERT_OF(sail_int, mach_int)(&zghz365, INT64_C(17));
       RECREATE(sail_int)(&zghz366);
-      CONVERT_OF(sail_int, mach_int)(&zghz366, INT64_C(21));
+      CONVERT_OF(sail_int, mach_int)(&zghz366, INT64_C(12));
       RECREATE(lbits)(&zghz367);
-      CONVERT_OF(lbits, fbits)(&zghz367, zx, UINT64_C(3) , true);
+      CONVERT_OF(lbits, fbits)(&zghz367, zx, UINT64_C(6) , true);
       RECREATE(lbits)(&zghz368);
       vector_update_subrange_lbits(&zghz368, zghz364, zghz365, zghz366, zghz367);
       zgaz339 = CONVERT_OF(fbits, lbits)(zghz368, true);
@@ -2307,37 +2098,34 @@ static struct zEncMetadata sailgen__update_EncMetadata_reserved_0(struct zEncMet
   }
   zghz363 = zv;
   zghz363.zbits = zgaz339;
-
 end_function_165: ;
   return zghz363;
 end_block_exception_166: ;
-  struct zEncMetadata zcbz395 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz395;
+  struct zEncMetadata zcbz396 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz396;
 }
 
 
 
-static void finish_sailgen__update_EncMetadata_reserved_0(void)
+static void finish_sailgen__update_EncMetadata_Tm(void)
 {
   KILL(lbits)(&zghz368);
   KILL(lbits)(&zghz367);
   KILL(sail_int)(&zghz366);
   KILL(sail_int)(&zghz365);
   KILL(lbits)(&zghz364);
-
 }
 
-static uint64_t sailgen__get_EncMetadata_reserved_1(struct zEncMetadata);
+static uint64_t sailgen__get_EncMetadata_reserved_0(struct zEncMetadata);
 
-static uint64_t sailgen__get_EncMetadata_reserved_1(struct zEncMetadata zv)
+static uint64_t sailgen__get_EncMetadata_reserved_0(struct zEncMetadata zv)
 {
   __label__ end_function_168, end_block_exception_169;
 
   uint64_t zcbz343;
   uint64_t zgaz340;
   zgaz340 = zv.zbits;
-  zcbz343 = (safe_rshift(UINT64_MAX, 64 - 1) & (zgaz340 >> INT64_C(24)));
-
+  zcbz343 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz340 >> INT64_C(21)));
 end_function_168: ;
   return zcbz343;
 end_block_exception_169: ;
@@ -2345,7 +2133,7 @@ end_block_exception_169: ;
   return UINT64_C(0xdeadc0de);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_reserved_1(struct zEncMetadata, uint64_t);
+static struct zEncMetadata sailgen__update_EncMetadata_reserved_0(struct zEncMetadata, uint64_t);
 
 struct zEncMetadata zghz369;
 lbits zghz370;
@@ -2354,7 +2142,7 @@ sail_int zghz372;
 lbits zghz373;
 lbits zghz374;
 
-static void startup_sailgen__update_EncMetadata_reserved_1(void)
+static void startup_sailgen__update_EncMetadata_reserved_0(void)
 {
 
   CREATE(lbits)(&zghz370);
@@ -2364,7 +2152,7 @@ static void startup_sailgen__update_EncMetadata_reserved_1(void)
   CREATE(lbits)(&zghz374);
 }
 
-static struct zEncMetadata sailgen__update_EncMetadata_reserved_1(struct zEncMetadata zv, uint64_t zx)
+static struct zEncMetadata sailgen__update_EncMetadata_reserved_0(struct zEncMetadata zv, uint64_t zx)
 {
   __label__ end_function_171, end_block_exception_172;
 
@@ -2377,11 +2165,11 @@ static struct zEncMetadata sailgen__update_EncMetadata_reserved_1(struct zEncMet
       RECREATE(lbits)(&zghz370);
       CONVERT_OF(lbits, fbits)(&zghz370, zgaz341, UINT64_C(32) , true);
       RECREATE(sail_int)(&zghz371);
-      CONVERT_OF(sail_int, mach_int)(&zghz371, INT64_C(24));
+      CONVERT_OF(sail_int, mach_int)(&zghz371, INT64_C(22));
       RECREATE(sail_int)(&zghz372);
-      CONVERT_OF(sail_int, mach_int)(&zghz372, INT64_C(24));
+      CONVERT_OF(sail_int, mach_int)(&zghz372, INT64_C(21));
       RECREATE(lbits)(&zghz373);
-      CONVERT_OF(lbits, fbits)(&zghz373, zx, UINT64_C(1) , true);
+      CONVERT_OF(lbits, fbits)(&zghz373, zx, UINT64_C(2) , true);
       RECREATE(lbits)(&zghz374);
       vector_update_subrange_lbits(&zghz374, zghz370, zghz371, zghz372, zghz373);
       zgaz342 = CONVERT_OF(fbits, lbits)(zghz374, true);
@@ -2389,24 +2177,101 @@ static struct zEncMetadata sailgen__update_EncMetadata_reserved_1(struct zEncMet
   }
   zghz369 = zv;
   zghz369.zbits = zgaz342;
-
 end_function_171: ;
   return zghz369;
 end_block_exception_172: ;
-  struct zEncMetadata zcbz396 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz396;
+  struct zEncMetadata zcbz397 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz397;
 }
 
 
 
-static void finish_sailgen__update_EncMetadata_reserved_1(void)
+static void finish_sailgen__update_EncMetadata_reserved_0(void)
 {
   KILL(lbits)(&zghz374);
   KILL(lbits)(&zghz373);
   KILL(sail_int)(&zghz372);
   KILL(sail_int)(&zghz371);
   KILL(lbits)(&zghz370);
+}
 
+static uint64_t sailgen__get_EncMetadata_reserved_1(struct zEncMetadata);
+
+static uint64_t sailgen__get_EncMetadata_reserved_1(struct zEncMetadata zv)
+{
+  __label__ end_function_174, end_block_exception_175;
+
+  uint64_t zcbz345;
+  uint64_t zgaz343;
+  zgaz343 = zv.zbits;
+  zcbz345 = (safe_rshift(UINT64_MAX, 64 - 1) & (zgaz343 >> INT64_C(23)));
+end_function_174: ;
+  return zcbz345;
+end_block_exception_175: ;
+
+  return UINT64_C(0xdeadc0de);
+}
+
+static struct zEncMetadata sailgen__update_EncMetadata_reserved_1(struct zEncMetadata, uint64_t);
+
+struct zEncMetadata zghz375;
+lbits zghz376;
+sail_int zghz377;
+sail_int zghz378;
+lbits zghz379;
+lbits zghz380;
+
+static void startup_sailgen__update_EncMetadata_reserved_1(void)
+{
+
+  CREATE(lbits)(&zghz376);
+  CREATE(sail_int)(&zghz377);
+  CREATE(sail_int)(&zghz378);
+  CREATE(lbits)(&zghz379);
+  CREATE(lbits)(&zghz380);
+}
+
+static struct zEncMetadata sailgen__update_EncMetadata_reserved_1(struct zEncMetadata zv, uint64_t zx)
+{
+  __label__ end_function_177, end_block_exception_178;
+
+  struct zEncMetadata zghz375;
+  uint64_t zgaz345;
+  {
+    uint64_t zgaz344;
+    zgaz344 = zv.zbits;
+    {
+      RECREATE(lbits)(&zghz376);
+      CONVERT_OF(lbits, fbits)(&zghz376, zgaz344, UINT64_C(32) , true);
+      RECREATE(sail_int)(&zghz377);
+      CONVERT_OF(sail_int, mach_int)(&zghz377, INT64_C(23));
+      RECREATE(sail_int)(&zghz378);
+      CONVERT_OF(sail_int, mach_int)(&zghz378, INT64_C(23));
+      RECREATE(lbits)(&zghz379);
+      CONVERT_OF(lbits, fbits)(&zghz379, zx, UINT64_C(1) , true);
+      RECREATE(lbits)(&zghz380);
+      vector_update_subrange_lbits(&zghz380, zghz376, zghz377, zghz378, zghz379);
+      zgaz345 = CONVERT_OF(fbits, lbits)(zghz380, true);
+    }
+  }
+  zghz375 = zv;
+  zghz375.zbits = zgaz345;
+end_function_177: ;
+  return zghz375;
+end_block_exception_178: ;
+  struct zEncMetadata zcbz398 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz398;
+}
+
+
+
+static void finish_sailgen__update_EncMetadata_reserved_1(void)
+{
+  KILL(lbits)(&zghz380);
+  KILL(lbits)(&zghz379);
+  KILL(sail_int)(&zghz378);
+  KILL(sail_int)(&zghz377);
+  KILL(lbits)(&zghz376);
 }
 
 static struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 sailgen_ap_m_encdec_forwards(uint64_t);
@@ -2415,22 +2280,26 @@ static uint64_t sailgen_ap_m_encdec_backwards(struct ztuple_z8z5structz0zzArchPe
 
 static bool sailgen_ap_m_encdec_forwards_matches(uint64_t);
 
-static bool sailgen_ap_m_encdec_backwards_matches(struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9);
-
-struct zArchPerms zghz375;
-struct zArchPerms zghz376;
-struct zArchPerms zghz377;
-struct zArchPerms zghz378;
-struct zArchPerms zghz379;
-struct zArchPerms zghz380;
 struct zArchPerms zghz381;
 struct zArchPerms zghz382;
 struct zArchPerms zghz383;
 struct zArchPerms zghz384;
 struct zArchPerms zghz385;
+struct zArchPerms zghz386;
+struct zArchPerms zghz387;
+struct zArchPerms zghz388;
+struct zArchPerms zghz389;
+struct zArchPerms zghz390;
+struct zArchPerms zghz391;
+struct zArchPerms zghz392;
+struct zArchPerms zghz393;
+struct zArchPerms zghz394;
 
 static void startup_sailgen_ap_m_encdec_forwards(void)
 {
+
+
+
 
 
 
@@ -2446,343 +2315,399 @@ static void startup_sailgen_ap_m_encdec_forwards(void)
 
 static struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 sailgen_ap_m_encdec_forwards(uint64_t zargz3)
 {
-  __label__ case_185, case_184, case_183, case_182, case_181, case_180, case_179, case_178, case_177, case_176, case_175, finish_match_174, end_function_186, end_block_exception_187;
+  __label__ case_194, case_193, case_192, case_191, case_190, case_189, case_188, case_187, case_186, case_185, case_184, case_183, case_182, case_181, finish_match_180, end_function_195, end_block_exception_196;
 
-  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz345;
+  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz347;
   {
     uint64_t zv__0;
     zv__0 = zargz3;
-    bool zgsz388;
-    zgsz388 = (zv__0 == UINT64_C(0b00000));
-    if (!(zgsz388)) {
-
-      goto case_185;
-    }
-    enum zExecutionMode zgaz343;
-    zgaz343 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz385;
-    zghz385.zASR = false;
-    zghz385.zC = false;
-    zghz385.zLM = false;
-    zghz385.zR = false;
-    zghz385.zW = false;
-    zghz385.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz387;
-    zgsz387.ztup0 = zghz385;
-    zgsz387.ztup1 = zgaz343;
-    zcbz345 = zgsz387;
-    goto finish_match_174;
+    bool zgsz398;
+    zgsz398 = (zv__0 == UINT64_C(0b00000));
+    if (!(zgsz398)) {  goto case_194;  }
+    enum zExecutionMode zgaz346;
+    zgaz346 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz394;
+    zghz394.zASR = false;
+    zghz394.zC = false;
+    zghz394.zEL = false;
+    zghz394.zLM = false;
+    zghz394.zR = false;
+    zghz394.zSL = false;
+    zghz394.zW = false;
+    zghz394.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz397;
+    zgsz397.ztup0 = zghz394;
+    zgsz397.ztup1 = zgaz346;
+    zcbz347 = zgsz397;
+    goto finish_match_180;
   }
-case_185: ;
+case_194: ;
   {
     uint64_t zv__3;
     zv__3 = zargz3;
-    bool zgsz385;
-    zgsz385 = (zv__3 == UINT64_C(0b00001));
-    if (!(zgsz385)) {
-
-      goto case_184;
-    }
-    enum zExecutionMode zgaz344;
-    zgaz344 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz384;
-    zghz384.zASR = false;
-    zghz384.zC = false;
-    zghz384.zLM = false;
-    zghz384.zR = true;
-    zghz384.zW = false;
-    zghz384.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz384;
-    zgsz384.ztup0 = zghz384;
-    zgsz384.ztup1 = zgaz344;
-    zcbz345 = zgsz384;
-    goto finish_match_174;
+    bool zgsz395;
+    zgsz395 = (zv__3 == UINT64_C(0b00001));
+    if (!(zgsz395)) {  goto case_193;  }
+    enum zExecutionMode zgaz347;
+    zgaz347 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz393;
+    zghz393.zASR = false;
+    zghz393.zC = false;
+    zghz393.zEL = false;
+    zghz393.zLM = false;
+    zghz393.zR = true;
+    zghz393.zSL = false;
+    zghz393.zW = false;
+    zghz393.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz394;
+    zgsz394.ztup0 = zghz393;
+    zgsz394.ztup1 = zgaz347;
+    zcbz347 = zgsz394;
+    goto finish_match_180;
   }
-case_184: ;
+case_193: ;
   {
     uint64_t zv__6;
     zv__6 = zargz3;
-    bool zgsz382;
-    zgsz382 = (zv__6 == UINT64_C(0b00100));
-    if (!(zgsz382)) {
-
-      goto case_183;
-    }
-    enum zExecutionMode zgaz345;
-    zgaz345 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz383;
-    zghz383.zASR = false;
-    zghz383.zC = false;
-    zghz383.zLM = false;
-    zghz383.zR = false;
-    zghz383.zW = true;
-    zghz383.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz381;
-    zgsz381.ztup0 = zghz383;
-    zgsz381.ztup1 = zgaz345;
-    zcbz345 = zgsz381;
-    goto finish_match_174;
+    bool zgsz392;
+    zgsz392 = (zv__6 == UINT64_C(0b00100));
+    if (!(zgsz392)) {  goto case_192;  }
+    enum zExecutionMode zgaz348;
+    zgaz348 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz392;
+    zghz392.zASR = false;
+    zghz392.zC = false;
+    zghz392.zEL = false;
+    zghz392.zLM = false;
+    zghz392.zR = false;
+    zghz392.zSL = false;
+    zghz392.zW = true;
+    zghz392.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz391;
+    zgsz391.ztup0 = zghz392;
+    zgsz391.ztup1 = zgaz348;
+    zcbz347 = zgsz391;
+    goto finish_match_180;
   }
-case_183: ;
+case_192: ;
   {
     uint64_t zv__9;
     zv__9 = zargz3;
-    bool zgsz379;
-    zgsz379 = (zv__9 == UINT64_C(0b00101));
-    if (!(zgsz379)) {
-
-      goto case_182;
-    }
-    enum zExecutionMode zgaz346;
-    zgaz346 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz382;
-    zghz382.zASR = false;
-    zghz382.zC = false;
-    zghz382.zLM = false;
-    zghz382.zR = true;
-    zghz382.zW = true;
-    zghz382.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz378;
-    zgsz378.ztup0 = zghz382;
-    zgsz378.ztup1 = zgaz346;
-    zcbz345 = zgsz378;
-    goto finish_match_174;
+    bool zgsz389;
+    zgsz389 = (zv__9 == UINT64_C(0b00101));
+    if (!(zgsz389)) {  goto case_191;  }
+    enum zExecutionMode zgaz349;
+    zgaz349 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz391;
+    zghz391.zASR = false;
+    zghz391.zC = false;
+    zghz391.zEL = false;
+    zghz391.zLM = false;
+    zghz391.zR = true;
+    zghz391.zSL = false;
+    zghz391.zW = true;
+    zghz391.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz388;
+    zgsz388.ztup0 = zghz391;
+    zgsz388.ztup1 = zgaz349;
+    zcbz347 = zgsz388;
+    goto finish_match_180;
   }
-case_182: ;
+case_191: ;
   {
     uint64_t zv__12;
     zv__12 = zargz3;
-    uint64_t zgaz348;
-    zgaz348 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__12 >> INT64_C(1)));
-    bool zgsz376;
-    zgsz376 = (zgaz348 == UINT64_C(0x4));
-    if (!(zgsz376)) {
-
-      goto case_181;
-    }
+    uint64_t zgaz351;
+    zgaz351 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__12 >> INT64_C(1)));
+    bool zgsz386;
+    zgsz386 = (zgaz351 == UINT64_C(0x4));
+    if (!(zgsz386)) {  goto case_190;  }
     uint64_t zm;
     zm = (safe_rshift(UINT64_MAX, 64 - 1) & (zv__12 >> INT64_C(0)));
-    enum zExecutionMode zgaz347;
-    zgaz347 = sailgen_execution_mode_encdec_backwards(zm);
-    struct zArchPerms zghz381;
-    zghz381.zASR = true;
-    zghz381.zC = true;
-    zghz381.zLM = true;
-    zghz381.zR = true;
-    zghz381.zW = true;
-    zghz381.zX = true;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz375;
-    zgsz375.ztup0 = zghz381;
-    zgsz375.ztup1 = zgaz347;
-    zcbz345 = zgsz375;
-    goto finish_match_174;
+    enum zExecutionMode zgaz350;
+    zgaz350 = sailgen_execution_mode_encdec_backwards(zm);
+    struct zArchPerms zghz390;
+    zghz390.zASR = true;
+    zghz390.zC = true;
+    zghz390.zEL = true;
+    zghz390.zLM = true;
+    zghz390.zR = true;
+    zghz390.zSL = true;
+    zghz390.zW = true;
+    zghz390.zX = true;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz385;
+    zgsz385.ztup0 = zghz390;
+    zgsz385.ztup1 = zgaz350;
+    zcbz347 = zgsz385;
+    goto finish_match_180;
   }
-case_181: ;
+case_190: ;
   {
     uint64_t zv__15;
     zv__15 = zargz3;
-    uint64_t zgaz350;
-    zgaz350 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__15 >> INT64_C(1)));
-    bool zgsz373;
-    zgsz373 = (zgaz350 == UINT64_C(0x5));
-    if (!(zgsz373)) {
-
-      goto case_180;
-    }
+    uint64_t zgaz353;
+    zgaz353 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__15 >> INT64_C(1)));
+    bool zgsz383;
+    zgsz383 = (zgaz353 == UINT64_C(0x5));
+    if (!(zgsz383)) {  goto case_189;  }
     uint64_t zuz32;
     zuz32 = (safe_rshift(UINT64_MAX, 64 - 1) & (zv__15 >> INT64_C(0)));
-    enum zExecutionMode zgaz349;
-    zgaz349 = sailgen_execution_mode_encdec_backwards(zuz32);
-    struct zArchPerms zghz380;
-    zghz380.zASR = false;
-    zghz380.zC = true;
-    zghz380.zLM = true;
-    zghz380.zR = true;
-    zghz380.zW = false;
-    zghz380.zX = true;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz372;
-    zgsz372.ztup0 = zghz380;
-    zgsz372.ztup1 = zgaz349;
-    zcbz345 = zgsz372;
-    goto finish_match_174;
+    enum zExecutionMode zgaz352;
+    zgaz352 = sailgen_execution_mode_encdec_backwards(zuz32);
+    struct zArchPerms zghz389;
+    zghz389.zASR = false;
+    zghz389.zC = true;
+    zghz389.zEL = true;
+    zghz389.zLM = true;
+    zghz389.zR = true;
+    zghz389.zSL = true;
+    zghz389.zW = false;
+    zghz389.zX = true;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz382;
+    zgsz382.ztup0 = zghz389;
+    zgsz382.ztup1 = zgaz352;
+    zcbz347 = zgsz382;
+    goto finish_match_180;
   }
-case_180: ;
+case_189: ;
   {
     uint64_t zv__18;
     zv__18 = zargz3;
-    uint64_t zgaz352;
-    zgaz352 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__18 >> INT64_C(1)));
-    bool zgsz370;
-    zgsz370 = (zgaz352 == UINT64_C(0x6));
-    if (!(zgsz370)) {
-
-      goto case_179;
-    }
+    uint64_t zgaz355;
+    zgaz355 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__18 >> INT64_C(1)));
+    bool zgsz380;
+    zgsz380 = (zgaz355 == UINT64_C(0x6));
+    if (!(zgsz380)) {  goto case_188;  }
     uint64_t zuz33;
     zuz33 = (safe_rshift(UINT64_MAX, 64 - 1) & (zv__18 >> INT64_C(0)));
-    enum zExecutionMode zgaz351;
-    zgaz351 = sailgen_execution_mode_encdec_backwards(zuz33);
-    struct zArchPerms zghz379;
-    zghz379.zASR = false;
-    zghz379.zC = true;
-    zghz379.zLM = true;
-    zghz379.zR = true;
-    zghz379.zW = true;
-    zghz379.zX = true;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz369;
-    zgsz369.ztup0 = zghz379;
-    zgsz369.ztup1 = zgaz351;
-    zcbz345 = zgsz369;
-    goto finish_match_174;
+    enum zExecutionMode zgaz354;
+    zgaz354 = sailgen_execution_mode_encdec_backwards(zuz33);
+    struct zArchPerms zghz388;
+    zghz388.zASR = false;
+    zghz388.zC = true;
+    zghz388.zEL = true;
+    zghz388.zLM = true;
+    zghz388.zR = true;
+    zghz388.zSL = true;
+    zghz388.zW = true;
+    zghz388.zX = true;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz379;
+    zgsz379.ztup0 = zghz388;
+    zgsz379.ztup1 = zgaz354;
+    zcbz347 = zgsz379;
+    goto finish_match_180;
   }
-case_179: ;
+case_188: ;
   {
     uint64_t zv__21;
     zv__21 = zargz3;
-    uint64_t zgaz354;
-    zgaz354 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__21 >> INT64_C(1)));
-    bool zgsz367;
-    zgsz367 = (zgaz354 == UINT64_C(0x7));
-    if (!(zgsz367)) {
-
-      goto case_178;
-    }
+    uint64_t zgaz357;
+    zgaz357 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__21 >> INT64_C(1)));
+    bool zgsz377;
+    zgsz377 = (zgaz357 == UINT64_C(0x7));
+    if (!(zgsz377)) {  goto case_187;  }
     uint64_t zuz34;
     zuz34 = (safe_rshift(UINT64_MAX, 64 - 1) & (zv__21 >> INT64_C(0)));
-    enum zExecutionMode zgaz353;
-    zgaz353 = sailgen_execution_mode_encdec_backwards(zuz34);
-    struct zArchPerms zghz378;
-    zghz378.zASR = false;
-    zghz378.zC = false;
-    zghz378.zLM = false;
-    zghz378.zR = true;
-    zghz378.zW = true;
-    zghz378.zX = true;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz366;
-    zgsz366.ztup0 = zghz378;
-    zgsz366.ztup1 = zgaz353;
-    zcbz345 = zgsz366;
-    goto finish_match_174;
+    enum zExecutionMode zgaz356;
+    zgaz356 = sailgen_execution_mode_encdec_backwards(zuz34);
+    struct zArchPerms zghz387;
+    zghz387.zASR = false;
+    zghz387.zC = false;
+    zghz387.zEL = false;
+    zghz387.zLM = false;
+    zghz387.zR = true;
+    zghz387.zSL = false;
+    zghz387.zW = true;
+    zghz387.zX = true;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz376;
+    zgsz376.ztup0 = zghz387;
+    zgsz376.ztup1 = zgaz356;
+    zcbz347 = zgsz376;
+    goto finish_match_180;
   }
-case_178: ;
+case_187: ;
   {
     uint64_t zv__24;
     zv__24 = zargz3;
-    bool zgsz364;
-    zgsz364 = (zv__24 == UINT64_C(0b10011));
-    if (!(zgsz364)) {
-
-      goto case_177;
-    }
-    enum zExecutionMode zgaz355;
-    zgaz355 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz377;
-    zghz377.zASR = false;
-    zghz377.zC = true;
-    zghz377.zLM = false;
-    zghz377.zR = true;
-    zghz377.zW = false;
-    zghz377.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz363;
-    zgsz363.ztup0 = zghz377;
-    zgsz363.ztup1 = zgaz355;
-    zcbz345 = zgsz363;
-    goto finish_match_174;
+    bool zgsz374;
+    zgsz374 = (zv__24 == UINT64_C(0b10011));
+    if (!(zgsz374)) {  goto case_186;  }
+    enum zExecutionMode zgaz358;
+    zgaz358 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz386;
+    zghz386.zASR = false;
+    zghz386.zC = true;
+    zghz386.zEL = false;
+    zghz386.zLM = false;
+    zghz386.zR = true;
+    zghz386.zSL = false;
+    zghz386.zW = false;
+    zghz386.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz373;
+    zgsz373.ztup0 = zghz386;
+    zgsz373.ztup1 = zgaz358;
+    zcbz347 = zgsz373;
+    goto finish_match_180;
   }
-case_177: ;
+case_186: ;
   {
     uint64_t zv__27;
     zv__27 = zargz3;
-    bool zgsz361;
-    zgsz361 = (zv__27 == UINT64_C(0b11011));
-    if (!(zgsz361)) {
-
-      goto case_176;
-    }
-    enum zExecutionMode zgaz356;
-    zgaz356 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz376;
-    zghz376.zASR = false;
-    zghz376.zC = true;
-    zghz376.zLM = true;
-    zghz376.zR = true;
-    zghz376.zW = false;
-    zghz376.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz360;
-    zgsz360.ztup0 = zghz376;
-    zgsz360.ztup1 = zgaz356;
-    zcbz345 = zgsz360;
-    goto finish_match_174;
+    bool zgsz371;
+    zgsz371 = (zv__27 == UINT64_C(0b10110));
+    if (!(zgsz371)) {  goto case_185;  }
+    enum zExecutionMode zgaz359;
+    zgaz359 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz385;
+    zghz385.zASR = false;
+    zghz385.zC = true;
+    zghz385.zEL = false;
+    zghz385.zLM = true;
+    zghz385.zR = true;
+    zghz385.zSL = true;
+    zghz385.zW = true;
+    zghz385.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz370;
+    zgsz370.ztup0 = zghz385;
+    zgsz370.ztup1 = zgaz359;
+    zcbz347 = zgsz370;
+    goto finish_match_180;
   }
-case_176: ;
+case_185: ;
   {
     uint64_t zv__30;
     zv__30 = zargz3;
-    bool zgsz358;
-    zgsz358 = (zv__30 == UINT64_C(0b11111));
-    if (!(zgsz358)) {
-
-      goto case_175;
-    }
-    enum zExecutionMode zgaz357;
-    zgaz357 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz375;
-    zghz375.zASR = false;
-    zghz375.zC = true;
-    zghz375.zLM = true;
-    zghz375.zR = true;
-    zghz375.zW = true;
-    zghz375.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz357;
-    zgsz357.ztup0 = zghz375;
-    zgsz357.ztup1 = zgaz357;
-    zcbz345 = zgsz357;
-    goto finish_match_174;
+    bool zgsz368;
+    zgsz368 = (zv__30 == UINT64_C(0b10111));
+    if (!(zgsz368)) {  goto case_184;  }
+    enum zExecutionMode zgaz360;
+    zgaz360 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz384;
+    zghz384.zASR = false;
+    zghz384.zC = true;
+    zghz384.zEL = false;
+    zghz384.zLM = true;
+    zghz384.zR = true;
+    zghz384.zSL = false;
+    zghz384.zW = true;
+    zghz384.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz367;
+    zgsz367.ztup0 = zghz384;
+    zgsz367.ztup1 = zgaz360;
+    zcbz347 = zgsz367;
+    goto finish_match_180;
   }
-case_175: ;
+case_184: ;
+  {
+    uint64_t zv__33;
+    zv__33 = zargz3;
+    bool zgsz365;
+    zgsz365 = (zv__33 == UINT64_C(0b11011));
+    if (!(zgsz365)) {  goto case_183;  }
+    enum zExecutionMode zgaz361;
+    zgaz361 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz383;
+    zghz383.zASR = false;
+    zghz383.zC = true;
+    zghz383.zEL = true;
+    zghz383.zLM = true;
+    zghz383.zR = true;
+    zghz383.zSL = false;
+    zghz383.zW = false;
+    zghz383.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz364;
+    zgsz364.ztup0 = zghz383;
+    zgsz364.ztup1 = zgaz361;
+    zcbz347 = zgsz364;
+    goto finish_match_180;
+  }
+case_183: ;
+  {
+    uint64_t zv__36;
+    zv__36 = zargz3;
+    bool zgsz362;
+    zgsz362 = (zv__36 == UINT64_C(0b11110));
+    if (!(zgsz362)) {  goto case_182;  }
+    enum zExecutionMode zgaz362;
+    zgaz362 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz382;
+    zghz382.zASR = false;
+    zghz382.zC = true;
+    zghz382.zEL = true;
+    zghz382.zLM = true;
+    zghz382.zR = true;
+    zghz382.zSL = true;
+    zghz382.zW = true;
+    zghz382.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz361;
+    zgsz361.ztup0 = zghz382;
+    zgsz361.ztup1 = zgaz362;
+    zcbz347 = zgsz361;
+    goto finish_match_180;
+  }
+case_182: ;
+  {
+    uint64_t zv__39;
+    zv__39 = zargz3;
+    bool zgsz359;
+    zgsz359 = (zv__39 == UINT64_C(0b11111));
+    if (!(zgsz359)) {  goto case_181;  }
+    enum zExecutionMode zgaz363;
+    zgaz363 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz381;
+    zghz381.zASR = false;
+    zghz381.zC = true;
+    zghz381.zEL = true;
+    zghz381.zLM = true;
+    zghz381.zR = true;
+    zghz381.zSL = false;
+    zghz381.zW = true;
+    zghz381.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz358;
+    zgsz358.ztup0 = zghz381;
+    zgsz358.ztup1 = zgaz363;
+    zcbz347 = zgsz358;
+    goto finish_match_180;
+  }
+case_181: ;
   sail_match_failure("ap_m_encdec_forwards");
-finish_match_174: ;
-end_function_186: ;
-  return zcbz345;
-end_block_exception_187: ;
-  struct zArchPerms zcbz398 = { .zASR = false, .zC = false, .zLM = false, .zR = false, .zW = false, .zX = false };
-  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz397 = { .ztup0 = zcbz398, .ztup1 = zCapPtrMode };
-  return zcbz397;
+finish_match_180: ;
+end_function_195: ;
+  return zcbz347;
+end_block_exception_196: ;
+  struct zArchPerms zcbz3100 = { .zASR = false, .zC = false, .zEL = false, .zLM = false, .zR = false, .zSL = false, .zW = false, .zX = false };
+  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz399 = { .ztup0 = zcbz3100, .ztup1 = zCapPtrMode };
+  return zcbz399;
 }
 
 
 
 static void finish_sailgen_ap_m_encdec_forwards(void)
 {
-
-
-
-
-
-
-
-
-
-
-
 }
 
 static struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 sailgen_ap_m_encdec_forwards_infallible(uint64_t);
 
-struct zArchPerms zghz386;
-struct zArchPerms zghz387;
-struct zArchPerms zghz388;
-struct zArchPerms zghz389;
-struct zArchPerms zghz390;
-struct zArchPerms zghz391;
-struct zArchPerms zghz392;
-struct zArchPerms zghz393;
-struct zArchPerms zghz394;
 struct zArchPerms zghz395;
 struct zArchPerms zghz396;
+struct zArchPerms zghz397;
+struct zArchPerms zghz398;
+struct zArchPerms zghz399;
+struct zArchPerms zghz3100;
+struct zArchPerms zghz3101;
+struct zArchPerms zghz3102;
+struct zArchPerms zghz3103;
+struct zArchPerms zghz3104;
+struct zArchPerms zghz3105;
+struct zArchPerms zghz3106;
+struct zArchPerms zghz3107;
+struct zArchPerms zghz3108;
 
 static void startup_sailgen_ap_m_encdec_forwards_infallible(void)
 {
+
+
+
 
 
 
@@ -2798,1751 +2723,376 @@ static void startup_sailgen_ap_m_encdec_forwards_infallible(void)
 
 static struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 sailgen_ap_m_encdec_forwards_infallible(uint64_t zargz3)
 {
-  __label__ case_199, case_198, case_197, case_196, case_195, case_194, case_193, case_192, case_191, case_190, case_189, finish_match_188, end_function_200, end_block_exception_201;
+  __label__ case_211, case_210, case_209, case_208, case_207, case_206, case_205, case_204, case_203, case_202, case_201, case_200, case_199, case_198, finish_match_197, end_function_212, end_block_exception_213;
 
-  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz346;
+  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz348;
   {
     uint64_t zv__0;
     zv__0 = zargz3;
-    bool zgsz3122;
-    zgsz3122 = (zv__0 == UINT64_C(0b00000));
-    if (!(zgsz3122)) {
-
-      goto case_199;
-    }
-    enum zExecutionMode zgaz343;
-    zgaz343 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz396;
-    zghz396.zASR = false;
-    zghz396.zC = false;
-    zghz396.zLM = false;
-    zghz396.zR = false;
-    zghz396.zW = false;
-    zghz396.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3121;
-    zgsz3121.ztup0 = zghz396;
-    zgsz3121.ztup1 = zgaz343;
-    zcbz346 = zgsz3121;
-    goto finish_match_188;
+    bool zgsz3141;
+    zgsz3141 = (zv__0 == UINT64_C(0b00000));
+    if (!(zgsz3141)) {  goto case_211;  }
+    enum zExecutionMode zgaz346;
+    zgaz346 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz3108;
+    zghz3108.zASR = false;
+    zghz3108.zC = false;
+    zghz3108.zEL = false;
+    zghz3108.zLM = false;
+    zghz3108.zR = false;
+    zghz3108.zSL = false;
+    zghz3108.zW = false;
+    zghz3108.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3140;
+    zgsz3140.ztup0 = zghz3108;
+    zgsz3140.ztup1 = zgaz346;
+    zcbz348 = zgsz3140;
+    goto finish_match_197;
   }
-case_199: ;
+case_211: ;
   {
     uint64_t zv__3;
     zv__3 = zargz3;
-    bool zgsz3119;
-    zgsz3119 = (zv__3 == UINT64_C(0b00001));
-    if (!(zgsz3119)) {
-
-      goto case_198;
-    }
-    enum zExecutionMode zgaz344;
-    zgaz344 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz395;
-    zghz395.zASR = false;
-    zghz395.zC = false;
-    zghz395.zLM = false;
-    zghz395.zR = true;
-    zghz395.zW = false;
-    zghz395.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3118;
-    zgsz3118.ztup0 = zghz395;
-    zgsz3118.ztup1 = zgaz344;
-    zcbz346 = zgsz3118;
-    goto finish_match_188;
+    bool zgsz3138;
+    zgsz3138 = (zv__3 == UINT64_C(0b00001));
+    if (!(zgsz3138)) {  goto case_210;  }
+    enum zExecutionMode zgaz347;
+    zgaz347 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz3107;
+    zghz3107.zASR = false;
+    zghz3107.zC = false;
+    zghz3107.zEL = false;
+    zghz3107.zLM = false;
+    zghz3107.zR = true;
+    zghz3107.zSL = false;
+    zghz3107.zW = false;
+    zghz3107.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3137;
+    zgsz3137.ztup0 = zghz3107;
+    zgsz3137.ztup1 = zgaz347;
+    zcbz348 = zgsz3137;
+    goto finish_match_197;
   }
-case_198: ;
+case_210: ;
   {
     uint64_t zv__6;
     zv__6 = zargz3;
-    bool zgsz3116;
-    zgsz3116 = (zv__6 == UINT64_C(0b00100));
-    if (!(zgsz3116)) {
-
-      goto case_197;
-    }
-    enum zExecutionMode zgaz345;
-    zgaz345 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz394;
-    zghz394.zASR = false;
-    zghz394.zC = false;
-    zghz394.zLM = false;
-    zghz394.zR = false;
-    zghz394.zW = true;
-    zghz394.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3115;
-    zgsz3115.ztup0 = zghz394;
-    zgsz3115.ztup1 = zgaz345;
-    zcbz346 = zgsz3115;
-    goto finish_match_188;
+    bool zgsz3135;
+    zgsz3135 = (zv__6 == UINT64_C(0b00100));
+    if (!(zgsz3135)) {  goto case_209;  }
+    enum zExecutionMode zgaz348;
+    zgaz348 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz3106;
+    zghz3106.zASR = false;
+    zghz3106.zC = false;
+    zghz3106.zEL = false;
+    zghz3106.zLM = false;
+    zghz3106.zR = false;
+    zghz3106.zSL = false;
+    zghz3106.zW = true;
+    zghz3106.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3134;
+    zgsz3134.ztup0 = zghz3106;
+    zgsz3134.ztup1 = zgaz348;
+    zcbz348 = zgsz3134;
+    goto finish_match_197;
   }
-case_197: ;
+case_209: ;
   {
     uint64_t zv__9;
     zv__9 = zargz3;
-    bool zgsz3113;
-    zgsz3113 = (zv__9 == UINT64_C(0b00101));
-    if (!(zgsz3113)) {
-
-      goto case_196;
-    }
-    enum zExecutionMode zgaz346;
-    zgaz346 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz393;
-    zghz393.zASR = false;
-    zghz393.zC = false;
-    zghz393.zLM = false;
-    zghz393.zR = true;
-    zghz393.zW = true;
-    zghz393.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3112;
-    zgsz3112.ztup0 = zghz393;
-    zgsz3112.ztup1 = zgaz346;
-    zcbz346 = zgsz3112;
-    goto finish_match_188;
+    bool zgsz3132;
+    zgsz3132 = (zv__9 == UINT64_C(0b00101));
+    if (!(zgsz3132)) {  goto case_208;  }
+    enum zExecutionMode zgaz349;
+    zgaz349 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz3105;
+    zghz3105.zASR = false;
+    zghz3105.zC = false;
+    zghz3105.zEL = false;
+    zghz3105.zLM = false;
+    zghz3105.zR = true;
+    zghz3105.zSL = false;
+    zghz3105.zW = true;
+    zghz3105.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3131;
+    zgsz3131.ztup0 = zghz3105;
+    zgsz3131.ztup1 = zgaz349;
+    zcbz348 = zgsz3131;
+    goto finish_match_197;
   }
-case_196: ;
+case_208: ;
   {
     uint64_t zv__12;
     zv__12 = zargz3;
-    uint64_t zgaz348;
-    zgaz348 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__12 >> INT64_C(1)));
-    bool zgsz3110;
-    zgsz3110 = (zgaz348 == UINT64_C(0x4));
-    if (!(zgsz3110)) {
-
-      goto case_195;
-    }
+    uint64_t zgaz351;
+    zgaz351 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__12 >> INT64_C(1)));
+    bool zgsz3129;
+    zgsz3129 = (zgaz351 == UINT64_C(0x4));
+    if (!(zgsz3129)) {  goto case_207;  }
     uint64_t zm;
     zm = (safe_rshift(UINT64_MAX, 64 - 1) & (zv__12 >> INT64_C(0)));
-    enum zExecutionMode zgaz347;
-    zgaz347 = sailgen_execution_mode_encdec_backwards(zm);
-    struct zArchPerms zghz392;
-    zghz392.zASR = true;
-    zghz392.zC = true;
-    zghz392.zLM = true;
-    zghz392.zR = true;
-    zghz392.zW = true;
-    zghz392.zX = true;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3109;
-    zgsz3109.ztup0 = zghz392;
-    zgsz3109.ztup1 = zgaz347;
-    zcbz346 = zgsz3109;
-    goto finish_match_188;
+    enum zExecutionMode zgaz350;
+    zgaz350 = sailgen_execution_mode_encdec_backwards(zm);
+    struct zArchPerms zghz3104;
+    zghz3104.zASR = true;
+    zghz3104.zC = true;
+    zghz3104.zEL = true;
+    zghz3104.zLM = true;
+    zghz3104.zR = true;
+    zghz3104.zSL = true;
+    zghz3104.zW = true;
+    zghz3104.zX = true;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3128;
+    zgsz3128.ztup0 = zghz3104;
+    zgsz3128.ztup1 = zgaz350;
+    zcbz348 = zgsz3128;
+    goto finish_match_197;
   }
-case_195: ;
+case_207: ;
   {
     uint64_t zv__15;
     zv__15 = zargz3;
-    uint64_t zgaz350;
-    zgaz350 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__15 >> INT64_C(1)));
-    bool zgsz3107;
-    zgsz3107 = (zgaz350 == UINT64_C(0x5));
-    if (!(zgsz3107)) {
-
-      goto case_194;
-    }
+    uint64_t zgaz353;
+    zgaz353 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__15 >> INT64_C(1)));
+    bool zgsz3126;
+    zgsz3126 = (zgaz353 == UINT64_C(0x5));
+    if (!(zgsz3126)) {  goto case_206;  }
     uint64_t zuz35;
     zuz35 = (safe_rshift(UINT64_MAX, 64 - 1) & (zv__15 >> INT64_C(0)));
-    enum zExecutionMode zgaz349;
-    zgaz349 = sailgen_execution_mode_encdec_backwards(zuz35);
-    struct zArchPerms zghz391;
-    zghz391.zASR = false;
-    zghz391.zC = true;
-    zghz391.zLM = true;
-    zghz391.zR = true;
-    zghz391.zW = false;
-    zghz391.zX = true;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3106;
-    zgsz3106.ztup0 = zghz391;
-    zgsz3106.ztup1 = zgaz349;
-    zcbz346 = zgsz3106;
-    goto finish_match_188;
+    enum zExecutionMode zgaz352;
+    zgaz352 = sailgen_execution_mode_encdec_backwards(zuz35);
+    struct zArchPerms zghz3103;
+    zghz3103.zASR = false;
+    zghz3103.zC = true;
+    zghz3103.zEL = true;
+    zghz3103.zLM = true;
+    zghz3103.zR = true;
+    zghz3103.zSL = true;
+    zghz3103.zW = false;
+    zghz3103.zX = true;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3125;
+    zgsz3125.ztup0 = zghz3103;
+    zgsz3125.ztup1 = zgaz352;
+    zcbz348 = zgsz3125;
+    goto finish_match_197;
   }
-case_194: ;
+case_206: ;
   {
     uint64_t zv__18;
     zv__18 = zargz3;
-    uint64_t zgaz352;
-    zgaz352 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__18 >> INT64_C(1)));
-    bool zgsz3104;
-    zgsz3104 = (zgaz352 == UINT64_C(0x6));
-    if (!(zgsz3104)) {
-
-      goto case_193;
-    }
+    uint64_t zgaz355;
+    zgaz355 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__18 >> INT64_C(1)));
+    bool zgsz3123;
+    zgsz3123 = (zgaz355 == UINT64_C(0x6));
+    if (!(zgsz3123)) {  goto case_205;  }
     uint64_t zuz36;
     zuz36 = (safe_rshift(UINT64_MAX, 64 - 1) & (zv__18 >> INT64_C(0)));
-    enum zExecutionMode zgaz351;
-    zgaz351 = sailgen_execution_mode_encdec_backwards(zuz36);
-    struct zArchPerms zghz390;
-    zghz390.zASR = false;
-    zghz390.zC = true;
-    zghz390.zLM = true;
-    zghz390.zR = true;
-    zghz390.zW = true;
-    zghz390.zX = true;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3103;
-    zgsz3103.ztup0 = zghz390;
-    zgsz3103.ztup1 = zgaz351;
-    zcbz346 = zgsz3103;
-    goto finish_match_188;
+    enum zExecutionMode zgaz354;
+    zgaz354 = sailgen_execution_mode_encdec_backwards(zuz36);
+    struct zArchPerms zghz3102;
+    zghz3102.zASR = false;
+    zghz3102.zC = true;
+    zghz3102.zEL = true;
+    zghz3102.zLM = true;
+    zghz3102.zR = true;
+    zghz3102.zSL = true;
+    zghz3102.zW = true;
+    zghz3102.zX = true;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3122;
+    zgsz3122.ztup0 = zghz3102;
+    zgsz3122.ztup1 = zgaz354;
+    zcbz348 = zgsz3122;
+    goto finish_match_197;
   }
-case_193: ;
+case_205: ;
   {
     uint64_t zv__21;
     zv__21 = zargz3;
-    uint64_t zgaz354;
-    zgaz354 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__21 >> INT64_C(1)));
-    bool zgsz3101;
-    zgsz3101 = (zgaz354 == UINT64_C(0x7));
-    if (!(zgsz3101)) {
-
-      goto case_192;
-    }
+    uint64_t zgaz357;
+    zgaz357 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__21 >> INT64_C(1)));
+    bool zgsz3120;
+    zgsz3120 = (zgaz357 == UINT64_C(0x7));
+    if (!(zgsz3120)) {  goto case_204;  }
     uint64_t zuz37;
     zuz37 = (safe_rshift(UINT64_MAX, 64 - 1) & (zv__21 >> INT64_C(0)));
-    enum zExecutionMode zgaz353;
-    zgaz353 = sailgen_execution_mode_encdec_backwards(zuz37);
-    struct zArchPerms zghz389;
-    zghz389.zASR = false;
-    zghz389.zC = false;
-    zghz389.zLM = false;
-    zghz389.zR = true;
-    zghz389.zW = true;
-    zghz389.zX = true;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3100;
-    zgsz3100.ztup0 = zghz389;
-    zgsz3100.ztup1 = zgaz353;
-    zcbz346 = zgsz3100;
-    goto finish_match_188;
+    enum zExecutionMode zgaz356;
+    zgaz356 = sailgen_execution_mode_encdec_backwards(zuz37);
+    struct zArchPerms zghz3101;
+    zghz3101.zASR = false;
+    zghz3101.zC = false;
+    zghz3101.zEL = false;
+    zghz3101.zLM = false;
+    zghz3101.zR = true;
+    zghz3101.zSL = false;
+    zghz3101.zW = true;
+    zghz3101.zX = true;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3119;
+    zgsz3119.ztup0 = zghz3101;
+    zgsz3119.ztup1 = zgaz356;
+    zcbz348 = zgsz3119;
+    goto finish_match_197;
   }
-case_192: ;
+case_204: ;
   {
     uint64_t zv__24;
     zv__24 = zargz3;
-    bool zgsz398;
-    zgsz398 = (zv__24 == UINT64_C(0b10011));
-    if (!(zgsz398)) {
-
-      goto case_191;
-    }
-    enum zExecutionMode zgaz355;
-    zgaz355 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz388;
-    zghz388.zASR = false;
-    zghz388.zC = true;
-    zghz388.zLM = false;
-    zghz388.zR = true;
-    zghz388.zW = false;
-    zghz388.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz397;
-    zgsz397.ztup0 = zghz388;
-    zgsz397.ztup1 = zgaz355;
-    zcbz346 = zgsz397;
-    goto finish_match_188;
+    bool zgsz3117;
+    zgsz3117 = (zv__24 == UINT64_C(0b10011));
+    if (!(zgsz3117)) {  goto case_203;  }
+    enum zExecutionMode zgaz358;
+    zgaz358 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz3100;
+    zghz3100.zASR = false;
+    zghz3100.zC = true;
+    zghz3100.zEL = false;
+    zghz3100.zLM = false;
+    zghz3100.zR = true;
+    zghz3100.zSL = false;
+    zghz3100.zW = false;
+    zghz3100.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3116;
+    zgsz3116.ztup0 = zghz3100;
+    zgsz3116.ztup1 = zgaz358;
+    zcbz348 = zgsz3116;
+    goto finish_match_197;
   }
-case_191: ;
+case_203: ;
   {
     uint64_t zv__27;
     zv__27 = zargz3;
-    bool zgsz395;
-    zgsz395 = (zv__27 == UINT64_C(0b11011));
-    if (!(zgsz395)) {
-
-      goto case_190;
-    }
-    enum zExecutionMode zgaz356;
-    zgaz356 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz387;
-    zghz387.zASR = false;
-    zghz387.zC = true;
-    zghz387.zLM = true;
-    zghz387.zR = true;
-    zghz387.zW = false;
-    zghz387.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz394;
-    zgsz394.ztup0 = zghz387;
-    zgsz394.ztup1 = zgaz356;
-    zcbz346 = zgsz394;
-    goto finish_match_188;
+    bool zgsz3114;
+    zgsz3114 = (zv__27 == UINT64_C(0b10110));
+    if (!(zgsz3114)) {  goto case_202;  }
+    enum zExecutionMode zgaz359;
+    zgaz359 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz399;
+    zghz399.zASR = false;
+    zghz399.zC = true;
+    zghz399.zEL = false;
+    zghz399.zLM = true;
+    zghz399.zR = true;
+    zghz399.zSL = true;
+    zghz399.zW = true;
+    zghz399.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3113;
+    zgsz3113.ztup0 = zghz399;
+    zgsz3113.ztup1 = zgaz359;
+    zcbz348 = zgsz3113;
+    goto finish_match_197;
   }
-case_190: ;
+case_202: ;
   {
     uint64_t zv__30;
     zv__30 = zargz3;
-    bool zgsz392;
-    zgsz392 = (zv__30 == UINT64_C(0b11111));
-    if (!(zgsz392)) {
-
-      goto case_189;
-    }
-    enum zExecutionMode zgaz357;
-    zgaz357 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    struct zArchPerms zghz386;
-    zghz386.zASR = false;
-    zghz386.zC = true;
-    zghz386.zLM = true;
-    zghz386.zR = true;
-    zghz386.zW = true;
-    zghz386.zX = false;
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz391;
-    zgsz391.ztup0 = zghz386;
-    zgsz391.ztup1 = zgaz357;
-    zcbz346 = zgsz391;
-    goto finish_match_188;
+    bool zgsz3111;
+    zgsz3111 = (zv__30 == UINT64_C(0b10111));
+    if (!(zgsz3111)) {  goto case_201;  }
+    enum zExecutionMode zgaz360;
+    zgaz360 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz398;
+    zghz398.zASR = false;
+    zghz398.zC = true;
+    zghz398.zEL = false;
+    zghz398.zLM = true;
+    zghz398.zR = true;
+    zghz398.zSL = false;
+    zghz398.zW = true;
+    zghz398.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3110;
+    zgsz3110.ztup0 = zghz398;
+    zgsz3110.ztup1 = zgaz360;
+    zcbz348 = zgsz3110;
+    goto finish_match_197;
   }
-case_189: ;
-finish_match_188: ;
-end_function_200: ;
-  return zcbz346;
-end_block_exception_201: ;
-  struct zArchPerms zcbz3100 = { .zASR = false, .zC = false, .zLM = false, .zR = false, .zW = false, .zX = false };
-  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz399 = { .ztup0 = zcbz3100, .ztup1 = zCapPtrMode };
-  return zcbz399;
+case_201: ;
+  {
+    uint64_t zv__33;
+    zv__33 = zargz3;
+    bool zgsz3108;
+    zgsz3108 = (zv__33 == UINT64_C(0b11011));
+    if (!(zgsz3108)) {  goto case_200;  }
+    enum zExecutionMode zgaz361;
+    zgaz361 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz397;
+    zghz397.zASR = false;
+    zghz397.zC = true;
+    zghz397.zEL = true;
+    zghz397.zLM = true;
+    zghz397.zR = true;
+    zghz397.zSL = false;
+    zghz397.zW = false;
+    zghz397.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3107;
+    zgsz3107.ztup0 = zghz397;
+    zgsz3107.ztup1 = zgaz361;
+    zcbz348 = zgsz3107;
+    goto finish_match_197;
+  }
+case_200: ;
+  {
+    uint64_t zv__36;
+    zv__36 = zargz3;
+    bool zgsz3105;
+    zgsz3105 = (zv__36 == UINT64_C(0b11110));
+    if (!(zgsz3105)) {  goto case_199;  }
+    enum zExecutionMode zgaz362;
+    zgaz362 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz396;
+    zghz396.zASR = false;
+    zghz396.zC = true;
+    zghz396.zEL = true;
+    zghz396.zLM = true;
+    zghz396.zR = true;
+    zghz396.zSL = true;
+    zghz396.zW = true;
+    zghz396.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3104;
+    zgsz3104.ztup0 = zghz396;
+    zgsz3104.ztup1 = zgaz362;
+    zcbz348 = zgsz3104;
+    goto finish_match_197;
+  }
+case_199: ;
+  {
+    uint64_t zv__39;
+    zv__39 = zargz3;
+    bool zgsz3102;
+    zgsz3102 = (zv__39 == UINT64_C(0b11111));
+    if (!(zgsz3102)) {  goto case_198;  }
+    enum zExecutionMode zgaz363;
+    zgaz363 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    struct zArchPerms zghz395;
+    zghz395.zASR = false;
+    zghz395.zC = true;
+    zghz395.zEL = true;
+    zghz395.zLM = true;
+    zghz395.zR = true;
+    zghz395.zSL = false;
+    zghz395.zW = true;
+    zghz395.zX = false;
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3101;
+    zgsz3101.ztup0 = zghz395;
+    zgsz3101.ztup1 = zgaz363;
+    zcbz348 = zgsz3101;
+    goto finish_match_197;
+  }
+case_198: ;
+finish_match_197: ;
+end_function_212: ;
+  return zcbz348;
+end_block_exception_213: ;
+  struct zArchPerms zcbz3102 = { .zASR = false, .zC = false, .zEL = false, .zLM = false, .zR = false, .zSL = false, .zW = false, .zX = false };
+  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz3101 = { .ztup0 = zcbz3102, .ztup1 = zCapPtrMode };
+  return zcbz3101;
 }
 
 
 
 static void finish_sailgen_ap_m_encdec_forwards_infallible(void)
 {
-
-
-
-
-
-
-
-
-
-
-
 }
 
-lbits zghz397;
-lbits zghz398;
-lbits zghz399;
-lbits zghz3100;
-lbits zghz3101;
-lbits zghz3102;
-lbits zghz3103;
-lbits zghz3104;
-lbits zghz3105;
-lbits zghz3106;
-lbits zghz3107;
-
-static void startup_sailgen_ap_m_encdec_backwards(void)
-{
-  CREATE(lbits)(&zghz397);
-  CREATE(lbits)(&zghz398);
-  CREATE(lbits)(&zghz399);
-  CREATE(lbits)(&zghz3100);
-  CREATE(lbits)(&zghz3101);
-  CREATE(lbits)(&zghz3102);
-  CREATE(lbits)(&zghz3103);
-  CREATE(lbits)(&zghz3104);
-  CREATE(lbits)(&zghz3105);
-  CREATE(lbits)(&zghz3106);
-  CREATE(lbits)(&zghz3107);
-}
-
-static uint64_t sailgen_ap_m_encdec_backwards(struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zargz3)
-{
-  __label__ case_300, case_210, finish_match_209, end_function_301, end_block_exception_302;
-
-  uint64_t zcbz347;
-  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zhead_expz3;
-  zhead_expz3 = zargz3;
-  struct zoptionzIbzK zgaz365;
-  CREATE(zoptionzIbzK)(&zgaz365);
-  {
-    __label__ case_205, case_204, finish_match_203;
-
-    {
-      __label__ case_208, case_207, finish_match_206;
-
-      bool zp0z3;
-      zp0z3 = zhead_expz3.ztup0.zR;
-      bool zp1z3;
-      zp1z3 = zhead_expz3.ztup0.zW;
-      bool zp2z3;
-      zp2z3 = zhead_expz3.ztup0.zC;
-      bool zp3z3;
-      zp3z3 = zhead_expz3.ztup0.zLM;
-      bool zp4z3;
-      zp4z3 = zhead_expz3.ztup0.zX;
-      bool zp5z3;
-      zp5z3 = zhead_expz3.ztup0.zASR;
-      enum zExecutionMode zmapping0z3;
-      zmapping0z3 = zhead_expz3.ztup1;
-      bool zgaz364;
-      {
-        bool zgaz363;
-        {
-          bool zgaz362;
-          {
-            bool zgaz361;
-            {
-              bool zgaz360;
-              {
-                bool zgaz359;
-                zgaz359 = sailgen_execution_mode_encdec_forwards_matches(zmapping0z3);
-                bool zgsz3125;
-                if (zgaz359) {  zgsz3125 = eq_bool(zp5z3, false);  } else {  zgsz3125 = false;  }
-                zgaz360 = zgsz3125;
-              }
-              bool zgsz3126;
-              if (zgaz360) {  zgsz3126 = eq_bool(zp4z3, false);  } else {  zgsz3126 = false;  }
-              zgaz361 = zgsz3126;
-            }
-            bool zgsz3127;
-            if (zgaz361) {  zgsz3127 = eq_bool(zp3z3, false);  } else {  zgsz3127 = false;  }
-            zgaz362 = zgsz3127;
-          }
-          bool zgsz3128;
-          if (zgaz362) {  zgsz3128 = eq_bool(zp2z3, false);  } else {  zgsz3128 = false;  }
-          zgaz363 = zgsz3128;
-        }
-        bool zgsz3129;
-        if (zgaz363) {  zgsz3129 = eq_bool(zp1z3, false);  } else {  zgsz3129 = false;  }
-        zgaz364 = zgsz3129;
-      }
-      bool zgsz3130;
-      if (zgaz364) {  zgsz3130 = eq_bool(zp0z3, false);  } else {  zgsz3130 = false;  }
-      bool zgsz3134;
-      zgsz3134 = zgsz3130;
-      if (!(zgsz3134)) {
-
-
-
-
-
-
-        goto case_205;
-      }
-      uint64_t zgaz358;
-      zgaz358 = sailgen_execution_mode_encdec_forwards_infallible(zmapping0z3);
-      struct zoptionzIbzK zgsz3131;
-      CREATE(zoptionzIbzK)(&zgsz3131);
-      {
-        uint64_t zb__6;
-        zb__6 = zgaz358;
-        bool zgsz3133;
-        zgsz3133 = (zb__6 == UINT64_C(0b0));
-        if (!(zgsz3133)) {
-
-          goto case_208;
-        }
-        {
-          RECREATE(lbits)(&zghz3107);
-          CONVERT_OF(lbits, fbits)(&zghz3107, UINT64_C(0b00000), UINT64_C(5) , true);
-          sailgen_SomezIbzK(&zgsz3131, zghz3107);
-        }
-        goto finish_match_206;
-      }
-    case_208: ;
-      {
-        sailgen_NonezIbzK(&zgsz3131, UNIT);
-        goto finish_match_206;
-      }
-    case_207: ;
-    finish_match_206: ;
-      COPY(zoptionzIbzK)(&zgaz365, zgsz3131);
-      KILL(zoptionzIbzK)(&zgsz3131);
-      goto finish_match_203;
-    }
-  case_205: ;
-    {
-      sailgen_NonezIbzK(&zgaz365, UNIT);
-      goto finish_match_203;
-    }
-  case_204: ;
-  finish_match_203: ;
-  }
-  {
-    if (zgaz365.kind != Kind_zSomezIbzK) goto case_300;
-    uint64_t zresult;
-    zresult = CONVERT_OF(fbits, lbits)(zgaz365.zSomezIbzK, true);
-    zcbz347 = zresult;
-    goto finish_match_209;
-  }
-case_300: ;
-  {
-    __label__ case_299, case_218, finish_match_217;
-
-    /* complete */
-    struct zoptionzIbzK zgaz373;
-    CREATE(zoptionzIbzK)(&zgaz373);
-    {
-      __label__ case_213, case_212, finish_match_211;
-
-      {
-        __label__ case_216, case_215, finish_match_214;
-
-        bool zuz38;
-        zuz38 = zhead_expz3.ztup0.zR;
-        bool zuz39;
-        zuz39 = zhead_expz3.ztup0.zW;
-        bool zuz310;
-        zuz310 = zhead_expz3.ztup0.zC;
-        bool zuz311;
-        zuz311 = zhead_expz3.ztup0.zLM;
-        bool zuz312;
-        zuz312 = zhead_expz3.ztup0.zX;
-        bool zuz313;
-        zuz313 = zhead_expz3.ztup0.zASR;
-        enum zExecutionMode zmapping1z3;
-        zmapping1z3 = zhead_expz3.ztup1;
-        bool zgaz372;
-        {
-          bool zgaz371;
-          {
-            bool zgaz370;
-            {
-              bool zgaz369;
-              {
-                bool zgaz368;
-                {
-                  bool zgaz367;
-                  zgaz367 = sailgen_execution_mode_encdec_forwards_matches(zmapping1z3);
-                  bool zgsz3138;
-                  if (zgaz367) {  zgsz3138 = eq_bool(zuz313, false);  } else {  zgsz3138 = false;  }
-                  zgaz368 = zgsz3138;
-                }
-                bool zgsz3139;
-                if (zgaz368) {  zgsz3139 = eq_bool(zuz312, false);  } else {  zgsz3139 = false;  }
-                zgaz369 = zgsz3139;
-              }
-              bool zgsz3140;
-              if (zgaz369) {  zgsz3140 = eq_bool(zuz311, false);  } else {  zgsz3140 = false;  }
-              zgaz370 = zgsz3140;
-            }
-            bool zgsz3141;
-            if (zgaz370) {  zgsz3141 = eq_bool(zuz310, false);  } else {  zgsz3141 = false;  }
-            zgaz371 = zgsz3141;
-          }
-          bool zgsz3142;
-          if (zgaz371) {  zgsz3142 = eq_bool(zuz39, false);  } else {  zgsz3142 = false;  }
-          zgaz372 = zgsz3142;
-        }
-        bool zgsz3143;
-        if (zgaz372) {  zgsz3143 = eq_bool(zuz38, true);  } else {  zgsz3143 = false;  }
-        bool zgsz3147;
-        zgsz3147 = zgsz3143;
-        if (!(zgsz3147)) {
-
-
-
-
-
-
-          goto case_213;
-        }
-        uint64_t zgaz366;
-        zgaz366 = sailgen_execution_mode_encdec_forwards_infallible(zmapping1z3);
-        struct zoptionzIbzK zgsz3144;
-        CREATE(zoptionzIbzK)(&zgsz3144);
-        {
-          uint64_t zb__5;
-          zb__5 = zgaz366;
-          bool zgsz3146;
-          zgsz3146 = (zb__5 == UINT64_C(0b0));
-          if (!(zgsz3146)) {
-
-            goto case_216;
-          }
-          {
-            RECREATE(lbits)(&zghz3106);
-            CONVERT_OF(lbits, fbits)(&zghz3106, UINT64_C(0b00001), UINT64_C(5) , true);
-            sailgen_SomezIbzK(&zgsz3144, zghz3106);
-          }
-          goto finish_match_214;
-        }
-      case_216: ;
-        {
-          sailgen_NonezIbzK(&zgsz3144, UNIT);
-          goto finish_match_214;
-        }
-      case_215: ;
-      finish_match_214: ;
-        COPY(zoptionzIbzK)(&zgaz373, zgsz3144);
-        KILL(zoptionzIbzK)(&zgsz3144);
-        goto finish_match_211;
-      }
-    case_213: ;
-      {
-        sailgen_NonezIbzK(&zgaz373, UNIT);
-        goto finish_match_211;
-      }
-    case_212: ;
-    finish_match_211: ;
-    }
-    uint64_t zgsz3148;
-    {
-      if (zgaz373.kind != Kind_zSomezIbzK) goto case_299;
-      zgsz3148 = CONVERT_OF(fbits, lbits)(zgaz373.zSomezIbzK, true);
-      goto finish_match_217;
-    }
-  case_299: ;
-    {
-      __label__ case_298, case_226, finish_match_225;
-
-      /* complete */
-      struct zoptionzIbzK zgaz381;
-      CREATE(zoptionzIbzK)(&zgaz381);
-      {
-        __label__ case_221, case_220, finish_match_219;
-
-        {
-          __label__ case_224, case_223, finish_match_222;
-
-          bool zuz315;
-          zuz315 = zhead_expz3.ztup0.zR;
-          bool zuz316;
-          zuz316 = zhead_expz3.ztup0.zW;
-          bool zuz317;
-          zuz317 = zhead_expz3.ztup0.zC;
-          bool zuz318;
-          zuz318 = zhead_expz3.ztup0.zLM;
-          bool zuz319;
-          zuz319 = zhead_expz3.ztup0.zX;
-          bool zuz320;
-          zuz320 = zhead_expz3.ztup0.zASR;
-          enum zExecutionMode zmapping2z3;
-          zmapping2z3 = zhead_expz3.ztup1;
-          bool zgaz380;
-          {
-            bool zgaz379;
-            {
-              bool zgaz378;
-              {
-                bool zgaz377;
-                {
-                  bool zgaz376;
-                  {
-                    bool zgaz375;
-                    zgaz375 = sailgen_execution_mode_encdec_forwards_matches(zmapping2z3);
-                    bool zgsz3151;
-                    if (zgaz375) {  zgsz3151 = eq_bool(zuz320, false);  } else {  zgsz3151 = false;  }
-                    zgaz376 = zgsz3151;
-                  }
-                  bool zgsz3152;
-                  if (zgaz376) {  zgsz3152 = eq_bool(zuz319, false);  } else {  zgsz3152 = false;  }
-                  zgaz377 = zgsz3152;
-                }
-                bool zgsz3153;
-                if (zgaz377) {  zgsz3153 = eq_bool(zuz318, false);  } else {  zgsz3153 = false;  }
-                zgaz378 = zgsz3153;
-              }
-              bool zgsz3154;
-              if (zgaz378) {  zgsz3154 = eq_bool(zuz317, false);  } else {  zgsz3154 = false;  }
-              zgaz379 = zgsz3154;
-            }
-            bool zgsz3155;
-            if (zgaz379) {  zgsz3155 = eq_bool(zuz316, true);  } else {  zgsz3155 = false;  }
-            zgaz380 = zgsz3155;
-          }
-          bool zgsz3156;
-          if (zgaz380) {  zgsz3156 = eq_bool(zuz315, false);  } else {  zgsz3156 = false;  }
-          bool zgsz3160;
-          zgsz3160 = zgsz3156;
-          if (!(zgsz3160)) {
-
-
-
-
-
-
-            goto case_221;
-          }
-          uint64_t zgaz374;
-          zgaz374 = sailgen_execution_mode_encdec_forwards_infallible(zmapping2z3);
-          struct zoptionzIbzK zgsz3157;
-          CREATE(zoptionzIbzK)(&zgsz3157);
-          {
-            uint64_t zb__4;
-            zb__4 = zgaz374;
-            bool zgsz3159;
-            zgsz3159 = (zb__4 == UINT64_C(0b0));
-            if (!(zgsz3159)) {
-
-              goto case_224;
-            }
-            {
-              RECREATE(lbits)(&zghz3105);
-              CONVERT_OF(lbits, fbits)(&zghz3105, UINT64_C(0b00100), UINT64_C(5) , true);
-              sailgen_SomezIbzK(&zgsz3157, zghz3105);
-            }
-            goto finish_match_222;
-          }
-        case_224: ;
-          {
-            sailgen_NonezIbzK(&zgsz3157, UNIT);
-            goto finish_match_222;
-          }
-        case_223: ;
-        finish_match_222: ;
-          COPY(zoptionzIbzK)(&zgaz381, zgsz3157);
-          KILL(zoptionzIbzK)(&zgsz3157);
-          goto finish_match_219;
-        }
-      case_221: ;
-        {
-          sailgen_NonezIbzK(&zgaz381, UNIT);
-          goto finish_match_219;
-        }
-      case_220: ;
-      finish_match_219: ;
-      }
-      uint64_t zgsz3161;
-      {
-        if (zgaz381.kind != Kind_zSomezIbzK) goto case_298;
-        zgsz3161 = CONVERT_OF(fbits, lbits)(zgaz381.zSomezIbzK, true);
-        goto finish_match_225;
-      }
-    case_298: ;
-      {
-        __label__ case_297, case_234, finish_match_233;
-
-        /* complete */
-        struct zoptionzIbzK zgaz389;
-        CREATE(zoptionzIbzK)(&zgaz389);
-        {
-          __label__ case_229, case_228, finish_match_227;
-
-          {
-            __label__ case_232, case_231, finish_match_230;
-
-            bool zuz322;
-            zuz322 = zhead_expz3.ztup0.zR;
-            bool zuz323;
-            zuz323 = zhead_expz3.ztup0.zW;
-            bool zuz324;
-            zuz324 = zhead_expz3.ztup0.zC;
-            bool zuz325;
-            zuz325 = zhead_expz3.ztup0.zLM;
-            bool zuz326;
-            zuz326 = zhead_expz3.ztup0.zX;
-            bool zuz327;
-            zuz327 = zhead_expz3.ztup0.zASR;
-            enum zExecutionMode zmapping3z3;
-            zmapping3z3 = zhead_expz3.ztup1;
-            bool zgaz388;
-            {
-              bool zgaz387;
-              {
-                bool zgaz386;
-                {
-                  bool zgaz385;
-                  {
-                    bool zgaz384;
-                    {
-                      bool zgaz383;
-                      zgaz383 = sailgen_execution_mode_encdec_forwards_matches(zmapping3z3);
-                      bool zgsz3164;
-                      if (zgaz383) {  zgsz3164 = eq_bool(zuz327, false);  } else {  zgsz3164 = false;  }
-                      zgaz384 = zgsz3164;
-                    }
-                    bool zgsz3165;
-                    if (zgaz384) {  zgsz3165 = eq_bool(zuz326, false);  } else {  zgsz3165 = false;  }
-                    zgaz385 = zgsz3165;
-                  }
-                  bool zgsz3166;
-                  if (zgaz385) {  zgsz3166 = eq_bool(zuz325, false);  } else {  zgsz3166 = false;  }
-                  zgaz386 = zgsz3166;
-                }
-                bool zgsz3167;
-                if (zgaz386) {  zgsz3167 = eq_bool(zuz324, false);  } else {  zgsz3167 = false;  }
-                zgaz387 = zgsz3167;
-              }
-              bool zgsz3168;
-              if (zgaz387) {  zgsz3168 = eq_bool(zuz323, true);  } else {  zgsz3168 = false;  }
-              zgaz388 = zgsz3168;
-            }
-            bool zgsz3169;
-            if (zgaz388) {  zgsz3169 = eq_bool(zuz322, true);  } else {  zgsz3169 = false;  }
-            bool zgsz3173;
-            zgsz3173 = zgsz3169;
-            if (!(zgsz3173)) {
-
-
-
-
-
-
-              goto case_229;
-            }
-            uint64_t zgaz382;
-            zgaz382 = sailgen_execution_mode_encdec_forwards_infallible(zmapping3z3);
-            struct zoptionzIbzK zgsz3170;
-            CREATE(zoptionzIbzK)(&zgsz3170);
-            {
-              uint64_t zb__3;
-              zb__3 = zgaz382;
-              bool zgsz3172;
-              zgsz3172 = (zb__3 == UINT64_C(0b0));
-              if (!(zgsz3172)) {
-
-                goto case_232;
-              }
-              {
-                RECREATE(lbits)(&zghz3104);
-                CONVERT_OF(lbits, fbits)(&zghz3104, UINT64_C(0b00101), UINT64_C(5) , true);
-                sailgen_SomezIbzK(&zgsz3170, zghz3104);
-              }
-              goto finish_match_230;
-            }
-          case_232: ;
-            {
-              sailgen_NonezIbzK(&zgsz3170, UNIT);
-              goto finish_match_230;
-            }
-          case_231: ;
-          finish_match_230: ;
-            COPY(zoptionzIbzK)(&zgaz389, zgsz3170);
-            KILL(zoptionzIbzK)(&zgsz3170);
-            goto finish_match_227;
-          }
-        case_229: ;
-          {
-            sailgen_NonezIbzK(&zgaz389, UNIT);
-            goto finish_match_227;
-          }
-        case_228: ;
-        finish_match_227: ;
-        }
-        uint64_t zgsz3174;
-        {
-          if (zgaz389.kind != Kind_zSomezIbzK) goto case_297;
-          zgsz3174 = CONVERT_OF(fbits, lbits)(zgaz389.zSomezIbzK, true);
-          goto finish_match_233;
-        }
-      case_297: ;
-        {
-          __label__ case_296, case_242, finish_match_241;
-
-          /* complete */
-          struct zoptionzIbzK zgaz3100;
-          CREATE(zoptionzIbzK)(&zgaz3100);
-          {
-            __label__ case_237, case_236, finish_match_235;
-
-            {
-              __label__ case_240, case_239, finish_match_238;
-
-              bool zuz329;
-              zuz329 = zhead_expz3.ztup0.zR;
-              bool zuz330;
-              zuz330 = zhead_expz3.ztup0.zW;
-              bool zuz331;
-              zuz331 = zhead_expz3.ztup0.zC;
-              bool zuz332;
-              zuz332 = zhead_expz3.ztup0.zLM;
-              bool zuz333;
-              zuz333 = zhead_expz3.ztup0.zX;
-              bool zuz334;
-              zuz334 = zhead_expz3.ztup0.zASR;
-              enum zExecutionMode zmapping4z3;
-              zmapping4z3 = zhead_expz3.ztup1;
-              bool zgaz399;
-              {
-                bool zgaz398;
-                {
-                  bool zgaz397;
-                  {
-                    bool zgaz396;
-                    {
-                      bool zgaz395;
-                      {
-                        bool zgaz394;
-                        zgaz394 = sailgen_execution_mode_encdec_forwards_matches(zmapping4z3);
-                        bool zgsz3177;
-                        if (zgaz394) {  zgsz3177 = eq_bool(zuz334, true);  } else {  zgsz3177 = false;  }
-                        zgaz395 = zgsz3177;
-                      }
-                      bool zgsz3178;
-                      if (zgaz395) {  zgsz3178 = eq_bool(zuz333, true);  } else {  zgsz3178 = false;  }
-                      zgaz396 = zgsz3178;
-                    }
-                    bool zgsz3179;
-                    if (zgaz396) {  zgsz3179 = eq_bool(zuz332, true);  } else {  zgsz3179 = false;  }
-                    zgaz397 = zgsz3179;
-                  }
-                  bool zgsz3180;
-                  if (zgaz397) {  zgsz3180 = eq_bool(zuz331, true);  } else {  zgsz3180 = false;  }
-                  zgaz398 = zgsz3180;
-                }
-                bool zgsz3181;
-                if (zgaz398) {  zgsz3181 = eq_bool(zuz330, true);  } else {  zgsz3181 = false;  }
-                zgaz399 = zgsz3181;
-              }
-              bool zgsz3182;
-              if (zgaz399) {  zgsz3182 = eq_bool(zuz329, true);  } else {  zgsz3182 = false;  }
-              bool zgsz3186;
-              zgsz3186 = zgsz3182;
-              if (!(zgsz3186)) {
-
-
-
-
-
-
-                goto case_237;
-              }
-              uint64_t zgaz390;
-              zgaz390 = sailgen_execution_mode_encdec_forwards_infallible(zmapping4z3);
-              struct zoptionzIbzK zgsz3183;
-              CREATE(zoptionzIbzK)(&zgsz3183);
-              {
-                uint64_t zm;
-                zm = zgaz390;
-                uint64_t zgaz393;
-                {
-                  uint64_t zgaz392;
-                  {
-                    uint64_t zgaz391;
-                    zgaz391 = zm;
-                    zgaz392 = (UINT64_C(0b00) << 1) | zgaz391;
-                  }
-                  zgaz393 = (UINT64_C(0b01) << 3) | zgaz392;
-                }
-                {
-                  RECREATE(lbits)(&zghz3103);
-                  CONVERT_OF(lbits, fbits)(&zghz3103, zgaz393, UINT64_C(5) , true);
-                  sailgen_SomezIbzK(&zgsz3183, zghz3103);
-                }
-                goto finish_match_238;
-              }
-            case_240: ;
-              {
-                sailgen_NonezIbzK(&zgsz3183, UNIT);
-                goto finish_match_238;
-              }
-            case_239: ;
-            finish_match_238: ;
-              COPY(zoptionzIbzK)(&zgaz3100, zgsz3183);
-              KILL(zoptionzIbzK)(&zgsz3183);
-              goto finish_match_235;
-            }
-          case_237: ;
-            {
-              sailgen_NonezIbzK(&zgaz3100, UNIT);
-              goto finish_match_235;
-            }
-          case_236: ;
-          finish_match_235: ;
-          }
-          uint64_t zgsz3187;
-          {
-            if (zgaz3100.kind != Kind_zSomezIbzK) goto case_296;
-            zgsz3187 = CONVERT_OF(fbits, lbits)(zgaz3100.zSomezIbzK, true);
-            goto finish_match_241;
-          }
-        case_296: ;
-          {
-            __label__ case_295, case_250, finish_match_249;
-
-            /* complete */
-            struct zoptionzIbzK zgaz3111;
-            CREATE(zoptionzIbzK)(&zgaz3111);
-            {
-              __label__ case_245, case_244, finish_match_243;
-
-              {
-                __label__ case_248, case_247, finish_match_246;
-
-                bool zuz336;
-                zuz336 = zhead_expz3.ztup0.zR;
-                bool zuz337;
-                zuz337 = zhead_expz3.ztup0.zW;
-                bool zuz338;
-                zuz338 = zhead_expz3.ztup0.zC;
-                bool zuz339;
-                zuz339 = zhead_expz3.ztup0.zLM;
-                bool zuz340;
-                zuz340 = zhead_expz3.ztup0.zX;
-                bool zuz341;
-                zuz341 = zhead_expz3.ztup0.zASR;
-                enum zExecutionMode zmapping5z3;
-                zmapping5z3 = zhead_expz3.ztup1;
-                bool zgaz3110;
-                {
-                  bool zgaz3109;
-                  {
-                    bool zgaz3108;
-                    {
-                      bool zgaz3107;
-                      {
-                        bool zgaz3106;
-                        {
-                          bool zgaz3105;
-                          zgaz3105 = sailgen_execution_mode_encdec_forwards_matches(zmapping5z3);
-                          bool zgsz3190;
-                          if (zgaz3105) {  zgsz3190 = eq_bool(zuz341, false);  } else {  zgsz3190 = false;  }
-                          zgaz3106 = zgsz3190;
-                        }
-                        bool zgsz3191;
-                        if (zgaz3106) {  zgsz3191 = eq_bool(zuz340, true);  } else {  zgsz3191 = false;  }
-                        zgaz3107 = zgsz3191;
-                      }
-                      bool zgsz3192;
-                      if (zgaz3107) {  zgsz3192 = eq_bool(zuz339, true);  } else {  zgsz3192 = false;  }
-                      zgaz3108 = zgsz3192;
-                    }
-                    bool zgsz3193;
-                    if (zgaz3108) {  zgsz3193 = eq_bool(zuz338, true);  } else {  zgsz3193 = false;  }
-                    zgaz3109 = zgsz3193;
-                  }
-                  bool zgsz3194;
-                  if (zgaz3109) {  zgsz3194 = eq_bool(zuz337, false);  } else {  zgsz3194 = false;  }
-                  zgaz3110 = zgsz3194;
-                }
-                bool zgsz3195;
-                if (zgaz3110) {  zgsz3195 = eq_bool(zuz336, true);  } else {  zgsz3195 = false;  }
-                bool zgsz3199;
-                zgsz3199 = zgsz3195;
-                if (!(zgsz3199)) {
-
-
-
-
-
-
-                  goto case_245;
-                }
-                uint64_t zgaz3101;
-                zgaz3101 = sailgen_execution_mode_encdec_forwards_infallible(zmapping5z3);
-                struct zoptionzIbzK zgsz3196;
-                CREATE(zoptionzIbzK)(&zgsz3196);
-                {
-                  uint64_t zuz342;
-                  zuz342 = zgaz3101;
-                  uint64_t zgaz3104;
-                  {
-                    uint64_t zgaz3103;
-                    {
-                      uint64_t zgaz3102;
-                      zgaz3102 = zuz342;
-                      zgaz3103 = (UINT64_C(0b01) << 1) | zgaz3102;
-                    }
-                    zgaz3104 = (UINT64_C(0b01) << 3) | zgaz3103;
-                  }
-                  {
-                    RECREATE(lbits)(&zghz3102);
-                    CONVERT_OF(lbits, fbits)(&zghz3102, zgaz3104, UINT64_C(5) , true);
-                    sailgen_SomezIbzK(&zgsz3196, zghz3102);
-                  }
-                  goto finish_match_246;
-                }
-              case_248: ;
-                {
-                  sailgen_NonezIbzK(&zgsz3196, UNIT);
-                  goto finish_match_246;
-                }
-              case_247: ;
-              finish_match_246: ;
-                COPY(zoptionzIbzK)(&zgaz3111, zgsz3196);
-                KILL(zoptionzIbzK)(&zgsz3196);
-                goto finish_match_243;
-              }
-            case_245: ;
-              {
-                sailgen_NonezIbzK(&zgaz3111, UNIT);
-                goto finish_match_243;
-              }
-            case_244: ;
-            finish_match_243: ;
-            }
-            uint64_t zgsz3200;
-            {
-              if (zgaz3111.kind != Kind_zSomezIbzK) goto case_295;
-              zgsz3200 = CONVERT_OF(fbits, lbits)(zgaz3111.zSomezIbzK, true);
-              goto finish_match_249;
-            }
-          case_295: ;
-            {
-              __label__ case_294, case_258, finish_match_257;
-
-              /* complete */
-              struct zoptionzIbzK zgaz3122;
-              CREATE(zoptionzIbzK)(&zgaz3122);
-              {
-                __label__ case_253, case_252, finish_match_251;
-
-                {
-                  __label__ case_256, case_255, finish_match_254;
-
-                  bool zuz344;
-                  zuz344 = zhead_expz3.ztup0.zR;
-                  bool zuz345;
-                  zuz345 = zhead_expz3.ztup0.zW;
-                  bool zuz346;
-                  zuz346 = zhead_expz3.ztup0.zC;
-                  bool zuz347;
-                  zuz347 = zhead_expz3.ztup0.zLM;
-                  bool zuz348;
-                  zuz348 = zhead_expz3.ztup0.zX;
-                  bool zuz349;
-                  zuz349 = zhead_expz3.ztup0.zASR;
-                  enum zExecutionMode zmapping6z3;
-                  zmapping6z3 = zhead_expz3.ztup1;
-                  bool zgaz3121;
-                  {
-                    bool zgaz3120;
-                    {
-                      bool zgaz3119;
-                      {
-                        bool zgaz3118;
-                        {
-                          bool zgaz3117;
-                          {
-                            bool zgaz3116;
-                            zgaz3116 = sailgen_execution_mode_encdec_forwards_matches(zmapping6z3);
-                            bool zgsz3203;
-                            if (zgaz3116) {  zgsz3203 = eq_bool(zuz349, false);  } else {  zgsz3203 = false;  }
-                            zgaz3117 = zgsz3203;
-                          }
-                          bool zgsz3204;
-                          if (zgaz3117) {  zgsz3204 = eq_bool(zuz348, true);  } else {  zgsz3204 = false;  }
-                          zgaz3118 = zgsz3204;
-                        }
-                        bool zgsz3205;
-                        if (zgaz3118) {  zgsz3205 = eq_bool(zuz347, true);  } else {  zgsz3205 = false;  }
-                        zgaz3119 = zgsz3205;
-                      }
-                      bool zgsz3206;
-                      if (zgaz3119) {  zgsz3206 = eq_bool(zuz346, true);  } else {  zgsz3206 = false;  }
-                      zgaz3120 = zgsz3206;
-                    }
-                    bool zgsz3207;
-                    if (zgaz3120) {  zgsz3207 = eq_bool(zuz345, true);  } else {  zgsz3207 = false;  }
-                    zgaz3121 = zgsz3207;
-                  }
-                  bool zgsz3208;
-                  if (zgaz3121) {  zgsz3208 = eq_bool(zuz344, true);  } else {  zgsz3208 = false;  }
-                  bool zgsz3212;
-                  zgsz3212 = zgsz3208;
-                  if (!(zgsz3212)) {
-
-
-
-
-
-
-                    goto case_253;
-                  }
-                  uint64_t zgaz3112;
-                  zgaz3112 = sailgen_execution_mode_encdec_forwards_infallible(zmapping6z3);
-                  struct zoptionzIbzK zgsz3209;
-                  CREATE(zoptionzIbzK)(&zgsz3209);
-                  {
-                    uint64_t zuz350;
-                    zuz350 = zgaz3112;
-                    uint64_t zgaz3115;
-                    {
-                      uint64_t zgaz3114;
-                      {
-                        uint64_t zgaz3113;
-                        zgaz3113 = zuz350;
-                        zgaz3114 = (UINT64_C(0b10) << 1) | zgaz3113;
-                      }
-                      zgaz3115 = (UINT64_C(0b01) << 3) | zgaz3114;
-                    }
-                    {
-                      RECREATE(lbits)(&zghz3101);
-                      CONVERT_OF(lbits, fbits)(&zghz3101, zgaz3115, UINT64_C(5) , true);
-                      sailgen_SomezIbzK(&zgsz3209, zghz3101);
-                    }
-                    goto finish_match_254;
-                  }
-                case_256: ;
-                  {
-                    sailgen_NonezIbzK(&zgsz3209, UNIT);
-                    goto finish_match_254;
-                  }
-                case_255: ;
-                finish_match_254: ;
-                  COPY(zoptionzIbzK)(&zgaz3122, zgsz3209);
-                  KILL(zoptionzIbzK)(&zgsz3209);
-                  goto finish_match_251;
-                }
-              case_253: ;
-                {
-                  sailgen_NonezIbzK(&zgaz3122, UNIT);
-                  goto finish_match_251;
-                }
-              case_252: ;
-              finish_match_251: ;
-              }
-              uint64_t zgsz3213;
-              {
-                if (zgaz3122.kind != Kind_zSomezIbzK) goto case_294;
-                zgsz3213 = CONVERT_OF(fbits, lbits)(zgaz3122.zSomezIbzK, true);
-                goto finish_match_257;
-              }
-            case_294: ;
-              {
-                __label__ case_293, case_266, finish_match_265;
-
-                /* complete */
-                struct zoptionzIbzK zgaz3133;
-                CREATE(zoptionzIbzK)(&zgaz3133);
-                {
-                  __label__ case_261, case_260, finish_match_259;
-
-                  {
-                    __label__ case_264, case_263, finish_match_262;
-
-                    bool zuz352;
-                    zuz352 = zhead_expz3.ztup0.zR;
-                    bool zuz353;
-                    zuz353 = zhead_expz3.ztup0.zW;
-                    bool zuz354;
-                    zuz354 = zhead_expz3.ztup0.zC;
-                    bool zuz355;
-                    zuz355 = zhead_expz3.ztup0.zLM;
-                    bool zuz356;
-                    zuz356 = zhead_expz3.ztup0.zX;
-                    bool zuz357;
-                    zuz357 = zhead_expz3.ztup0.zASR;
-                    enum zExecutionMode zmapping7z3;
-                    zmapping7z3 = zhead_expz3.ztup1;
-                    bool zgaz3132;
-                    {
-                      bool zgaz3131;
-                      {
-                        bool zgaz3130;
-                        {
-                          bool zgaz3129;
-                          {
-                            bool zgaz3128;
-                            {
-                              bool zgaz3127;
-                              zgaz3127 = sailgen_execution_mode_encdec_forwards_matches(zmapping7z3);
-                              bool zgsz3216;
-                              if (zgaz3127) {  zgsz3216 = eq_bool(zuz357, false);  } else {  zgsz3216 = false;  }
-                              zgaz3128 = zgsz3216;
-                            }
-                            bool zgsz3217;
-                            if (zgaz3128) {  zgsz3217 = eq_bool(zuz356, true);  } else {  zgsz3217 = false;  }
-                            zgaz3129 = zgsz3217;
-                          }
-                          bool zgsz3218;
-                          if (zgaz3129) {  zgsz3218 = eq_bool(zuz355, false);  } else {  zgsz3218 = false;  }
-                          zgaz3130 = zgsz3218;
-                        }
-                        bool zgsz3219;
-                        if (zgaz3130) {  zgsz3219 = eq_bool(zuz354, false);  } else {  zgsz3219 = false;  }
-                        zgaz3131 = zgsz3219;
-                      }
-                      bool zgsz3220;
-                      if (zgaz3131) {  zgsz3220 = eq_bool(zuz353, true);  } else {  zgsz3220 = false;  }
-                      zgaz3132 = zgsz3220;
-                    }
-                    bool zgsz3221;
-                    if (zgaz3132) {  zgsz3221 = eq_bool(zuz352, true);  } else {  zgsz3221 = false;  }
-                    bool zgsz3225;
-                    zgsz3225 = zgsz3221;
-                    if (!(zgsz3225)) {
-
-
-
-
-
-
-                      goto case_261;
-                    }
-                    uint64_t zgaz3123;
-                    zgaz3123 = sailgen_execution_mode_encdec_forwards_infallible(zmapping7z3);
-                    struct zoptionzIbzK zgsz3222;
-                    CREATE(zoptionzIbzK)(&zgsz3222);
-                    {
-                      uint64_t zuz358;
-                      zuz358 = zgaz3123;
-                      uint64_t zgaz3126;
-                      {
-                        uint64_t zgaz3125;
-                        {
-                          uint64_t zgaz3124;
-                          zgaz3124 = zuz358;
-                          zgaz3125 = (UINT64_C(0b11) << 1) | zgaz3124;
-                        }
-                        zgaz3126 = (UINT64_C(0b01) << 3) | zgaz3125;
-                      }
-                      {
-                        RECREATE(lbits)(&zghz3100);
-                        CONVERT_OF(lbits, fbits)(&zghz3100, zgaz3126, UINT64_C(5) , true);
-                        sailgen_SomezIbzK(&zgsz3222, zghz3100);
-                      }
-                      goto finish_match_262;
-                    }
-                  case_264: ;
-                    {
-                      sailgen_NonezIbzK(&zgsz3222, UNIT);
-                      goto finish_match_262;
-                    }
-                  case_263: ;
-                  finish_match_262: ;
-                    COPY(zoptionzIbzK)(&zgaz3133, zgsz3222);
-                    KILL(zoptionzIbzK)(&zgsz3222);
-                    goto finish_match_259;
-                  }
-                case_261: ;
-                  {
-                    sailgen_NonezIbzK(&zgaz3133, UNIT);
-                    goto finish_match_259;
-                  }
-                case_260: ;
-                finish_match_259: ;
-                }
-                uint64_t zgsz3226;
-                {
-                  if (zgaz3133.kind != Kind_zSomezIbzK) goto case_293;
-                  zgsz3226 = CONVERT_OF(fbits, lbits)(zgaz3133.zSomezIbzK, true);
-                  goto finish_match_265;
-                }
-              case_293: ;
-                {
-                  __label__ case_292, case_274, finish_match_273;
-
-                  /* complete */
-                  struct zoptionzIbzK zgaz3141;
-                  CREATE(zoptionzIbzK)(&zgaz3141);
-                  {
-                    __label__ case_269, case_268, finish_match_267;
-
-                    {
-                      __label__ case_272, case_271, finish_match_270;
-
-                      bool zuz360;
-                      zuz360 = zhead_expz3.ztup0.zR;
-                      bool zuz361;
-                      zuz361 = zhead_expz3.ztup0.zW;
-                      bool zuz362;
-                      zuz362 = zhead_expz3.ztup0.zC;
-                      bool zuz363;
-                      zuz363 = zhead_expz3.ztup0.zLM;
-                      bool zuz364;
-                      zuz364 = zhead_expz3.ztup0.zX;
-                      bool zuz365;
-                      zuz365 = zhead_expz3.ztup0.zASR;
-                      enum zExecutionMode zmapping8z3;
-                      zmapping8z3 = zhead_expz3.ztup1;
-                      bool zgaz3140;
-                      {
-                        bool zgaz3139;
-                        {
-                          bool zgaz3138;
-                          {
-                            bool zgaz3137;
-                            {
-                              bool zgaz3136;
-                              {
-                                bool zgaz3135;
-                                zgaz3135 = sailgen_execution_mode_encdec_forwards_matches(zmapping8z3);
-                                bool zgsz3229;
-                                if (zgaz3135) {  zgsz3229 = eq_bool(zuz365, false);  } else {  zgsz3229 = false;  }
-                                zgaz3136 = zgsz3229;
-                              }
-                              bool zgsz3230;
-                              if (zgaz3136) {  zgsz3230 = eq_bool(zuz364, false);  } else {  zgsz3230 = false;  }
-                              zgaz3137 = zgsz3230;
-                            }
-                            bool zgsz3231;
-                            if (zgaz3137) {  zgsz3231 = eq_bool(zuz363, false);  } else {  zgsz3231 = false;  }
-                            zgaz3138 = zgsz3231;
-                          }
-                          bool zgsz3232;
-                          if (zgaz3138) {  zgsz3232 = eq_bool(zuz362, true);  } else {  zgsz3232 = false;  }
-                          zgaz3139 = zgsz3232;
-                        }
-                        bool zgsz3233;
-                        if (zgaz3139) {  zgsz3233 = eq_bool(zuz361, false);  } else {  zgsz3233 = false;  }
-                        zgaz3140 = zgsz3233;
-                      }
-                      bool zgsz3234;
-                      if (zgaz3140) {  zgsz3234 = eq_bool(zuz360, true);  } else {  zgsz3234 = false;  }
-                      bool zgsz3238;
-                      zgsz3238 = zgsz3234;
-                      if (!(zgsz3238)) {
-
-
-
-
-
-
-                        goto case_269;
-                      }
-                      uint64_t zgaz3134;
-                      zgaz3134 = sailgen_execution_mode_encdec_forwards_infallible(zmapping8z3);
-                      struct zoptionzIbzK zgsz3235;
-                      CREATE(zoptionzIbzK)(&zgsz3235);
-                      {
-                        uint64_t zb__2;
-                        zb__2 = zgaz3134;
-                        bool zgsz3237;
-                        zgsz3237 = (zb__2 == UINT64_C(0b0));
-                        if (!(zgsz3237)) {
-
-                          goto case_272;
-                        }
-                        {
-                          RECREATE(lbits)(&zghz399);
-                          CONVERT_OF(lbits, fbits)(&zghz399, UINT64_C(0b10011), UINT64_C(5) , true);
-                          sailgen_SomezIbzK(&zgsz3235, zghz399);
-                        }
-                        goto finish_match_270;
-                      }
-                    case_272: ;
-                      {
-                        sailgen_NonezIbzK(&zgsz3235, UNIT);
-                        goto finish_match_270;
-                      }
-                    case_271: ;
-                    finish_match_270: ;
-                      COPY(zoptionzIbzK)(&zgaz3141, zgsz3235);
-                      KILL(zoptionzIbzK)(&zgsz3235);
-                      goto finish_match_267;
-                    }
-                  case_269: ;
-                    {
-                      sailgen_NonezIbzK(&zgaz3141, UNIT);
-                      goto finish_match_267;
-                    }
-                  case_268: ;
-                  finish_match_267: ;
-                  }
-                  uint64_t zgsz3239;
-                  {
-                    if (zgaz3141.kind != Kind_zSomezIbzK) goto case_292;
-                    zgsz3239 = CONVERT_OF(fbits, lbits)(zgaz3141.zSomezIbzK, true);
-                    goto finish_match_273;
-                  }
-                case_292: ;
-                  {
-                    __label__ case_291, case_282, finish_match_281;
-
-                    /* complete */
-                    struct zoptionzIbzK zgaz3149;
-                    CREATE(zoptionzIbzK)(&zgaz3149);
-                    {
-                      __label__ case_277, case_276, finish_match_275;
-
-                      {
-                        __label__ case_280, case_279, finish_match_278;
-
-                        bool zuz367;
-                        zuz367 = zhead_expz3.ztup0.zR;
-                        bool zuz368;
-                        zuz368 = zhead_expz3.ztup0.zW;
-                        bool zuz369;
-                        zuz369 = zhead_expz3.ztup0.zC;
-                        bool zuz370;
-                        zuz370 = zhead_expz3.ztup0.zLM;
-                        bool zuz371;
-                        zuz371 = zhead_expz3.ztup0.zX;
-                        bool zuz372;
-                        zuz372 = zhead_expz3.ztup0.zASR;
-                        enum zExecutionMode zmapping9z3;
-                        zmapping9z3 = zhead_expz3.ztup1;
-                        bool zgaz3148;
-                        {
-                          bool zgaz3147;
-                          {
-                            bool zgaz3146;
-                            {
-                              bool zgaz3145;
-                              {
-                                bool zgaz3144;
-                                {
-                                  bool zgaz3143;
-                                  zgaz3143 = sailgen_execution_mode_encdec_forwards_matches(zmapping9z3);
-                                  bool zgsz3242;
-                                  if (zgaz3143) {  zgsz3242 = eq_bool(zuz372, false);  } else {  zgsz3242 = false;  }
-                                  zgaz3144 = zgsz3242;
-                                }
-                                bool zgsz3243;
-                                if (zgaz3144) {  zgsz3243 = eq_bool(zuz371, false);  } else {  zgsz3243 = false;  }
-                                zgaz3145 = zgsz3243;
-                              }
-                              bool zgsz3244;
-                              if (zgaz3145) {  zgsz3244 = eq_bool(zuz370, true);  } else {  zgsz3244 = false;  }
-                              zgaz3146 = zgsz3244;
-                            }
-                            bool zgsz3245;
-                            if (zgaz3146) {  zgsz3245 = eq_bool(zuz369, true);  } else {  zgsz3245 = false;  }
-                            zgaz3147 = zgsz3245;
-                          }
-                          bool zgsz3246;
-                          if (zgaz3147) {  zgsz3246 = eq_bool(zuz368, false);  } else {  zgsz3246 = false;  }
-                          zgaz3148 = zgsz3246;
-                        }
-                        bool zgsz3247;
-                        if (zgaz3148) {  zgsz3247 = eq_bool(zuz367, true);  } else {  zgsz3247 = false;  }
-                        bool zgsz3251;
-                        zgsz3251 = zgsz3247;
-                        if (!(zgsz3251)) {
-
-
-
-
-
-
-                          goto case_277;
-                        }
-                        uint64_t zgaz3142;
-                        zgaz3142 = sailgen_execution_mode_encdec_forwards_infallible(zmapping9z3);
-                        struct zoptionzIbzK zgsz3248;
-                        CREATE(zoptionzIbzK)(&zgsz3248);
-                        {
-                          uint64_t zb__1;
-                          zb__1 = zgaz3142;
-                          bool zgsz3250;
-                          zgsz3250 = (zb__1 == UINT64_C(0b0));
-                          if (!(zgsz3250)) {
-
-                            goto case_280;
-                          }
-                          {
-                            RECREATE(lbits)(&zghz398);
-                            CONVERT_OF(lbits, fbits)(&zghz398, UINT64_C(0b11011), UINT64_C(5) , true);
-                            sailgen_SomezIbzK(&zgsz3248, zghz398);
-                          }
-                          goto finish_match_278;
-                        }
-                      case_280: ;
-                        {
-                          sailgen_NonezIbzK(&zgsz3248, UNIT);
-                          goto finish_match_278;
-                        }
-                      case_279: ;
-                      finish_match_278: ;
-                        COPY(zoptionzIbzK)(&zgaz3149, zgsz3248);
-                        KILL(zoptionzIbzK)(&zgsz3248);
-                        goto finish_match_275;
-                      }
-                    case_277: ;
-                      {
-                        sailgen_NonezIbzK(&zgaz3149, UNIT);
-                        goto finish_match_275;
-                      }
-                    case_276: ;
-                    finish_match_275: ;
-                    }
-                    uint64_t zgsz3252;
-                    {
-                      if (zgaz3149.kind != Kind_zSomezIbzK) goto case_291;
-                      zgsz3252 = CONVERT_OF(fbits, lbits)(zgaz3149.zSomezIbzK, true);
-                      goto finish_match_281;
-                    }
-                  case_291: ;
-                    {
-                      __label__ case_290, finish_match_289;
-
-                      /* complete */
-                      struct zoptionzIbzK zgaz3157;
-                      CREATE(zoptionzIbzK)(&zgaz3157);
-                      {
-                        __label__ case_285, case_284, finish_match_283;
-
-                        {
-                          __label__ case_288, case_287, finish_match_286;
-
-                          bool zuz374;
-                          zuz374 = zhead_expz3.ztup0.zR;
-                          bool zuz375;
-                          zuz375 = zhead_expz3.ztup0.zW;
-                          bool zuz376;
-                          zuz376 = zhead_expz3.ztup0.zC;
-                          bool zuz377;
-                          zuz377 = zhead_expz3.ztup0.zLM;
-                          bool zuz378;
-                          zuz378 = zhead_expz3.ztup0.zX;
-                          bool zuz379;
-                          zuz379 = zhead_expz3.ztup0.zASR;
-                          enum zExecutionMode zmapping10z3;
-                          zmapping10z3 = zhead_expz3.ztup1;
-                          bool zgaz3156;
-                          {
-                            bool zgaz3155;
-                            {
-                              bool zgaz3154;
-                              {
-                                bool zgaz3153;
-                                {
-                                  bool zgaz3152;
-                                  {
-                                    bool zgaz3151;
-                                    zgaz3151 = sailgen_execution_mode_encdec_forwards_matches(zmapping10z3);
-                                    bool zgsz3255;
-                                    if (zgaz3151) {  zgsz3255 = eq_bool(zuz379, false);  } else {  zgsz3255 = false;  }
-                                    zgaz3152 = zgsz3255;
-                                  }
-                                  bool zgsz3256;
-                                  if (zgaz3152) {  zgsz3256 = eq_bool(zuz378, false);  } else {  zgsz3256 = false;  }
-                                  zgaz3153 = zgsz3256;
-                                }
-                                bool zgsz3257;
-                                if (zgaz3153) {  zgsz3257 = eq_bool(zuz377, true);  } else {  zgsz3257 = false;  }
-                                zgaz3154 = zgsz3257;
-                              }
-                              bool zgsz3258;
-                              if (zgaz3154) {  zgsz3258 = eq_bool(zuz376, true);  } else {  zgsz3258 = false;  }
-                              zgaz3155 = zgsz3258;
-                            }
-                            bool zgsz3259;
-                            if (zgaz3155) {  zgsz3259 = eq_bool(zuz375, true);  } else {  zgsz3259 = false;  }
-                            zgaz3156 = zgsz3259;
-                          }
-                          bool zgsz3260;
-                          if (zgaz3156) {  zgsz3260 = eq_bool(zuz374, true);  } else {  zgsz3260 = false;  }
-                          bool zgsz3264;
-                          zgsz3264 = zgsz3260;
-                          if (!(zgsz3264)) {
-
-
-
-
-
-
-                            goto case_285;
-                          }
-                          uint64_t zgaz3150;
-                          zgaz3150 = sailgen_execution_mode_encdec_forwards_infallible(zmapping10z3);
-                          struct zoptionzIbzK zgsz3261;
-                          CREATE(zoptionzIbzK)(&zgsz3261);
-                          {
-                            uint64_t zb__0;
-                            zb__0 = zgaz3150;
-                            bool zgsz3263;
-                            zgsz3263 = (zb__0 == UINT64_C(0b0));
-                            if (!(zgsz3263)) {
-
-                              goto case_288;
-                            }
-                            {
-                              RECREATE(lbits)(&zghz397);
-                              CONVERT_OF(lbits, fbits)(&zghz397, UINT64_C(0b11111), UINT64_C(5) , true);
-                              sailgen_SomezIbzK(&zgsz3261, zghz397);
-                            }
-                            goto finish_match_286;
-                          }
-                        case_288: ;
-                          {
-                            sailgen_NonezIbzK(&zgsz3261, UNIT);
-                            goto finish_match_286;
-                          }
-                        case_287: ;
-                        finish_match_286: ;
-                          COPY(zoptionzIbzK)(&zgaz3157, zgsz3261);
-                          KILL(zoptionzIbzK)(&zgsz3261);
-                          goto finish_match_283;
-                        }
-                      case_285: ;
-                        {
-                          sailgen_NonezIbzK(&zgaz3157, UNIT);
-                          goto finish_match_283;
-                        }
-                      case_284: ;
-                      finish_match_283: ;
-                      }
-                      uint64_t zgsz3265;
-                      {
-                        if (zgaz3157.kind != Kind_zSomezIbzK) goto case_290;
-                        zgsz3265 = CONVERT_OF(fbits, lbits)(zgaz3157.zSomezIbzK, true);
-                        goto finish_match_289;
-                      }
-                    case_290: ;
-                      sail_match_failure("ap_m_encdec_backwards");
-                    finish_match_289: ;
-                      zgsz3252 = zgsz3265;
-                      KILL(zoptionzIbzK)(&zgaz3157);
-                      goto finish_match_281;
-                    }
-                  case_282: ;
-                  finish_match_281: ;
-                    zgsz3239 = zgsz3252;
-                    KILL(zoptionzIbzK)(&zgaz3149);
-                    goto finish_match_273;
-                  }
-                case_274: ;
-                finish_match_273: ;
-                  zgsz3226 = zgsz3239;
-                  KILL(zoptionzIbzK)(&zgaz3141);
-                  goto finish_match_265;
-                }
-              case_266: ;
-              finish_match_265: ;
-                zgsz3213 = zgsz3226;
-                KILL(zoptionzIbzK)(&zgaz3133);
-                goto finish_match_257;
-              }
-            case_258: ;
-            finish_match_257: ;
-              zgsz3200 = zgsz3213;
-              KILL(zoptionzIbzK)(&zgaz3122);
-              goto finish_match_249;
-            }
-          case_250: ;
-          finish_match_249: ;
-            zgsz3187 = zgsz3200;
-            KILL(zoptionzIbzK)(&zgaz3111);
-            goto finish_match_241;
-          }
-        case_242: ;
-        finish_match_241: ;
-          zgsz3174 = zgsz3187;
-          KILL(zoptionzIbzK)(&zgaz3100);
-          goto finish_match_233;
-        }
-      case_234: ;
-      finish_match_233: ;
-        zgsz3161 = zgsz3174;
-        KILL(zoptionzIbzK)(&zgaz389);
-        goto finish_match_225;
-      }
-    case_226: ;
-    finish_match_225: ;
-      zgsz3148 = zgsz3161;
-      KILL(zoptionzIbzK)(&zgaz381);
-      goto finish_match_217;
-    }
-  case_218: ;
-  finish_match_217: ;
-    zcbz347 = zgsz3148;
-    KILL(zoptionzIbzK)(&zgaz373);
-    goto finish_match_209;
-  }
-case_210: ;
-finish_match_209: ;
-  KILL(zoptionzIbzK)(&zgaz365);
-
-end_function_301: ;
-  return zcbz347;
-end_block_exception_302: ;
-
-  return UINT64_C(0xdeadc0de);
-}
-
-
-
-static void finish_sailgen_ap_m_encdec_backwards(void)
-{
-  KILL(lbits)(&zghz3107);
-  KILL(lbits)(&zghz3106);
-  KILL(lbits)(&zghz3105);
-  KILL(lbits)(&zghz3104);
-  KILL(lbits)(&zghz3103);
-  KILL(lbits)(&zghz3102);
-  KILL(lbits)(&zghz3101);
-  KILL(lbits)(&zghz3100);
-  KILL(lbits)(&zghz399);
-  KILL(lbits)(&zghz398);
-  KILL(lbits)(&zghz397);
-}
-
-static uint64_t sailgen_ap_m_encdec_backwards_infallible(struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9);
-
-lbits zghz3108;
 lbits zghz3109;
 lbits zghz3110;
 lbits zghz3111;
@@ -4553,10 +3103,13 @@ lbits zghz3115;
 lbits zghz3116;
 lbits zghz3117;
 lbits zghz3118;
+lbits zghz3119;
+lbits zghz3120;
+lbits zghz3121;
+lbits zghz3122;
 
-static void startup_sailgen_ap_m_encdec_backwards_infallible(void)
+static void startup_sailgen_ap_m_encdec_backwards(void)
 {
-  CREATE(lbits)(&zghz3108);
   CREATE(lbits)(&zghz3109);
   CREATE(lbits)(&zghz3110);
   CREATE(lbits)(&zghz3111);
@@ -4567,22 +3120,26 @@ static void startup_sailgen_ap_m_encdec_backwards_infallible(void)
   CREATE(lbits)(&zghz3116);
   CREATE(lbits)(&zghz3117);
   CREATE(lbits)(&zghz3118);
+  CREATE(lbits)(&zghz3119);
+  CREATE(lbits)(&zghz3120);
+  CREATE(lbits)(&zghz3121);
+  CREATE(lbits)(&zghz3122);
 }
 
-static uint64_t sailgen_ap_m_encdec_backwards_infallible(struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zargz3)
+static uint64_t sailgen_ap_m_encdec_backwards(struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zargz3)
 {
-  __label__ case_400, case_310, finish_match_309, end_function_401, end_block_exception_402;
+  __label__ case_339, case_222, finish_match_221, end_function_340, end_block_exception_341;
 
-  uint64_t zcbz348;
+  uint64_t zcbz349;
   struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zhead_expz3;
   zhead_expz3 = zargz3;
-  struct zoptionzIbzK zgaz365;
-  CREATE(zoptionzIbzK)(&zgaz365);
+  struct zoptionzIbzK zgaz373;
+  CREATE(zoptionzIbzK)(&zgaz373);
   {
-    __label__ case_305, case_304, finish_match_303;
+    __label__ case_217, case_216, finish_match_215;
 
     {
-      __label__ case_308, case_307, finish_match_306;
+      __label__ case_220, case_219, finish_match_218;
 
       bool zp0z3;
       zp0z3 = zhead_expz3.ztup0.zR;
@@ -4593,1364 +3150,1848 @@ static uint64_t sailgen_ap_m_encdec_backwards_infallible(struct ztuple_z8z5struc
       bool zp3z3;
       zp3z3 = zhead_expz3.ztup0.zLM;
       bool zp4z3;
-      zp4z3 = zhead_expz3.ztup0.zX;
+      zp4z3 = zhead_expz3.ztup0.zEL;
       bool zp5z3;
-      zp5z3 = zhead_expz3.ztup0.zASR;
+      zp5z3 = zhead_expz3.ztup0.zSL;
+      bool zp6z3;
+      zp6z3 = zhead_expz3.ztup0.zX;
+      bool zp7z3;
+      zp7z3 = zhead_expz3.ztup0.zASR;
       enum zExecutionMode zmapping0z3;
       zmapping0z3 = zhead_expz3.ztup1;
-      bool zgaz364;
+      bool zgaz372;
       {
-        bool zgaz363;
+        bool zgaz371;
         {
-          bool zgaz362;
+          bool zgaz370;
           {
-            bool zgaz361;
+            bool zgaz369;
             {
-              bool zgaz360;
+              bool zgaz368;
               {
-                bool zgaz359;
-                zgaz359 = sailgen_execution_mode_encdec_forwards_matches(zmapping0z3);
-                bool zgsz3289;
-                if (zgaz359) {  zgsz3289 = eq_bool(zp5z3, false);  } else {  zgsz3289 = false;  }
-                zgaz360 = zgsz3289;
+                bool zgaz367;
+                {
+                  bool zgaz366;
+                  {
+                    bool zgaz365;
+                    zgaz365 = sailgen_execution_mode_encdec_forwards_matches(zmapping0z3);
+                    bool zgsz3144;
+                    if (zgaz365) {  zgsz3144 = eq_bool(zp7z3, false);  } else {  zgsz3144 = false;  }
+                    zgaz366 = zgsz3144;
+                  }
+                  bool zgsz3145;
+                  if (zgaz366) {  zgsz3145 = eq_bool(zp6z3, false);  } else {  zgsz3145 = false;  }
+                  zgaz367 = zgsz3145;
+                }
+                bool zgsz3146;
+                if (zgaz367) {  zgsz3146 = eq_bool(zp5z3, false);  } else {  zgsz3146 = false;  }
+                zgaz368 = zgsz3146;
               }
-              bool zgsz3290;
-              if (zgaz360) {  zgsz3290 = eq_bool(zp4z3, false);  } else {  zgsz3290 = false;  }
-              zgaz361 = zgsz3290;
+              bool zgsz3147;
+              if (zgaz368) {  zgsz3147 = eq_bool(zp4z3, false);  } else {  zgsz3147 = false;  }
+              zgaz369 = zgsz3147;
             }
-            bool zgsz3291;
-            if (zgaz361) {  zgsz3291 = eq_bool(zp3z3, false);  } else {  zgsz3291 = false;  }
-            zgaz362 = zgsz3291;
+            bool zgsz3148;
+            if (zgaz369) {  zgsz3148 = eq_bool(zp3z3, false);  } else {  zgsz3148 = false;  }
+            zgaz370 = zgsz3148;
           }
-          bool zgsz3292;
-          if (zgaz362) {  zgsz3292 = eq_bool(zp2z3, false);  } else {  zgsz3292 = false;  }
-          zgaz363 = zgsz3292;
+          bool zgsz3149;
+          if (zgaz370) {  zgsz3149 = eq_bool(zp2z3, false);  } else {  zgsz3149 = false;  }
+          zgaz371 = zgsz3149;
         }
-        bool zgsz3293;
-        if (zgaz363) {  zgsz3293 = eq_bool(zp1z3, false);  } else {  zgsz3293 = false;  }
-        zgaz364 = zgsz3293;
+        bool zgsz3150;
+        if (zgaz371) {  zgsz3150 = eq_bool(zp1z3, false);  } else {  zgsz3150 = false;  }
+        zgaz372 = zgsz3150;
       }
-      bool zgsz3294;
-      if (zgaz364) {  zgsz3294 = eq_bool(zp0z3, false);  } else {  zgsz3294 = false;  }
-      bool zgsz3298;
-      zgsz3298 = zgsz3294;
-      if (!(zgsz3298)) {
-
-
-
-
-
-
-        goto case_305;
-      }
-      uint64_t zgaz358;
-      zgaz358 = sailgen_execution_mode_encdec_forwards_infallible(zmapping0z3);
-      struct zoptionzIbzK zgsz3295;
-      CREATE(zoptionzIbzK)(&zgsz3295);
+      bool zgsz3151;
+      if (zgaz372) {  zgsz3151 = eq_bool(zp0z3, false);  } else {  zgsz3151 = false;  }
+      bool zgsz3155;
+      zgsz3155 = zgsz3151;
+      if (!(zgsz3155)) {  goto case_217;  }
+      uint64_t zgaz364;
+      zgaz364 = sailgen_execution_mode_encdec_forwards_infallible(zmapping0z3);
+      struct zoptionzIbzK zgsz3152;
+      CREATE(zoptionzIbzK)(&zgsz3152);
       {
-        uint64_t zb__6;
-        zb__6 = zgaz358;
-        bool zgsz3297;
-        zgsz3297 = (zb__6 == UINT64_C(0b0));
-        if (!(zgsz3297)) {
-
-          goto case_308;
-        }
+        uint64_t zb__9;
+        zb__9 = zgaz364;
+        bool zgsz3154;
+        zgsz3154 = (zb__9 == UINT64_C(0b0));
+        if (!(zgsz3154)) {  goto case_220;  }
         {
-          RECREATE(lbits)(&zghz3118);
-          CONVERT_OF(lbits, fbits)(&zghz3118, UINT64_C(0b00000), UINT64_C(5) , true);
-          sailgen_SomezIbzK(&zgsz3295, zghz3118);
+          RECREATE(lbits)(&zghz3122);
+          CONVERT_OF(lbits, fbits)(&zghz3122, UINT64_C(0b00000), UINT64_C(5) , true);
+          sailgen_SomezIbzK(&zgsz3152, zghz3122);
         }
-        goto finish_match_306;
+        goto finish_match_218;
       }
-    case_308: ;
+    case_220: ;
       {
-        sailgen_NonezIbzK(&zgsz3295, UNIT);
-        goto finish_match_306;
+        sailgen_NonezIbzK(&zgsz3152, UNIT);
+        goto finish_match_218;
       }
-    case_307: ;
-    finish_match_306: ;
-      COPY(zoptionzIbzK)(&zgaz365, zgsz3295);
-      KILL(zoptionzIbzK)(&zgsz3295);
-      goto finish_match_303;
+    case_219: ;
+    finish_match_218: ;
+      COPY(zoptionzIbzK)(&zgaz373, zgsz3152);
+      KILL(zoptionzIbzK)(&zgsz3152);
+      goto finish_match_215;
     }
-  case_305: ;
+  case_217: ;
     {
-      sailgen_NonezIbzK(&zgaz365, UNIT);
-      goto finish_match_303;
+      sailgen_NonezIbzK(&zgaz373, UNIT);
+      goto finish_match_215;
     }
-  case_304: ;
-  finish_match_303: ;
+  case_216: ;
+  finish_match_215: ;
   }
   {
-    if (zgaz365.kind != Kind_zSomezIbzK) goto case_400;
+    if (zgaz373.kind != Kind_zSomezIbzK) goto case_339;
     uint64_t zresult;
-    zresult = CONVERT_OF(fbits, lbits)(zgaz365.zSomezIbzK, true);
-    zcbz348 = zresult;
-    goto finish_match_309;
+    zresult = CONVERT_OF(fbits, lbits)(zgaz373.variants.zSomezIbzK, true);
+    zcbz349 = zresult;
+    goto finish_match_221;
   }
-case_400: ;
+case_339: ;
   {
-    __label__ case_399, case_318, finish_match_317;
+    __label__ case_338, case_230, finish_match_229;
 
     /* complete */
-    struct zoptionzIbzK zgaz373;
-    CREATE(zoptionzIbzK)(&zgaz373);
+    struct zoptionzIbzK zgaz383;
+    CREATE(zoptionzIbzK)(&zgaz383);
     {
-      __label__ case_313, case_312, finish_match_311;
+      __label__ case_225, case_224, finish_match_223;
 
       {
-        __label__ case_316, case_315, finish_match_314;
+        __label__ case_228, case_227, finish_match_226;
 
-        bool zuz381;
-        zuz381 = zhead_expz3.ztup0.zR;
-        bool zuz382;
-        zuz382 = zhead_expz3.ztup0.zW;
-        bool zuz383;
-        zuz383 = zhead_expz3.ztup0.zC;
-        bool zuz384;
-        zuz384 = zhead_expz3.ztup0.zLM;
-        bool zuz385;
-        zuz385 = zhead_expz3.ztup0.zX;
-        bool zuz386;
-        zuz386 = zhead_expz3.ztup0.zASR;
+        bool zuz38;
+        zuz38 = zhead_expz3.ztup0.zR;
+        bool zuz39;
+        zuz39 = zhead_expz3.ztup0.zW;
+        bool zuz310;
+        zuz310 = zhead_expz3.ztup0.zC;
+        bool zuz311;
+        zuz311 = zhead_expz3.ztup0.zLM;
+        bool zuz312;
+        zuz312 = zhead_expz3.ztup0.zEL;
+        bool zuz313;
+        zuz313 = zhead_expz3.ztup0.zSL;
+        bool zuz314;
+        zuz314 = zhead_expz3.ztup0.zX;
+        bool zuz315;
+        zuz315 = zhead_expz3.ztup0.zASR;
         enum zExecutionMode zmapping1z3;
         zmapping1z3 = zhead_expz3.ztup1;
-        bool zgaz372;
+        bool zgaz382;
         {
-          bool zgaz371;
+          bool zgaz381;
           {
-            bool zgaz370;
+            bool zgaz380;
             {
-              bool zgaz369;
+              bool zgaz379;
               {
-                bool zgaz368;
+                bool zgaz378;
                 {
-                  bool zgaz367;
-                  zgaz367 = sailgen_execution_mode_encdec_forwards_matches(zmapping1z3);
-                  bool zgsz3302;
-                  if (zgaz367) {  zgsz3302 = eq_bool(zuz386, false);  } else {  zgsz3302 = false;  }
-                  zgaz368 = zgsz3302;
+                  bool zgaz377;
+                  {
+                    bool zgaz376;
+                    {
+                      bool zgaz375;
+                      zgaz375 = sailgen_execution_mode_encdec_forwards_matches(zmapping1z3);
+                      bool zgsz3159;
+                      if (zgaz375) {  zgsz3159 = eq_bool(zuz315, false);  } else {  zgsz3159 = false;  }
+                      zgaz376 = zgsz3159;
+                    }
+                    bool zgsz3160;
+                    if (zgaz376) {  zgsz3160 = eq_bool(zuz314, false);  } else {  zgsz3160 = false;  }
+                    zgaz377 = zgsz3160;
+                  }
+                  bool zgsz3161;
+                  if (zgaz377) {  zgsz3161 = eq_bool(zuz313, false);  } else {  zgsz3161 = false;  }
+                  zgaz378 = zgsz3161;
                 }
-                bool zgsz3303;
-                if (zgaz368) {  zgsz3303 = eq_bool(zuz385, false);  } else {  zgsz3303 = false;  }
-                zgaz369 = zgsz3303;
+                bool zgsz3162;
+                if (zgaz378) {  zgsz3162 = eq_bool(zuz312, false);  } else {  zgsz3162 = false;  }
+                zgaz379 = zgsz3162;
               }
-              bool zgsz3304;
-              if (zgaz369) {  zgsz3304 = eq_bool(zuz384, false);  } else {  zgsz3304 = false;  }
-              zgaz370 = zgsz3304;
+              bool zgsz3163;
+              if (zgaz379) {  zgsz3163 = eq_bool(zuz311, false);  } else {  zgsz3163 = false;  }
+              zgaz380 = zgsz3163;
             }
-            bool zgsz3305;
-            if (zgaz370) {  zgsz3305 = eq_bool(zuz383, false);  } else {  zgsz3305 = false;  }
-            zgaz371 = zgsz3305;
+            bool zgsz3164;
+            if (zgaz380) {  zgsz3164 = eq_bool(zuz310, false);  } else {  zgsz3164 = false;  }
+            zgaz381 = zgsz3164;
           }
-          bool zgsz3306;
-          if (zgaz371) {  zgsz3306 = eq_bool(zuz382, false);  } else {  zgsz3306 = false;  }
-          zgaz372 = zgsz3306;
+          bool zgsz3165;
+          if (zgaz381) {  zgsz3165 = eq_bool(zuz39, false);  } else {  zgsz3165 = false;  }
+          zgaz382 = zgsz3165;
         }
-        bool zgsz3307;
-        if (zgaz372) {  zgsz3307 = eq_bool(zuz381, true);  } else {  zgsz3307 = false;  }
-        bool zgsz3311;
-        zgsz3311 = zgsz3307;
-        if (!(zgsz3311)) {
-
-
-
-
-
-
-          goto case_313;
-        }
-        uint64_t zgaz366;
-        zgaz366 = sailgen_execution_mode_encdec_forwards_infallible(zmapping1z3);
-        struct zoptionzIbzK zgsz3308;
-        CREATE(zoptionzIbzK)(&zgsz3308);
+        bool zgsz3166;
+        if (zgaz382) {  zgsz3166 = eq_bool(zuz38, true);  } else {  zgsz3166 = false;  }
+        bool zgsz3170;
+        zgsz3170 = zgsz3166;
+        if (!(zgsz3170)) {  goto case_225;  }
+        uint64_t zgaz374;
+        zgaz374 = sailgen_execution_mode_encdec_forwards_infallible(zmapping1z3);
+        struct zoptionzIbzK zgsz3167;
+        CREATE(zoptionzIbzK)(&zgsz3167);
         {
-          uint64_t zb__5;
-          zb__5 = zgaz366;
-          bool zgsz3310;
-          zgsz3310 = (zb__5 == UINT64_C(0b0));
-          if (!(zgsz3310)) {
-
-            goto case_316;
-          }
+          uint64_t zb__8;
+          zb__8 = zgaz374;
+          bool zgsz3169;
+          zgsz3169 = (zb__8 == UINT64_C(0b0));
+          if (!(zgsz3169)) {  goto case_228;  }
           {
-            RECREATE(lbits)(&zghz3117);
-            CONVERT_OF(lbits, fbits)(&zghz3117, UINT64_C(0b00001), UINT64_C(5) , true);
-            sailgen_SomezIbzK(&zgsz3308, zghz3117);
+            RECREATE(lbits)(&zghz3121);
+            CONVERT_OF(lbits, fbits)(&zghz3121, UINT64_C(0b00001), UINT64_C(5) , true);
+            sailgen_SomezIbzK(&zgsz3167, zghz3121);
           }
-          goto finish_match_314;
+          goto finish_match_226;
         }
-      case_316: ;
+      case_228: ;
         {
-          sailgen_NonezIbzK(&zgsz3308, UNIT);
-          goto finish_match_314;
+          sailgen_NonezIbzK(&zgsz3167, UNIT);
+          goto finish_match_226;
         }
-      case_315: ;
-      finish_match_314: ;
-        COPY(zoptionzIbzK)(&zgaz373, zgsz3308);
-        KILL(zoptionzIbzK)(&zgsz3308);
-        goto finish_match_311;
+      case_227: ;
+      finish_match_226: ;
+        COPY(zoptionzIbzK)(&zgaz383, zgsz3167);
+        KILL(zoptionzIbzK)(&zgsz3167);
+        goto finish_match_223;
       }
-    case_313: ;
+    case_225: ;
       {
-        sailgen_NonezIbzK(&zgaz373, UNIT);
-        goto finish_match_311;
+        sailgen_NonezIbzK(&zgaz383, UNIT);
+        goto finish_match_223;
       }
-    case_312: ;
-    finish_match_311: ;
+    case_224: ;
+    finish_match_223: ;
     }
-    uint64_t zgsz3312;
+    uint64_t zgsz3171;
     {
-      if (zgaz373.kind != Kind_zSomezIbzK) goto case_399;
-      zgsz3312 = CONVERT_OF(fbits, lbits)(zgaz373.zSomezIbzK, true);
-      goto finish_match_317;
+      if (zgaz383.kind != Kind_zSomezIbzK) goto case_338;
+      zgsz3171 = CONVERT_OF(fbits, lbits)(zgaz383.variants.zSomezIbzK, true);
+      goto finish_match_229;
     }
-  case_399: ;
+  case_338: ;
     {
-      __label__ case_398, case_326, finish_match_325;
+      __label__ case_337, case_238, finish_match_237;
 
       /* complete */
-      struct zoptionzIbzK zgaz381;
-      CREATE(zoptionzIbzK)(&zgaz381);
+      struct zoptionzIbzK zgaz393;
+      CREATE(zoptionzIbzK)(&zgaz393);
       {
-        __label__ case_321, case_320, finish_match_319;
+        __label__ case_233, case_232, finish_match_231;
 
         {
-          __label__ case_324, case_323, finish_match_322;
+          __label__ case_236, case_235, finish_match_234;
 
-          bool zuz388;
-          zuz388 = zhead_expz3.ztup0.zR;
-          bool zuz389;
-          zuz389 = zhead_expz3.ztup0.zW;
-          bool zuz390;
-          zuz390 = zhead_expz3.ztup0.zC;
-          bool zuz391;
-          zuz391 = zhead_expz3.ztup0.zLM;
-          bool zuz392;
-          zuz392 = zhead_expz3.ztup0.zX;
-          bool zuz393;
-          zuz393 = zhead_expz3.ztup0.zASR;
+          bool zuz317;
+          zuz317 = zhead_expz3.ztup0.zR;
+          bool zuz318;
+          zuz318 = zhead_expz3.ztup0.zW;
+          bool zuz319;
+          zuz319 = zhead_expz3.ztup0.zC;
+          bool zuz320;
+          zuz320 = zhead_expz3.ztup0.zLM;
+          bool zuz321;
+          zuz321 = zhead_expz3.ztup0.zEL;
+          bool zuz322;
+          zuz322 = zhead_expz3.ztup0.zSL;
+          bool zuz323;
+          zuz323 = zhead_expz3.ztup0.zX;
+          bool zuz324;
+          zuz324 = zhead_expz3.ztup0.zASR;
           enum zExecutionMode zmapping2z3;
           zmapping2z3 = zhead_expz3.ztup1;
-          bool zgaz380;
+          bool zgaz392;
           {
-            bool zgaz379;
+            bool zgaz391;
             {
-              bool zgaz378;
+              bool zgaz390;
               {
-                bool zgaz377;
+                bool zgaz389;
                 {
-                  bool zgaz376;
+                  bool zgaz388;
                   {
-                    bool zgaz375;
-                    zgaz375 = sailgen_execution_mode_encdec_forwards_matches(zmapping2z3);
-                    bool zgsz3315;
-                    if (zgaz375) {  zgsz3315 = eq_bool(zuz393, false);  } else {  zgsz3315 = false;  }
-                    zgaz376 = zgsz3315;
+                    bool zgaz387;
+                    {
+                      bool zgaz386;
+                      {
+                        bool zgaz385;
+                        zgaz385 = sailgen_execution_mode_encdec_forwards_matches(zmapping2z3);
+                        bool zgsz3174;
+                        if (zgaz385) {  zgsz3174 = eq_bool(zuz324, false);  } else {  zgsz3174 = false;  }
+                        zgaz386 = zgsz3174;
+                      }
+                      bool zgsz3175;
+                      if (zgaz386) {  zgsz3175 = eq_bool(zuz323, false);  } else {  zgsz3175 = false;  }
+                      zgaz387 = zgsz3175;
+                    }
+                    bool zgsz3176;
+                    if (zgaz387) {  zgsz3176 = eq_bool(zuz322, false);  } else {  zgsz3176 = false;  }
+                    zgaz388 = zgsz3176;
                   }
-                  bool zgsz3316;
-                  if (zgaz376) {  zgsz3316 = eq_bool(zuz392, false);  } else {  zgsz3316 = false;  }
-                  zgaz377 = zgsz3316;
+                  bool zgsz3177;
+                  if (zgaz388) {  zgsz3177 = eq_bool(zuz321, false);  } else {  zgsz3177 = false;  }
+                  zgaz389 = zgsz3177;
                 }
-                bool zgsz3317;
-                if (zgaz377) {  zgsz3317 = eq_bool(zuz391, false);  } else {  zgsz3317 = false;  }
-                zgaz378 = zgsz3317;
+                bool zgsz3178;
+                if (zgaz389) {  zgsz3178 = eq_bool(zuz320, false);  } else {  zgsz3178 = false;  }
+                zgaz390 = zgsz3178;
               }
-              bool zgsz3318;
-              if (zgaz378) {  zgsz3318 = eq_bool(zuz390, false);  } else {  zgsz3318 = false;  }
-              zgaz379 = zgsz3318;
+              bool zgsz3179;
+              if (zgaz390) {  zgsz3179 = eq_bool(zuz319, false);  } else {  zgsz3179 = false;  }
+              zgaz391 = zgsz3179;
             }
-            bool zgsz3319;
-            if (zgaz379) {  zgsz3319 = eq_bool(zuz389, true);  } else {  zgsz3319 = false;  }
-            zgaz380 = zgsz3319;
+            bool zgsz3180;
+            if (zgaz391) {  zgsz3180 = eq_bool(zuz318, true);  } else {  zgsz3180 = false;  }
+            zgaz392 = zgsz3180;
           }
-          bool zgsz3320;
-          if (zgaz380) {  zgsz3320 = eq_bool(zuz388, false);  } else {  zgsz3320 = false;  }
-          bool zgsz3324;
-          zgsz3324 = zgsz3320;
-          if (!(zgsz3324)) {
-
-
-
-
-
-
-            goto case_321;
-          }
-          uint64_t zgaz374;
-          zgaz374 = sailgen_execution_mode_encdec_forwards_infallible(zmapping2z3);
-          struct zoptionzIbzK zgsz3321;
-          CREATE(zoptionzIbzK)(&zgsz3321);
+          bool zgsz3181;
+          if (zgaz392) {  zgsz3181 = eq_bool(zuz317, false);  } else {  zgsz3181 = false;  }
+          bool zgsz3185;
+          zgsz3185 = zgsz3181;
+          if (!(zgsz3185)) {  goto case_233;  }
+          uint64_t zgaz384;
+          zgaz384 = sailgen_execution_mode_encdec_forwards_infallible(zmapping2z3);
+          struct zoptionzIbzK zgsz3182;
+          CREATE(zoptionzIbzK)(&zgsz3182);
           {
-            uint64_t zb__4;
-            zb__4 = zgaz374;
-            bool zgsz3323;
-            zgsz3323 = (zb__4 == UINT64_C(0b0));
-            if (!(zgsz3323)) {
-
-              goto case_324;
-            }
+            uint64_t zb__7;
+            zb__7 = zgaz384;
+            bool zgsz3184;
+            zgsz3184 = (zb__7 == UINT64_C(0b0));
+            if (!(zgsz3184)) {  goto case_236;  }
             {
-              RECREATE(lbits)(&zghz3116);
-              CONVERT_OF(lbits, fbits)(&zghz3116, UINT64_C(0b00100), UINT64_C(5) , true);
-              sailgen_SomezIbzK(&zgsz3321, zghz3116);
+              RECREATE(lbits)(&zghz3120);
+              CONVERT_OF(lbits, fbits)(&zghz3120, UINT64_C(0b00100), UINT64_C(5) , true);
+              sailgen_SomezIbzK(&zgsz3182, zghz3120);
             }
-            goto finish_match_322;
+            goto finish_match_234;
           }
-        case_324: ;
+        case_236: ;
           {
-            sailgen_NonezIbzK(&zgsz3321, UNIT);
-            goto finish_match_322;
+            sailgen_NonezIbzK(&zgsz3182, UNIT);
+            goto finish_match_234;
           }
-        case_323: ;
-        finish_match_322: ;
-          COPY(zoptionzIbzK)(&zgaz381, zgsz3321);
-          KILL(zoptionzIbzK)(&zgsz3321);
-          goto finish_match_319;
+        case_235: ;
+        finish_match_234: ;
+          COPY(zoptionzIbzK)(&zgaz393, zgsz3182);
+          KILL(zoptionzIbzK)(&zgsz3182);
+          goto finish_match_231;
         }
-      case_321: ;
+      case_233: ;
         {
-          sailgen_NonezIbzK(&zgaz381, UNIT);
-          goto finish_match_319;
+          sailgen_NonezIbzK(&zgaz393, UNIT);
+          goto finish_match_231;
         }
-      case_320: ;
-      finish_match_319: ;
+      case_232: ;
+      finish_match_231: ;
       }
-      uint64_t zgsz3325;
+      uint64_t zgsz3186;
       {
-        if (zgaz381.kind != Kind_zSomezIbzK) goto case_398;
-        zgsz3325 = CONVERT_OF(fbits, lbits)(zgaz381.zSomezIbzK, true);
-        goto finish_match_325;
+        if (zgaz393.kind != Kind_zSomezIbzK) goto case_337;
+        zgsz3186 = CONVERT_OF(fbits, lbits)(zgaz393.variants.zSomezIbzK, true);
+        goto finish_match_237;
       }
-    case_398: ;
+    case_337: ;
       {
-        __label__ case_397, case_334, finish_match_333;
+        __label__ case_336, case_246, finish_match_245;
 
         /* complete */
-        struct zoptionzIbzK zgaz389;
-        CREATE(zoptionzIbzK)(&zgaz389);
+        struct zoptionzIbzK zgaz3103;
+        CREATE(zoptionzIbzK)(&zgaz3103);
         {
-          __label__ case_329, case_328, finish_match_327;
+          __label__ case_241, case_240, finish_match_239;
 
           {
-            __label__ case_332, case_331, finish_match_330;
+            __label__ case_244, case_243, finish_match_242;
 
-            bool zuz395;
-            zuz395 = zhead_expz3.ztup0.zR;
-            bool zuz396;
-            zuz396 = zhead_expz3.ztup0.zW;
-            bool zuz397;
-            zuz397 = zhead_expz3.ztup0.zC;
-            bool zuz398;
-            zuz398 = zhead_expz3.ztup0.zLM;
-            bool zuz399;
-            zuz399 = zhead_expz3.ztup0.zX;
-            bool zuz3100;
-            zuz3100 = zhead_expz3.ztup0.zASR;
+            bool zuz326;
+            zuz326 = zhead_expz3.ztup0.zR;
+            bool zuz327;
+            zuz327 = zhead_expz3.ztup0.zW;
+            bool zuz328;
+            zuz328 = zhead_expz3.ztup0.zC;
+            bool zuz329;
+            zuz329 = zhead_expz3.ztup0.zLM;
+            bool zuz330;
+            zuz330 = zhead_expz3.ztup0.zEL;
+            bool zuz331;
+            zuz331 = zhead_expz3.ztup0.zSL;
+            bool zuz332;
+            zuz332 = zhead_expz3.ztup0.zX;
+            bool zuz333;
+            zuz333 = zhead_expz3.ztup0.zASR;
             enum zExecutionMode zmapping3z3;
             zmapping3z3 = zhead_expz3.ztup1;
-            bool zgaz388;
+            bool zgaz3102;
             {
-              bool zgaz387;
+              bool zgaz3101;
               {
-                bool zgaz386;
+                bool zgaz3100;
                 {
-                  bool zgaz385;
+                  bool zgaz399;
                   {
-                    bool zgaz384;
+                    bool zgaz398;
                     {
-                      bool zgaz383;
-                      zgaz383 = sailgen_execution_mode_encdec_forwards_matches(zmapping3z3);
-                      bool zgsz3328;
-                      if (zgaz383) {  zgsz3328 = eq_bool(zuz3100, false);  } else {  zgsz3328 = false;  }
-                      zgaz384 = zgsz3328;
+                      bool zgaz397;
+                      {
+                        bool zgaz396;
+                        {
+                          bool zgaz395;
+                          zgaz395 = sailgen_execution_mode_encdec_forwards_matches(zmapping3z3);
+                          bool zgsz3189;
+                          if (zgaz395) {  zgsz3189 = eq_bool(zuz333, false);  } else {  zgsz3189 = false;  }
+                          zgaz396 = zgsz3189;
+                        }
+                        bool zgsz3190;
+                        if (zgaz396) {  zgsz3190 = eq_bool(zuz332, false);  } else {  zgsz3190 = false;  }
+                        zgaz397 = zgsz3190;
+                      }
+                      bool zgsz3191;
+                      if (zgaz397) {  zgsz3191 = eq_bool(zuz331, false);  } else {  zgsz3191 = false;  }
+                      zgaz398 = zgsz3191;
                     }
-                    bool zgsz3329;
-                    if (zgaz384) {  zgsz3329 = eq_bool(zuz399, false);  } else {  zgsz3329 = false;  }
-                    zgaz385 = zgsz3329;
+                    bool zgsz3192;
+                    if (zgaz398) {  zgsz3192 = eq_bool(zuz330, false);  } else {  zgsz3192 = false;  }
+                    zgaz399 = zgsz3192;
                   }
-                  bool zgsz3330;
-                  if (zgaz385) {  zgsz3330 = eq_bool(zuz398, false);  } else {  zgsz3330 = false;  }
-                  zgaz386 = zgsz3330;
+                  bool zgsz3193;
+                  if (zgaz399) {  zgsz3193 = eq_bool(zuz329, false);  } else {  zgsz3193 = false;  }
+                  zgaz3100 = zgsz3193;
                 }
-                bool zgsz3331;
-                if (zgaz386) {  zgsz3331 = eq_bool(zuz397, false);  } else {  zgsz3331 = false;  }
-                zgaz387 = zgsz3331;
+                bool zgsz3194;
+                if (zgaz3100) {  zgsz3194 = eq_bool(zuz328, false);  } else {  zgsz3194 = false;  }
+                zgaz3101 = zgsz3194;
               }
-              bool zgsz3332;
-              if (zgaz387) {  zgsz3332 = eq_bool(zuz396, true);  } else {  zgsz3332 = false;  }
-              zgaz388 = zgsz3332;
+              bool zgsz3195;
+              if (zgaz3101) {  zgsz3195 = eq_bool(zuz327, true);  } else {  zgsz3195 = false;  }
+              zgaz3102 = zgsz3195;
             }
-            bool zgsz3333;
-            if (zgaz388) {  zgsz3333 = eq_bool(zuz395, true);  } else {  zgsz3333 = false;  }
-            bool zgsz3337;
-            zgsz3337 = zgsz3333;
-            if (!(zgsz3337)) {
-
-
-
-
-
-
-              goto case_329;
-            }
-            uint64_t zgaz382;
-            zgaz382 = sailgen_execution_mode_encdec_forwards_infallible(zmapping3z3);
-            struct zoptionzIbzK zgsz3334;
-            CREATE(zoptionzIbzK)(&zgsz3334);
+            bool zgsz3196;
+            if (zgaz3102) {  zgsz3196 = eq_bool(zuz326, true);  } else {  zgsz3196 = false;  }
+            bool zgsz3200;
+            zgsz3200 = zgsz3196;
+            if (!(zgsz3200)) {  goto case_241;  }
+            uint64_t zgaz394;
+            zgaz394 = sailgen_execution_mode_encdec_forwards_infallible(zmapping3z3);
+            struct zoptionzIbzK zgsz3197;
+            CREATE(zoptionzIbzK)(&zgsz3197);
             {
-              uint64_t zb__3;
-              zb__3 = zgaz382;
-              bool zgsz3336;
-              zgsz3336 = (zb__3 == UINT64_C(0b0));
-              if (!(zgsz3336)) {
-
-                goto case_332;
-              }
+              uint64_t zb__6;
+              zb__6 = zgaz394;
+              bool zgsz3199;
+              zgsz3199 = (zb__6 == UINT64_C(0b0));
+              if (!(zgsz3199)) {  goto case_244;  }
               {
-                RECREATE(lbits)(&zghz3115);
-                CONVERT_OF(lbits, fbits)(&zghz3115, UINT64_C(0b00101), UINT64_C(5) , true);
-                sailgen_SomezIbzK(&zgsz3334, zghz3115);
+                RECREATE(lbits)(&zghz3119);
+                CONVERT_OF(lbits, fbits)(&zghz3119, UINT64_C(0b00101), UINT64_C(5) , true);
+                sailgen_SomezIbzK(&zgsz3197, zghz3119);
               }
-              goto finish_match_330;
+              goto finish_match_242;
             }
-          case_332: ;
+          case_244: ;
             {
-              sailgen_NonezIbzK(&zgsz3334, UNIT);
-              goto finish_match_330;
+              sailgen_NonezIbzK(&zgsz3197, UNIT);
+              goto finish_match_242;
             }
-          case_331: ;
-          finish_match_330: ;
-            COPY(zoptionzIbzK)(&zgaz389, zgsz3334);
-            KILL(zoptionzIbzK)(&zgsz3334);
-            goto finish_match_327;
+          case_243: ;
+          finish_match_242: ;
+            COPY(zoptionzIbzK)(&zgaz3103, zgsz3197);
+            KILL(zoptionzIbzK)(&zgsz3197);
+            goto finish_match_239;
           }
-        case_329: ;
+        case_241: ;
           {
-            sailgen_NonezIbzK(&zgaz389, UNIT);
-            goto finish_match_327;
+            sailgen_NonezIbzK(&zgaz3103, UNIT);
+            goto finish_match_239;
           }
-        case_328: ;
-        finish_match_327: ;
+        case_240: ;
+        finish_match_239: ;
         }
-        uint64_t zgsz3338;
+        uint64_t zgsz3201;
         {
-          if (zgaz389.kind != Kind_zSomezIbzK) goto case_397;
-          zgsz3338 = CONVERT_OF(fbits, lbits)(zgaz389.zSomezIbzK, true);
-          goto finish_match_333;
+          if (zgaz3103.kind != Kind_zSomezIbzK) goto case_336;
+          zgsz3201 = CONVERT_OF(fbits, lbits)(zgaz3103.variants.zSomezIbzK, true);
+          goto finish_match_245;
         }
-      case_397: ;
+      case_336: ;
         {
-          __label__ case_396, case_342, finish_match_341;
+          __label__ case_335, case_254, finish_match_253;
 
           /* complete */
-          struct zoptionzIbzK zgaz3100;
-          CREATE(zoptionzIbzK)(&zgaz3100);
+          struct zoptionzIbzK zgaz3116;
+          CREATE(zoptionzIbzK)(&zgaz3116);
           {
-            __label__ case_337, case_336, finish_match_335;
+            __label__ case_249, case_248, finish_match_247;
 
             {
-              __label__ case_340, case_339, finish_match_338;
+              __label__ case_252, case_251, finish_match_250;
 
-              bool zuz3102;
-              zuz3102 = zhead_expz3.ztup0.zR;
-              bool zuz3103;
-              zuz3103 = zhead_expz3.ztup0.zW;
-              bool zuz3104;
-              zuz3104 = zhead_expz3.ztup0.zC;
-              bool zuz3105;
-              zuz3105 = zhead_expz3.ztup0.zLM;
-              bool zuz3106;
-              zuz3106 = zhead_expz3.ztup0.zX;
-              bool zuz3107;
-              zuz3107 = zhead_expz3.ztup0.zASR;
+              bool zuz335;
+              zuz335 = zhead_expz3.ztup0.zR;
+              bool zuz336;
+              zuz336 = zhead_expz3.ztup0.zW;
+              bool zuz337;
+              zuz337 = zhead_expz3.ztup0.zC;
+              bool zuz338;
+              zuz338 = zhead_expz3.ztup0.zLM;
+              bool zuz339;
+              zuz339 = zhead_expz3.ztup0.zEL;
+              bool zuz340;
+              zuz340 = zhead_expz3.ztup0.zSL;
+              bool zuz341;
+              zuz341 = zhead_expz3.ztup0.zX;
+              bool zuz342;
+              zuz342 = zhead_expz3.ztup0.zASR;
               enum zExecutionMode zmapping4z3;
               zmapping4z3 = zhead_expz3.ztup1;
-              bool zgaz399;
+              bool zgaz3115;
               {
-                bool zgaz398;
+                bool zgaz3114;
                 {
-                  bool zgaz397;
+                  bool zgaz3113;
                   {
-                    bool zgaz396;
+                    bool zgaz3112;
                     {
-                      bool zgaz395;
+                      bool zgaz3111;
                       {
-                        bool zgaz394;
-                        zgaz394 = sailgen_execution_mode_encdec_forwards_matches(zmapping4z3);
-                        bool zgsz3341;
-                        if (zgaz394) {  zgsz3341 = eq_bool(zuz3107, true);  } else {  zgsz3341 = false;  }
-                        zgaz395 = zgsz3341;
+                        bool zgaz3110;
+                        {
+                          bool zgaz3109;
+                          {
+                            bool zgaz3108;
+                            zgaz3108 = sailgen_execution_mode_encdec_forwards_matches(zmapping4z3);
+                            bool zgsz3204;
+                            if (zgaz3108) {  zgsz3204 = eq_bool(zuz342, true);  } else {  zgsz3204 = false;  }
+                            zgaz3109 = zgsz3204;
+                          }
+                          bool zgsz3205;
+                          if (zgaz3109) {  zgsz3205 = eq_bool(zuz341, true);  } else {  zgsz3205 = false;  }
+                          zgaz3110 = zgsz3205;
+                        }
+                        bool zgsz3206;
+                        if (zgaz3110) {  zgsz3206 = eq_bool(zuz340, true);  } else {  zgsz3206 = false;  }
+                        zgaz3111 = zgsz3206;
                       }
-                      bool zgsz3342;
-                      if (zgaz395) {  zgsz3342 = eq_bool(zuz3106, true);  } else {  zgsz3342 = false;  }
-                      zgaz396 = zgsz3342;
+                      bool zgsz3207;
+                      if (zgaz3111) {  zgsz3207 = eq_bool(zuz339, true);  } else {  zgsz3207 = false;  }
+                      zgaz3112 = zgsz3207;
                     }
-                    bool zgsz3343;
-                    if (zgaz396) {  zgsz3343 = eq_bool(zuz3105, true);  } else {  zgsz3343 = false;  }
-                    zgaz397 = zgsz3343;
+                    bool zgsz3208;
+                    if (zgaz3112) {  zgsz3208 = eq_bool(zuz338, true);  } else {  zgsz3208 = false;  }
+                    zgaz3113 = zgsz3208;
                   }
-                  bool zgsz3344;
-                  if (zgaz397) {  zgsz3344 = eq_bool(zuz3104, true);  } else {  zgsz3344 = false;  }
-                  zgaz398 = zgsz3344;
+                  bool zgsz3209;
+                  if (zgaz3113) {  zgsz3209 = eq_bool(zuz337, true);  } else {  zgsz3209 = false;  }
+                  zgaz3114 = zgsz3209;
                 }
-                bool zgsz3345;
-                if (zgaz398) {  zgsz3345 = eq_bool(zuz3103, true);  } else {  zgsz3345 = false;  }
-                zgaz399 = zgsz3345;
+                bool zgsz3210;
+                if (zgaz3114) {  zgsz3210 = eq_bool(zuz336, true);  } else {  zgsz3210 = false;  }
+                zgaz3115 = zgsz3210;
               }
-              bool zgsz3346;
-              if (zgaz399) {  zgsz3346 = eq_bool(zuz3102, true);  } else {  zgsz3346 = false;  }
-              bool zgsz3350;
-              zgsz3350 = zgsz3346;
-              if (!(zgsz3350)) {
-
-
-
-
-
-
-                goto case_337;
-              }
-              uint64_t zgaz390;
-              zgaz390 = sailgen_execution_mode_encdec_forwards_infallible(zmapping4z3);
-              struct zoptionzIbzK zgsz3347;
-              CREATE(zoptionzIbzK)(&zgsz3347);
+              bool zgsz3211;
+              if (zgaz3115) {  zgsz3211 = eq_bool(zuz335, true);  } else {  zgsz3211 = false;  }
+              bool zgsz3215;
+              zgsz3215 = zgsz3211;
+              if (!(zgsz3215)) {  goto case_249;  }
+              uint64_t zgaz3104;
+              zgaz3104 = sailgen_execution_mode_encdec_forwards_infallible(zmapping4z3);
+              struct zoptionzIbzK zgsz3212;
+              CREATE(zoptionzIbzK)(&zgsz3212);
               {
                 uint64_t zm;
-                zm = zgaz390;
-                uint64_t zgaz393;
+                zm = zgaz3104;
+                uint64_t zgaz3107;
                 {
-                  uint64_t zgaz392;
+                  uint64_t zgaz3106;
                   {
-                    uint64_t zgaz391;
-                    zgaz391 = zm;
-                    zgaz392 = (UINT64_C(0b00) << 1) | zgaz391;
+                    uint64_t zgaz3105;
+                    zgaz3105 = zm;
+                    zgaz3106 = (UINT64_C(0b00) << 1) | zgaz3105;
                   }
-                  zgaz393 = (UINT64_C(0b01) << 3) | zgaz392;
+                  zgaz3107 = (UINT64_C(0b01) << 3) | zgaz3106;
                 }
                 {
-                  RECREATE(lbits)(&zghz3114);
-                  CONVERT_OF(lbits, fbits)(&zghz3114, zgaz393, UINT64_C(5) , true);
-                  sailgen_SomezIbzK(&zgsz3347, zghz3114);
+                  RECREATE(lbits)(&zghz3118);
+                  CONVERT_OF(lbits, fbits)(&zghz3118, zgaz3107, UINT64_C(5) , true);
+                  sailgen_SomezIbzK(&zgsz3212, zghz3118);
                 }
-                goto finish_match_338;
+                goto finish_match_250;
               }
-            case_340: ;
+            case_252: ;
               {
-                sailgen_NonezIbzK(&zgsz3347, UNIT);
-                goto finish_match_338;
+                sailgen_NonezIbzK(&zgsz3212, UNIT);
+                goto finish_match_250;
               }
-            case_339: ;
-            finish_match_338: ;
-              COPY(zoptionzIbzK)(&zgaz3100, zgsz3347);
-              KILL(zoptionzIbzK)(&zgsz3347);
-              goto finish_match_335;
+            case_251: ;
+            finish_match_250: ;
+              COPY(zoptionzIbzK)(&zgaz3116, zgsz3212);
+              KILL(zoptionzIbzK)(&zgsz3212);
+              goto finish_match_247;
             }
-          case_337: ;
+          case_249: ;
             {
-              sailgen_NonezIbzK(&zgaz3100, UNIT);
-              goto finish_match_335;
+              sailgen_NonezIbzK(&zgaz3116, UNIT);
+              goto finish_match_247;
             }
-          case_336: ;
-          finish_match_335: ;
+          case_248: ;
+          finish_match_247: ;
           }
-          uint64_t zgsz3351;
+          uint64_t zgsz3216;
           {
-            if (zgaz3100.kind != Kind_zSomezIbzK) goto case_396;
-            zgsz3351 = CONVERT_OF(fbits, lbits)(zgaz3100.zSomezIbzK, true);
-            goto finish_match_341;
+            if (zgaz3116.kind != Kind_zSomezIbzK) goto case_335;
+            zgsz3216 = CONVERT_OF(fbits, lbits)(zgaz3116.variants.zSomezIbzK, true);
+            goto finish_match_253;
           }
-        case_396: ;
+        case_335: ;
           {
-            __label__ case_395, case_350, finish_match_349;
+            __label__ case_334, case_262, finish_match_261;
 
             /* complete */
-            struct zoptionzIbzK zgaz3111;
-            CREATE(zoptionzIbzK)(&zgaz3111);
+            struct zoptionzIbzK zgaz3129;
+            CREATE(zoptionzIbzK)(&zgaz3129);
             {
-              __label__ case_345, case_344, finish_match_343;
+              __label__ case_257, case_256, finish_match_255;
 
               {
-                __label__ case_348, case_347, finish_match_346;
+                __label__ case_260, case_259, finish_match_258;
 
-                bool zuz3109;
-                zuz3109 = zhead_expz3.ztup0.zR;
-                bool zuz3110;
-                zuz3110 = zhead_expz3.ztup0.zW;
-                bool zuz3111;
-                zuz3111 = zhead_expz3.ztup0.zC;
-                bool zuz3112;
-                zuz3112 = zhead_expz3.ztup0.zLM;
-                bool zuz3113;
-                zuz3113 = zhead_expz3.ztup0.zX;
-                bool zuz3114;
-                zuz3114 = zhead_expz3.ztup0.zASR;
+                bool zuz344;
+                zuz344 = zhead_expz3.ztup0.zR;
+                bool zuz345;
+                zuz345 = zhead_expz3.ztup0.zW;
+                bool zuz346;
+                zuz346 = zhead_expz3.ztup0.zC;
+                bool zuz347;
+                zuz347 = zhead_expz3.ztup0.zLM;
+                bool zuz348;
+                zuz348 = zhead_expz3.ztup0.zEL;
+                bool zuz349;
+                zuz349 = zhead_expz3.ztup0.zSL;
+                bool zuz350;
+                zuz350 = zhead_expz3.ztup0.zX;
+                bool zuz351;
+                zuz351 = zhead_expz3.ztup0.zASR;
                 enum zExecutionMode zmapping5z3;
                 zmapping5z3 = zhead_expz3.ztup1;
-                bool zgaz3110;
+                bool zgaz3128;
                 {
-                  bool zgaz3109;
+                  bool zgaz3127;
                   {
-                    bool zgaz3108;
+                    bool zgaz3126;
                     {
-                      bool zgaz3107;
+                      bool zgaz3125;
                       {
-                        bool zgaz3106;
+                        bool zgaz3124;
                         {
-                          bool zgaz3105;
-                          zgaz3105 = sailgen_execution_mode_encdec_forwards_matches(zmapping5z3);
-                          bool zgsz3354;
-                          if (zgaz3105) {  zgsz3354 = eq_bool(zuz3114, false);  } else {  zgsz3354 = false;  }
-                          zgaz3106 = zgsz3354;
+                          bool zgaz3123;
+                          {
+                            bool zgaz3122;
+                            {
+                              bool zgaz3121;
+                              zgaz3121 = sailgen_execution_mode_encdec_forwards_matches(zmapping5z3);
+                              bool zgsz3219;
+                              if (zgaz3121) {  zgsz3219 = eq_bool(zuz351, false);  } else {  zgsz3219 = false;  }
+                              zgaz3122 = zgsz3219;
+                            }
+                            bool zgsz3220;
+                            if (zgaz3122) {  zgsz3220 = eq_bool(zuz350, true);  } else {  zgsz3220 = false;  }
+                            zgaz3123 = zgsz3220;
+                          }
+                          bool zgsz3221;
+                          if (zgaz3123) {  zgsz3221 = eq_bool(zuz349, true);  } else {  zgsz3221 = false;  }
+                          zgaz3124 = zgsz3221;
                         }
-                        bool zgsz3355;
-                        if (zgaz3106) {  zgsz3355 = eq_bool(zuz3113, true);  } else {  zgsz3355 = false;  }
-                        zgaz3107 = zgsz3355;
+                        bool zgsz3222;
+                        if (zgaz3124) {  zgsz3222 = eq_bool(zuz348, true);  } else {  zgsz3222 = false;  }
+                        zgaz3125 = zgsz3222;
                       }
-                      bool zgsz3356;
-                      if (zgaz3107) {  zgsz3356 = eq_bool(zuz3112, true);  } else {  zgsz3356 = false;  }
-                      zgaz3108 = zgsz3356;
+                      bool zgsz3223;
+                      if (zgaz3125) {  zgsz3223 = eq_bool(zuz347, true);  } else {  zgsz3223 = false;  }
+                      zgaz3126 = zgsz3223;
                     }
-                    bool zgsz3357;
-                    if (zgaz3108) {  zgsz3357 = eq_bool(zuz3111, true);  } else {  zgsz3357 = false;  }
-                    zgaz3109 = zgsz3357;
+                    bool zgsz3224;
+                    if (zgaz3126) {  zgsz3224 = eq_bool(zuz346, true);  } else {  zgsz3224 = false;  }
+                    zgaz3127 = zgsz3224;
                   }
-                  bool zgsz3358;
-                  if (zgaz3109) {  zgsz3358 = eq_bool(zuz3110, false);  } else {  zgsz3358 = false;  }
-                  zgaz3110 = zgsz3358;
+                  bool zgsz3225;
+                  if (zgaz3127) {  zgsz3225 = eq_bool(zuz345, false);  } else {  zgsz3225 = false;  }
+                  zgaz3128 = zgsz3225;
                 }
-                bool zgsz3359;
-                if (zgaz3110) {  zgsz3359 = eq_bool(zuz3109, true);  } else {  zgsz3359 = false;  }
-                bool zgsz3363;
-                zgsz3363 = zgsz3359;
-                if (!(zgsz3363)) {
-
-
-
-
-
-
-                  goto case_345;
-                }
-                uint64_t zgaz3101;
-                zgaz3101 = sailgen_execution_mode_encdec_forwards_infallible(zmapping5z3);
-                struct zoptionzIbzK zgsz3360;
-                CREATE(zoptionzIbzK)(&zgsz3360);
+                bool zgsz3226;
+                if (zgaz3128) {  zgsz3226 = eq_bool(zuz344, true);  } else {  zgsz3226 = false;  }
+                bool zgsz3230;
+                zgsz3230 = zgsz3226;
+                if (!(zgsz3230)) {  goto case_257;  }
+                uint64_t zgaz3117;
+                zgaz3117 = sailgen_execution_mode_encdec_forwards_infallible(zmapping5z3);
+                struct zoptionzIbzK zgsz3227;
+                CREATE(zoptionzIbzK)(&zgsz3227);
                 {
-                  uint64_t zuz3115;
-                  zuz3115 = zgaz3101;
-                  uint64_t zgaz3104;
+                  uint64_t zuz352;
+                  zuz352 = zgaz3117;
+                  uint64_t zgaz3120;
                   {
-                    uint64_t zgaz3103;
+                    uint64_t zgaz3119;
                     {
-                      uint64_t zgaz3102;
-                      zgaz3102 = zuz3115;
-                      zgaz3103 = (UINT64_C(0b01) << 1) | zgaz3102;
+                      uint64_t zgaz3118;
+                      zgaz3118 = zuz352;
+                      zgaz3119 = (UINT64_C(0b01) << 1) | zgaz3118;
                     }
-                    zgaz3104 = (UINT64_C(0b01) << 3) | zgaz3103;
+                    zgaz3120 = (UINT64_C(0b01) << 3) | zgaz3119;
                   }
                   {
-                    RECREATE(lbits)(&zghz3113);
-                    CONVERT_OF(lbits, fbits)(&zghz3113, zgaz3104, UINT64_C(5) , true);
-                    sailgen_SomezIbzK(&zgsz3360, zghz3113);
+                    RECREATE(lbits)(&zghz3117);
+                    CONVERT_OF(lbits, fbits)(&zghz3117, zgaz3120, UINT64_C(5) , true);
+                    sailgen_SomezIbzK(&zgsz3227, zghz3117);
                   }
-                  goto finish_match_346;
+                  goto finish_match_258;
                 }
-              case_348: ;
+              case_260: ;
                 {
-                  sailgen_NonezIbzK(&zgsz3360, UNIT);
-                  goto finish_match_346;
+                  sailgen_NonezIbzK(&zgsz3227, UNIT);
+                  goto finish_match_258;
                 }
-              case_347: ;
-              finish_match_346: ;
-                COPY(zoptionzIbzK)(&zgaz3111, zgsz3360);
-                KILL(zoptionzIbzK)(&zgsz3360);
-                goto finish_match_343;
+              case_259: ;
+              finish_match_258: ;
+                COPY(zoptionzIbzK)(&zgaz3129, zgsz3227);
+                KILL(zoptionzIbzK)(&zgsz3227);
+                goto finish_match_255;
               }
-            case_345: ;
+            case_257: ;
               {
-                sailgen_NonezIbzK(&zgaz3111, UNIT);
-                goto finish_match_343;
+                sailgen_NonezIbzK(&zgaz3129, UNIT);
+                goto finish_match_255;
               }
-            case_344: ;
-            finish_match_343: ;
+            case_256: ;
+            finish_match_255: ;
             }
-            uint64_t zgsz3364;
+            uint64_t zgsz3231;
             {
-              if (zgaz3111.kind != Kind_zSomezIbzK) goto case_395;
-              zgsz3364 = CONVERT_OF(fbits, lbits)(zgaz3111.zSomezIbzK, true);
-              goto finish_match_349;
+              if (zgaz3129.kind != Kind_zSomezIbzK) goto case_334;
+              zgsz3231 = CONVERT_OF(fbits, lbits)(zgaz3129.variants.zSomezIbzK, true);
+              goto finish_match_261;
             }
-          case_395: ;
+          case_334: ;
             {
-              __label__ case_394, case_358, finish_match_357;
+              __label__ case_333, case_270, finish_match_269;
 
               /* complete */
-              struct zoptionzIbzK zgaz3122;
-              CREATE(zoptionzIbzK)(&zgaz3122);
+              struct zoptionzIbzK zgaz3142;
+              CREATE(zoptionzIbzK)(&zgaz3142);
               {
-                __label__ case_353, case_352, finish_match_351;
+                __label__ case_265, case_264, finish_match_263;
 
                 {
-                  __label__ case_356, case_355, finish_match_354;
+                  __label__ case_268, case_267, finish_match_266;
 
-                  bool zuz3117;
-                  zuz3117 = zhead_expz3.ztup0.zR;
-                  bool zuz3118;
-                  zuz3118 = zhead_expz3.ztup0.zW;
-                  bool zuz3119;
-                  zuz3119 = zhead_expz3.ztup0.zC;
-                  bool zuz3120;
-                  zuz3120 = zhead_expz3.ztup0.zLM;
-                  bool zuz3121;
-                  zuz3121 = zhead_expz3.ztup0.zX;
-                  bool zuz3122;
-                  zuz3122 = zhead_expz3.ztup0.zASR;
+                  bool zuz354;
+                  zuz354 = zhead_expz3.ztup0.zR;
+                  bool zuz355;
+                  zuz355 = zhead_expz3.ztup0.zW;
+                  bool zuz356;
+                  zuz356 = zhead_expz3.ztup0.zC;
+                  bool zuz357;
+                  zuz357 = zhead_expz3.ztup0.zLM;
+                  bool zuz358;
+                  zuz358 = zhead_expz3.ztup0.zEL;
+                  bool zuz359;
+                  zuz359 = zhead_expz3.ztup0.zSL;
+                  bool zuz360;
+                  zuz360 = zhead_expz3.ztup0.zX;
+                  bool zuz361;
+                  zuz361 = zhead_expz3.ztup0.zASR;
                   enum zExecutionMode zmapping6z3;
                   zmapping6z3 = zhead_expz3.ztup1;
-                  bool zgaz3121;
+                  bool zgaz3141;
                   {
-                    bool zgaz3120;
+                    bool zgaz3140;
                     {
-                      bool zgaz3119;
+                      bool zgaz3139;
                       {
-                        bool zgaz3118;
+                        bool zgaz3138;
                         {
-                          bool zgaz3117;
+                          bool zgaz3137;
                           {
-                            bool zgaz3116;
-                            zgaz3116 = sailgen_execution_mode_encdec_forwards_matches(zmapping6z3);
-                            bool zgsz3367;
-                            if (zgaz3116) {  zgsz3367 = eq_bool(zuz3122, false);  } else {  zgsz3367 = false;  }
-                            zgaz3117 = zgsz3367;
+                            bool zgaz3136;
+                            {
+                              bool zgaz3135;
+                              {
+                                bool zgaz3134;
+                                zgaz3134 = sailgen_execution_mode_encdec_forwards_matches(zmapping6z3);
+                                bool zgsz3234;
+                                if (zgaz3134) {  zgsz3234 = eq_bool(zuz361, false);  } else {  zgsz3234 = false;  }
+                                zgaz3135 = zgsz3234;
+                              }
+                              bool zgsz3235;
+                              if (zgaz3135) {  zgsz3235 = eq_bool(zuz360, true);  } else {  zgsz3235 = false;  }
+                              zgaz3136 = zgsz3235;
+                            }
+                            bool zgsz3236;
+                            if (zgaz3136) {  zgsz3236 = eq_bool(zuz359, true);  } else {  zgsz3236 = false;  }
+                            zgaz3137 = zgsz3236;
                           }
-                          bool zgsz3368;
-                          if (zgaz3117) {  zgsz3368 = eq_bool(zuz3121, true);  } else {  zgsz3368 = false;  }
-                          zgaz3118 = zgsz3368;
+                          bool zgsz3237;
+                          if (zgaz3137) {  zgsz3237 = eq_bool(zuz358, true);  } else {  zgsz3237 = false;  }
+                          zgaz3138 = zgsz3237;
                         }
-                        bool zgsz3369;
-                        if (zgaz3118) {  zgsz3369 = eq_bool(zuz3120, true);  } else {  zgsz3369 = false;  }
-                        zgaz3119 = zgsz3369;
+                        bool zgsz3238;
+                        if (zgaz3138) {  zgsz3238 = eq_bool(zuz357, true);  } else {  zgsz3238 = false;  }
+                        zgaz3139 = zgsz3238;
                       }
-                      bool zgsz3370;
-                      if (zgaz3119) {  zgsz3370 = eq_bool(zuz3119, true);  } else {  zgsz3370 = false;  }
-                      zgaz3120 = zgsz3370;
+                      bool zgsz3239;
+                      if (zgaz3139) {  zgsz3239 = eq_bool(zuz356, true);  } else {  zgsz3239 = false;  }
+                      zgaz3140 = zgsz3239;
                     }
-                    bool zgsz3371;
-                    if (zgaz3120) {  zgsz3371 = eq_bool(zuz3118, true);  } else {  zgsz3371 = false;  }
-                    zgaz3121 = zgsz3371;
+                    bool zgsz3240;
+                    if (zgaz3140) {  zgsz3240 = eq_bool(zuz355, true);  } else {  zgsz3240 = false;  }
+                    zgaz3141 = zgsz3240;
                   }
-                  bool zgsz3372;
-                  if (zgaz3121) {  zgsz3372 = eq_bool(zuz3117, true);  } else {  zgsz3372 = false;  }
-                  bool zgsz3376;
-                  zgsz3376 = zgsz3372;
-                  if (!(zgsz3376)) {
-
-
-
-
-
-
-                    goto case_353;
-                  }
-                  uint64_t zgaz3112;
-                  zgaz3112 = sailgen_execution_mode_encdec_forwards_infallible(zmapping6z3);
-                  struct zoptionzIbzK zgsz3373;
-                  CREATE(zoptionzIbzK)(&zgsz3373);
+                  bool zgsz3241;
+                  if (zgaz3141) {  zgsz3241 = eq_bool(zuz354, true);  } else {  zgsz3241 = false;  }
+                  bool zgsz3245;
+                  zgsz3245 = zgsz3241;
+                  if (!(zgsz3245)) {  goto case_265;  }
+                  uint64_t zgaz3130;
+                  zgaz3130 = sailgen_execution_mode_encdec_forwards_infallible(zmapping6z3);
+                  struct zoptionzIbzK zgsz3242;
+                  CREATE(zoptionzIbzK)(&zgsz3242);
                   {
-                    uint64_t zuz3123;
-                    zuz3123 = zgaz3112;
-                    uint64_t zgaz3115;
+                    uint64_t zuz362;
+                    zuz362 = zgaz3130;
+                    uint64_t zgaz3133;
                     {
-                      uint64_t zgaz3114;
+                      uint64_t zgaz3132;
                       {
-                        uint64_t zgaz3113;
-                        zgaz3113 = zuz3123;
-                        zgaz3114 = (UINT64_C(0b10) << 1) | zgaz3113;
+                        uint64_t zgaz3131;
+                        zgaz3131 = zuz362;
+                        zgaz3132 = (UINT64_C(0b10) << 1) | zgaz3131;
                       }
-                      zgaz3115 = (UINT64_C(0b01) << 3) | zgaz3114;
+                      zgaz3133 = (UINT64_C(0b01) << 3) | zgaz3132;
                     }
                     {
-                      RECREATE(lbits)(&zghz3112);
-                      CONVERT_OF(lbits, fbits)(&zghz3112, zgaz3115, UINT64_C(5) , true);
-                      sailgen_SomezIbzK(&zgsz3373, zghz3112);
+                      RECREATE(lbits)(&zghz3116);
+                      CONVERT_OF(lbits, fbits)(&zghz3116, zgaz3133, UINT64_C(5) , true);
+                      sailgen_SomezIbzK(&zgsz3242, zghz3116);
                     }
-                    goto finish_match_354;
+                    goto finish_match_266;
                   }
-                case_356: ;
+                case_268: ;
                   {
-                    sailgen_NonezIbzK(&zgsz3373, UNIT);
-                    goto finish_match_354;
+                    sailgen_NonezIbzK(&zgsz3242, UNIT);
+                    goto finish_match_266;
                   }
-                case_355: ;
-                finish_match_354: ;
-                  COPY(zoptionzIbzK)(&zgaz3122, zgsz3373);
-                  KILL(zoptionzIbzK)(&zgsz3373);
-                  goto finish_match_351;
+                case_267: ;
+                finish_match_266: ;
+                  COPY(zoptionzIbzK)(&zgaz3142, zgsz3242);
+                  KILL(zoptionzIbzK)(&zgsz3242);
+                  goto finish_match_263;
                 }
-              case_353: ;
+              case_265: ;
                 {
-                  sailgen_NonezIbzK(&zgaz3122, UNIT);
-                  goto finish_match_351;
+                  sailgen_NonezIbzK(&zgaz3142, UNIT);
+                  goto finish_match_263;
                 }
-              case_352: ;
-              finish_match_351: ;
+              case_264: ;
+              finish_match_263: ;
               }
-              uint64_t zgsz3377;
+              uint64_t zgsz3246;
               {
-                if (zgaz3122.kind != Kind_zSomezIbzK) goto case_394;
-                zgsz3377 = CONVERT_OF(fbits, lbits)(zgaz3122.zSomezIbzK, true);
-                goto finish_match_357;
+                if (zgaz3142.kind != Kind_zSomezIbzK) goto case_333;
+                zgsz3246 = CONVERT_OF(fbits, lbits)(zgaz3142.variants.zSomezIbzK, true);
+                goto finish_match_269;
               }
-            case_394: ;
+            case_333: ;
               {
-                __label__ case_393, case_366, finish_match_365;
+                __label__ case_332, case_278, finish_match_277;
 
                 /* complete */
-                struct zoptionzIbzK zgaz3133;
-                CREATE(zoptionzIbzK)(&zgaz3133);
+                struct zoptionzIbzK zgaz3155;
+                CREATE(zoptionzIbzK)(&zgaz3155);
                 {
-                  __label__ case_361, case_360, finish_match_359;
+                  __label__ case_273, case_272, finish_match_271;
 
                   {
-                    __label__ case_364, case_363, finish_match_362;
+                    __label__ case_276, case_275, finish_match_274;
 
-                    bool zuz3125;
-                    zuz3125 = zhead_expz3.ztup0.zR;
-                    bool zuz3126;
-                    zuz3126 = zhead_expz3.ztup0.zW;
-                    bool zuz3127;
-                    zuz3127 = zhead_expz3.ztup0.zC;
-                    bool zuz3128;
-                    zuz3128 = zhead_expz3.ztup0.zLM;
-                    bool zuz3129;
-                    zuz3129 = zhead_expz3.ztup0.zX;
-                    bool zuz3130;
-                    zuz3130 = zhead_expz3.ztup0.zASR;
+                    bool zuz364;
+                    zuz364 = zhead_expz3.ztup0.zR;
+                    bool zuz365;
+                    zuz365 = zhead_expz3.ztup0.zW;
+                    bool zuz366;
+                    zuz366 = zhead_expz3.ztup0.zC;
+                    bool zuz367;
+                    zuz367 = zhead_expz3.ztup0.zLM;
+                    bool zuz368;
+                    zuz368 = zhead_expz3.ztup0.zEL;
+                    bool zuz369;
+                    zuz369 = zhead_expz3.ztup0.zSL;
+                    bool zuz370;
+                    zuz370 = zhead_expz3.ztup0.zX;
+                    bool zuz371;
+                    zuz371 = zhead_expz3.ztup0.zASR;
                     enum zExecutionMode zmapping7z3;
                     zmapping7z3 = zhead_expz3.ztup1;
-                    bool zgaz3132;
+                    bool zgaz3154;
                     {
-                      bool zgaz3131;
+                      bool zgaz3153;
                       {
-                        bool zgaz3130;
+                        bool zgaz3152;
                         {
-                          bool zgaz3129;
+                          bool zgaz3151;
                           {
-                            bool zgaz3128;
+                            bool zgaz3150;
                             {
-                              bool zgaz3127;
-                              zgaz3127 = sailgen_execution_mode_encdec_forwards_matches(zmapping7z3);
-                              bool zgsz3380;
-                              if (zgaz3127) {  zgsz3380 = eq_bool(zuz3130, false);  } else {  zgsz3380 = false;  }
-                              zgaz3128 = zgsz3380;
+                              bool zgaz3149;
+                              {
+                                bool zgaz3148;
+                                {
+                                  bool zgaz3147;
+                                  zgaz3147 = sailgen_execution_mode_encdec_forwards_matches(zmapping7z3);
+                                  bool zgsz3249;
+                                  if (zgaz3147) {  zgsz3249 = eq_bool(zuz371, false);  } else {  zgsz3249 = false;  }
+                                  zgaz3148 = zgsz3249;
+                                }
+                                bool zgsz3250;
+                                if (zgaz3148) {  zgsz3250 = eq_bool(zuz370, true);  } else {  zgsz3250 = false;  }
+                                zgaz3149 = zgsz3250;
+                              }
+                              bool zgsz3251;
+                              if (zgaz3149) {  zgsz3251 = eq_bool(zuz369, false);  } else {  zgsz3251 = false;  }
+                              zgaz3150 = zgsz3251;
                             }
-                            bool zgsz3381;
-                            if (zgaz3128) {  zgsz3381 = eq_bool(zuz3129, true);  } else {  zgsz3381 = false;  }
-                            zgaz3129 = zgsz3381;
+                            bool zgsz3252;
+                            if (zgaz3150) {  zgsz3252 = eq_bool(zuz368, false);  } else {  zgsz3252 = false;  }
+                            zgaz3151 = zgsz3252;
                           }
-                          bool zgsz3382;
-                          if (zgaz3129) {  zgsz3382 = eq_bool(zuz3128, false);  } else {  zgsz3382 = false;  }
-                          zgaz3130 = zgsz3382;
+                          bool zgsz3253;
+                          if (zgaz3151) {  zgsz3253 = eq_bool(zuz367, false);  } else {  zgsz3253 = false;  }
+                          zgaz3152 = zgsz3253;
                         }
-                        bool zgsz3383;
-                        if (zgaz3130) {  zgsz3383 = eq_bool(zuz3127, false);  } else {  zgsz3383 = false;  }
-                        zgaz3131 = zgsz3383;
+                        bool zgsz3254;
+                        if (zgaz3152) {  zgsz3254 = eq_bool(zuz366, false);  } else {  zgsz3254 = false;  }
+                        zgaz3153 = zgsz3254;
                       }
-                      bool zgsz3384;
-                      if (zgaz3131) {  zgsz3384 = eq_bool(zuz3126, true);  } else {  zgsz3384 = false;  }
-                      zgaz3132 = zgsz3384;
+                      bool zgsz3255;
+                      if (zgaz3153) {  zgsz3255 = eq_bool(zuz365, true);  } else {  zgsz3255 = false;  }
+                      zgaz3154 = zgsz3255;
                     }
-                    bool zgsz3385;
-                    if (zgaz3132) {  zgsz3385 = eq_bool(zuz3125, true);  } else {  zgsz3385 = false;  }
-                    bool zgsz3389;
-                    zgsz3389 = zgsz3385;
-                    if (!(zgsz3389)) {
-
-
-
-
-
-
-                      goto case_361;
-                    }
-                    uint64_t zgaz3123;
-                    zgaz3123 = sailgen_execution_mode_encdec_forwards_infallible(zmapping7z3);
-                    struct zoptionzIbzK zgsz3386;
-                    CREATE(zoptionzIbzK)(&zgsz3386);
+                    bool zgsz3256;
+                    if (zgaz3154) {  zgsz3256 = eq_bool(zuz364, true);  } else {  zgsz3256 = false;  }
+                    bool zgsz3260;
+                    zgsz3260 = zgsz3256;
+                    if (!(zgsz3260)) {  goto case_273;  }
+                    uint64_t zgaz3143;
+                    zgaz3143 = sailgen_execution_mode_encdec_forwards_infallible(zmapping7z3);
+                    struct zoptionzIbzK zgsz3257;
+                    CREATE(zoptionzIbzK)(&zgsz3257);
                     {
-                      uint64_t zuz3131;
-                      zuz3131 = zgaz3123;
-                      uint64_t zgaz3126;
+                      uint64_t zuz372;
+                      zuz372 = zgaz3143;
+                      uint64_t zgaz3146;
                       {
-                        uint64_t zgaz3125;
+                        uint64_t zgaz3145;
                         {
-                          uint64_t zgaz3124;
-                          zgaz3124 = zuz3131;
-                          zgaz3125 = (UINT64_C(0b11) << 1) | zgaz3124;
+                          uint64_t zgaz3144;
+                          zgaz3144 = zuz372;
+                          zgaz3145 = (UINT64_C(0b11) << 1) | zgaz3144;
                         }
-                        zgaz3126 = (UINT64_C(0b01) << 3) | zgaz3125;
+                        zgaz3146 = (UINT64_C(0b01) << 3) | zgaz3145;
                       }
                       {
-                        RECREATE(lbits)(&zghz3111);
-                        CONVERT_OF(lbits, fbits)(&zghz3111, zgaz3126, UINT64_C(5) , true);
-                        sailgen_SomezIbzK(&zgsz3386, zghz3111);
+                        RECREATE(lbits)(&zghz3115);
+                        CONVERT_OF(lbits, fbits)(&zghz3115, zgaz3146, UINT64_C(5) , true);
+                        sailgen_SomezIbzK(&zgsz3257, zghz3115);
                       }
-                      goto finish_match_362;
+                      goto finish_match_274;
                     }
-                  case_364: ;
+                  case_276: ;
                     {
-                      sailgen_NonezIbzK(&zgsz3386, UNIT);
-                      goto finish_match_362;
+                      sailgen_NonezIbzK(&zgsz3257, UNIT);
+                      goto finish_match_274;
                     }
-                  case_363: ;
-                  finish_match_362: ;
-                    COPY(zoptionzIbzK)(&zgaz3133, zgsz3386);
-                    KILL(zoptionzIbzK)(&zgsz3386);
-                    goto finish_match_359;
+                  case_275: ;
+                  finish_match_274: ;
+                    COPY(zoptionzIbzK)(&zgaz3155, zgsz3257);
+                    KILL(zoptionzIbzK)(&zgsz3257);
+                    goto finish_match_271;
                   }
-                case_361: ;
+                case_273: ;
                   {
-                    sailgen_NonezIbzK(&zgaz3133, UNIT);
-                    goto finish_match_359;
+                    sailgen_NonezIbzK(&zgaz3155, UNIT);
+                    goto finish_match_271;
                   }
-                case_360: ;
-                finish_match_359: ;
+                case_272: ;
+                finish_match_271: ;
                 }
-                uint64_t zgsz3390;
+                uint64_t zgsz3261;
                 {
-                  if (zgaz3133.kind != Kind_zSomezIbzK) goto case_393;
-                  zgsz3390 = CONVERT_OF(fbits, lbits)(zgaz3133.zSomezIbzK, true);
-                  goto finish_match_365;
+                  if (zgaz3155.kind != Kind_zSomezIbzK) goto case_332;
+                  zgsz3261 = CONVERT_OF(fbits, lbits)(zgaz3155.variants.zSomezIbzK, true);
+                  goto finish_match_277;
                 }
-              case_393: ;
+              case_332: ;
                 {
-                  __label__ case_392, case_374, finish_match_373;
+                  __label__ case_331, case_286, finish_match_285;
 
                   /* complete */
-                  struct zoptionzIbzK zgaz3141;
-                  CREATE(zoptionzIbzK)(&zgaz3141);
+                  struct zoptionzIbzK zgaz3165;
+                  CREATE(zoptionzIbzK)(&zgaz3165);
                   {
-                    __label__ case_369, case_368, finish_match_367;
+                    __label__ case_281, case_280, finish_match_279;
 
                     {
-                      __label__ case_372, case_371, finish_match_370;
+                      __label__ case_284, case_283, finish_match_282;
 
-                      bool zuz3133;
-                      zuz3133 = zhead_expz3.ztup0.zR;
-                      bool zuz3134;
-                      zuz3134 = zhead_expz3.ztup0.zW;
-                      bool zuz3135;
-                      zuz3135 = zhead_expz3.ztup0.zC;
-                      bool zuz3136;
-                      zuz3136 = zhead_expz3.ztup0.zLM;
-                      bool zuz3137;
-                      zuz3137 = zhead_expz3.ztup0.zX;
-                      bool zuz3138;
-                      zuz3138 = zhead_expz3.ztup0.zASR;
+                      bool zuz374;
+                      zuz374 = zhead_expz3.ztup0.zR;
+                      bool zuz375;
+                      zuz375 = zhead_expz3.ztup0.zW;
+                      bool zuz376;
+                      zuz376 = zhead_expz3.ztup0.zC;
+                      bool zuz377;
+                      zuz377 = zhead_expz3.ztup0.zLM;
+                      bool zuz378;
+                      zuz378 = zhead_expz3.ztup0.zEL;
+                      bool zuz379;
+                      zuz379 = zhead_expz3.ztup0.zSL;
+                      bool zuz380;
+                      zuz380 = zhead_expz3.ztup0.zX;
+                      bool zuz381;
+                      zuz381 = zhead_expz3.ztup0.zASR;
                       enum zExecutionMode zmapping8z3;
                       zmapping8z3 = zhead_expz3.ztup1;
-                      bool zgaz3140;
+                      bool zgaz3164;
                       {
-                        bool zgaz3139;
+                        bool zgaz3163;
                         {
-                          bool zgaz3138;
+                          bool zgaz3162;
                           {
-                            bool zgaz3137;
+                            bool zgaz3161;
                             {
-                              bool zgaz3136;
+                              bool zgaz3160;
                               {
-                                bool zgaz3135;
-                                zgaz3135 = sailgen_execution_mode_encdec_forwards_matches(zmapping8z3);
-                                bool zgsz3393;
-                                if (zgaz3135) {  zgsz3393 = eq_bool(zuz3138, false);  } else {  zgsz3393 = false;  }
-                                zgaz3136 = zgsz3393;
+                                bool zgaz3159;
+                                {
+                                  bool zgaz3158;
+                                  {
+                                    bool zgaz3157;
+                                    zgaz3157 = sailgen_execution_mode_encdec_forwards_matches(zmapping8z3);
+                                    bool zgsz3264;
+                                    if (zgaz3157) {  zgsz3264 = eq_bool(zuz381, false);  } else {  zgsz3264 = false;  }
+                                    zgaz3158 = zgsz3264;
+                                  }
+                                  bool zgsz3265;
+                                  if (zgaz3158) {  zgsz3265 = eq_bool(zuz380, false);  } else {  zgsz3265 = false;  }
+                                  zgaz3159 = zgsz3265;
+                                }
+                                bool zgsz3266;
+                                if (zgaz3159) {  zgsz3266 = eq_bool(zuz379, false);  } else {  zgsz3266 = false;  }
+                                zgaz3160 = zgsz3266;
                               }
-                              bool zgsz3394;
-                              if (zgaz3136) {  zgsz3394 = eq_bool(zuz3137, false);  } else {  zgsz3394 = false;  }
-                              zgaz3137 = zgsz3394;
+                              bool zgsz3267;
+                              if (zgaz3160) {  zgsz3267 = eq_bool(zuz378, false);  } else {  zgsz3267 = false;  }
+                              zgaz3161 = zgsz3267;
                             }
-                            bool zgsz3395;
-                            if (zgaz3137) {  zgsz3395 = eq_bool(zuz3136, false);  } else {  zgsz3395 = false;  }
-                            zgaz3138 = zgsz3395;
+                            bool zgsz3268;
+                            if (zgaz3161) {  zgsz3268 = eq_bool(zuz377, false);  } else {  zgsz3268 = false;  }
+                            zgaz3162 = zgsz3268;
                           }
-                          bool zgsz3396;
-                          if (zgaz3138) {  zgsz3396 = eq_bool(zuz3135, true);  } else {  zgsz3396 = false;  }
-                          zgaz3139 = zgsz3396;
+                          bool zgsz3269;
+                          if (zgaz3162) {  zgsz3269 = eq_bool(zuz376, true);  } else {  zgsz3269 = false;  }
+                          zgaz3163 = zgsz3269;
                         }
-                        bool zgsz3397;
-                        if (zgaz3139) {  zgsz3397 = eq_bool(zuz3134, false);  } else {  zgsz3397 = false;  }
-                        zgaz3140 = zgsz3397;
+                        bool zgsz3270;
+                        if (zgaz3163) {  zgsz3270 = eq_bool(zuz375, false);  } else {  zgsz3270 = false;  }
+                        zgaz3164 = zgsz3270;
                       }
-                      bool zgsz3398;
-                      if (zgaz3140) {  zgsz3398 = eq_bool(zuz3133, true);  } else {  zgsz3398 = false;  }
-                      bool zgsz3402;
-                      zgsz3402 = zgsz3398;
-                      if (!(zgsz3402)) {
-
-
-
-
-
-
-                        goto case_369;
-                      }
-                      uint64_t zgaz3134;
-                      zgaz3134 = sailgen_execution_mode_encdec_forwards_infallible(zmapping8z3);
-                      struct zoptionzIbzK zgsz3399;
-                      CREATE(zoptionzIbzK)(&zgsz3399);
+                      bool zgsz3271;
+                      if (zgaz3164) {  zgsz3271 = eq_bool(zuz374, true);  } else {  zgsz3271 = false;  }
+                      bool zgsz3275;
+                      zgsz3275 = zgsz3271;
+                      if (!(zgsz3275)) {  goto case_281;  }
+                      uint64_t zgaz3156;
+                      zgaz3156 = sailgen_execution_mode_encdec_forwards_infallible(zmapping8z3);
+                      struct zoptionzIbzK zgsz3272;
+                      CREATE(zoptionzIbzK)(&zgsz3272);
                       {
-                        uint64_t zb__2;
-                        zb__2 = zgaz3134;
-                        bool zgsz3401;
-                        zgsz3401 = (zb__2 == UINT64_C(0b0));
-                        if (!(zgsz3401)) {
-
-                          goto case_372;
-                        }
+                        uint64_t zb__5;
+                        zb__5 = zgaz3156;
+                        bool zgsz3274;
+                        zgsz3274 = (zb__5 == UINT64_C(0b0));
+                        if (!(zgsz3274)) {  goto case_284;  }
                         {
-                          RECREATE(lbits)(&zghz3110);
-                          CONVERT_OF(lbits, fbits)(&zghz3110, UINT64_C(0b10011), UINT64_C(5) , true);
-                          sailgen_SomezIbzK(&zgsz3399, zghz3110);
+                          RECREATE(lbits)(&zghz3114);
+                          CONVERT_OF(lbits, fbits)(&zghz3114, UINT64_C(0b10011), UINT64_C(5) , true);
+                          sailgen_SomezIbzK(&zgsz3272, zghz3114);
                         }
-                        goto finish_match_370;
+                        goto finish_match_282;
                       }
-                    case_372: ;
+                    case_284: ;
                       {
-                        sailgen_NonezIbzK(&zgsz3399, UNIT);
-                        goto finish_match_370;
+                        sailgen_NonezIbzK(&zgsz3272, UNIT);
+                        goto finish_match_282;
                       }
-                    case_371: ;
-                    finish_match_370: ;
-                      COPY(zoptionzIbzK)(&zgaz3141, zgsz3399);
-                      KILL(zoptionzIbzK)(&zgsz3399);
-                      goto finish_match_367;
+                    case_283: ;
+                    finish_match_282: ;
+                      COPY(zoptionzIbzK)(&zgaz3165, zgsz3272);
+                      KILL(zoptionzIbzK)(&zgsz3272);
+                      goto finish_match_279;
                     }
-                  case_369: ;
+                  case_281: ;
                     {
-                      sailgen_NonezIbzK(&zgaz3141, UNIT);
-                      goto finish_match_367;
+                      sailgen_NonezIbzK(&zgaz3165, UNIT);
+                      goto finish_match_279;
                     }
-                  case_368: ;
-                  finish_match_367: ;
+                  case_280: ;
+                  finish_match_279: ;
                   }
-                  uint64_t zgsz3403;
+                  uint64_t zgsz3276;
                   {
-                    if (zgaz3141.kind != Kind_zSomezIbzK) goto case_392;
-                    zgsz3403 = CONVERT_OF(fbits, lbits)(zgaz3141.zSomezIbzK, true);
-                    goto finish_match_373;
+                    if (zgaz3165.kind != Kind_zSomezIbzK) goto case_331;
+                    zgsz3276 = CONVERT_OF(fbits, lbits)(zgaz3165.variants.zSomezIbzK, true);
+                    goto finish_match_285;
                   }
-                case_392: ;
+                case_331: ;
                   {
-                    __label__ case_391, case_382, finish_match_381;
+                    __label__ case_330, case_294, finish_match_293;
 
                     /* complete */
-                    struct zoptionzIbzK zgaz3149;
-                    CREATE(zoptionzIbzK)(&zgaz3149);
+                    struct zoptionzIbzK zgaz3175;
+                    CREATE(zoptionzIbzK)(&zgaz3175);
                     {
-                      __label__ case_377, case_376, finish_match_375;
+                      __label__ case_289, case_288, finish_match_287;
 
                       {
-                        __label__ case_380, case_379, finish_match_378;
+                        __label__ case_292, case_291, finish_match_290;
 
-                        bool zuz3140;
-                        zuz3140 = zhead_expz3.ztup0.zR;
-                        bool zuz3141;
-                        zuz3141 = zhead_expz3.ztup0.zW;
-                        bool zuz3142;
-                        zuz3142 = zhead_expz3.ztup0.zC;
-                        bool zuz3143;
-                        zuz3143 = zhead_expz3.ztup0.zLM;
-                        bool zuz3144;
-                        zuz3144 = zhead_expz3.ztup0.zX;
-                        bool zuz3145;
-                        zuz3145 = zhead_expz3.ztup0.zASR;
+                        bool zuz383;
+                        zuz383 = zhead_expz3.ztup0.zR;
+                        bool zuz384;
+                        zuz384 = zhead_expz3.ztup0.zW;
+                        bool zuz385;
+                        zuz385 = zhead_expz3.ztup0.zC;
+                        bool zuz386;
+                        zuz386 = zhead_expz3.ztup0.zLM;
+                        bool zuz387;
+                        zuz387 = zhead_expz3.ztup0.zEL;
+                        bool zuz388;
+                        zuz388 = zhead_expz3.ztup0.zSL;
+                        bool zuz389;
+                        zuz389 = zhead_expz3.ztup0.zX;
+                        bool zuz390;
+                        zuz390 = zhead_expz3.ztup0.zASR;
                         enum zExecutionMode zmapping9z3;
                         zmapping9z3 = zhead_expz3.ztup1;
-                        bool zgaz3148;
+                        bool zgaz3174;
                         {
-                          bool zgaz3147;
+                          bool zgaz3173;
                           {
-                            bool zgaz3146;
+                            bool zgaz3172;
                             {
-                              bool zgaz3145;
+                              bool zgaz3171;
                               {
-                                bool zgaz3144;
+                                bool zgaz3170;
                                 {
-                                  bool zgaz3143;
-                                  zgaz3143 = sailgen_execution_mode_encdec_forwards_matches(zmapping9z3);
-                                  bool zgsz3406;
-                                  if (zgaz3143) {  zgsz3406 = eq_bool(zuz3145, false);  } else {  zgsz3406 = false;  }
-                                  zgaz3144 = zgsz3406;
+                                  bool zgaz3169;
+                                  {
+                                    bool zgaz3168;
+                                    {
+                                      bool zgaz3167;
+                                      zgaz3167 = sailgen_execution_mode_encdec_forwards_matches(zmapping9z3);
+                                      bool zgsz3279;
+                                      if (zgaz3167) {  zgsz3279 = eq_bool(zuz390, false);  } else {
+                                        zgsz3279 = false;
+                                      }
+                                      zgaz3168 = zgsz3279;
+                                    }
+                                    bool zgsz3280;
+                                    if (zgaz3168) {  zgsz3280 = eq_bool(zuz389, false);  } else {  zgsz3280 = false;  }
+                                    zgaz3169 = zgsz3280;
+                                  }
+                                  bool zgsz3281;
+                                  if (zgaz3169) {  zgsz3281 = eq_bool(zuz388, true);  } else {  zgsz3281 = false;  }
+                                  zgaz3170 = zgsz3281;
                                 }
-                                bool zgsz3407;
-                                if (zgaz3144) {  zgsz3407 = eq_bool(zuz3144, false);  } else {  zgsz3407 = false;  }
-                                zgaz3145 = zgsz3407;
+                                bool zgsz3282;
+                                if (zgaz3170) {  zgsz3282 = eq_bool(zuz387, false);  } else {  zgsz3282 = false;  }
+                                zgaz3171 = zgsz3282;
                               }
-                              bool zgsz3408;
-                              if (zgaz3145) {  zgsz3408 = eq_bool(zuz3143, true);  } else {  zgsz3408 = false;  }
-                              zgaz3146 = zgsz3408;
+                              bool zgsz3283;
+                              if (zgaz3171) {  zgsz3283 = eq_bool(zuz386, true);  } else {  zgsz3283 = false;  }
+                              zgaz3172 = zgsz3283;
                             }
-                            bool zgsz3409;
-                            if (zgaz3146) {  zgsz3409 = eq_bool(zuz3142, true);  } else {  zgsz3409 = false;  }
-                            zgaz3147 = zgsz3409;
+                            bool zgsz3284;
+                            if (zgaz3172) {  zgsz3284 = eq_bool(zuz385, true);  } else {  zgsz3284 = false;  }
+                            zgaz3173 = zgsz3284;
                           }
-                          bool zgsz3410;
-                          if (zgaz3147) {  zgsz3410 = eq_bool(zuz3141, false);  } else {  zgsz3410 = false;  }
-                          zgaz3148 = zgsz3410;
+                          bool zgsz3285;
+                          if (zgaz3173) {  zgsz3285 = eq_bool(zuz384, true);  } else {  zgsz3285 = false;  }
+                          zgaz3174 = zgsz3285;
                         }
-                        bool zgsz3411;
-                        if (zgaz3148) {  zgsz3411 = eq_bool(zuz3140, true);  } else {  zgsz3411 = false;  }
-                        bool zgsz3415;
-                        zgsz3415 = zgsz3411;
-                        if (!(zgsz3415)) {
-
-
-
-
-
-
-                          goto case_377;
-                        }
-                        uint64_t zgaz3142;
-                        zgaz3142 = sailgen_execution_mode_encdec_forwards_infallible(zmapping9z3);
-                        struct zoptionzIbzK zgsz3412;
-                        CREATE(zoptionzIbzK)(&zgsz3412);
+                        bool zgsz3286;
+                        if (zgaz3174) {  zgsz3286 = eq_bool(zuz383, true);  } else {  zgsz3286 = false;  }
+                        bool zgsz3290;
+                        zgsz3290 = zgsz3286;
+                        if (!(zgsz3290)) {  goto case_289;  }
+                        uint64_t zgaz3166;
+                        zgaz3166 = sailgen_execution_mode_encdec_forwards_infallible(zmapping9z3);
+                        struct zoptionzIbzK zgsz3287;
+                        CREATE(zoptionzIbzK)(&zgsz3287);
                         {
-                          uint64_t zb__1;
-                          zb__1 = zgaz3142;
-                          bool zgsz3414;
-                          zgsz3414 = (zb__1 == UINT64_C(0b0));
-                          if (!(zgsz3414)) {
-
-                            goto case_380;
-                          }
+                          uint64_t zb__4;
+                          zb__4 = zgaz3166;
+                          bool zgsz3289;
+                          zgsz3289 = (zb__4 == UINT64_C(0b0));
+                          if (!(zgsz3289)) {  goto case_292;  }
                           {
-                            RECREATE(lbits)(&zghz3109);
-                            CONVERT_OF(lbits, fbits)(&zghz3109, UINT64_C(0b11011), UINT64_C(5) , true);
-                            sailgen_SomezIbzK(&zgsz3412, zghz3109);
+                            RECREATE(lbits)(&zghz3113);
+                            CONVERT_OF(lbits, fbits)(&zghz3113, UINT64_C(0b10110), UINT64_C(5) , true);
+                            sailgen_SomezIbzK(&zgsz3287, zghz3113);
                           }
-                          goto finish_match_378;
+                          goto finish_match_290;
                         }
-                      case_380: ;
+                      case_292: ;
                         {
-                          sailgen_NonezIbzK(&zgsz3412, UNIT);
-                          goto finish_match_378;
+                          sailgen_NonezIbzK(&zgsz3287, UNIT);
+                          goto finish_match_290;
                         }
-                      case_379: ;
-                      finish_match_378: ;
-                        COPY(zoptionzIbzK)(&zgaz3149, zgsz3412);
-                        KILL(zoptionzIbzK)(&zgsz3412);
-                        goto finish_match_375;
+                      case_291: ;
+                      finish_match_290: ;
+                        COPY(zoptionzIbzK)(&zgaz3175, zgsz3287);
+                        KILL(zoptionzIbzK)(&zgsz3287);
+                        goto finish_match_287;
                       }
-                    case_377: ;
+                    case_289: ;
                       {
-                        sailgen_NonezIbzK(&zgaz3149, UNIT);
-                        goto finish_match_375;
+                        sailgen_NonezIbzK(&zgaz3175, UNIT);
+                        goto finish_match_287;
                       }
-                    case_376: ;
-                    finish_match_375: ;
+                    case_288: ;
+                    finish_match_287: ;
                     }
-                    uint64_t zgsz3416;
+                    uint64_t zgsz3291;
                     {
-                      if (zgaz3149.kind != Kind_zSomezIbzK) goto case_391;
-                      zgsz3416 = CONVERT_OF(fbits, lbits)(zgaz3149.zSomezIbzK, true);
-                      goto finish_match_381;
+                      if (zgaz3175.kind != Kind_zSomezIbzK) goto case_330;
+                      zgsz3291 = CONVERT_OF(fbits, lbits)(zgaz3175.variants.zSomezIbzK, true);
+                      goto finish_match_293;
                     }
-                  case_391: ;
+                  case_330: ;
                     {
-                      __label__ case_390, finish_match_389;
+                      __label__ case_329, case_302, finish_match_301;
 
                       /* complete */
-                      struct zoptionzIbzK zgaz3157;
-                      CREATE(zoptionzIbzK)(&zgaz3157);
+                      struct zoptionzIbzK zgaz3185;
+                      CREATE(zoptionzIbzK)(&zgaz3185);
                       {
-                        __label__ case_385, case_384, finish_match_383;
+                        __label__ case_297, case_296, finish_match_295;
 
                         {
-                          __label__ case_388, case_387, finish_match_386;
+                          __label__ case_300, case_299, finish_match_298;
 
-                          bool zuz3147;
-                          zuz3147 = zhead_expz3.ztup0.zR;
-                          bool zuz3148;
-                          zuz3148 = zhead_expz3.ztup0.zW;
-                          bool zuz3149;
-                          zuz3149 = zhead_expz3.ztup0.zC;
-                          bool zuz3150;
-                          zuz3150 = zhead_expz3.ztup0.zLM;
-                          bool zuz3151;
-                          zuz3151 = zhead_expz3.ztup0.zX;
-                          bool zuz3152;
-                          zuz3152 = zhead_expz3.ztup0.zASR;
+                          bool zuz392;
+                          zuz392 = zhead_expz3.ztup0.zR;
+                          bool zuz393;
+                          zuz393 = zhead_expz3.ztup0.zW;
+                          bool zuz394;
+                          zuz394 = zhead_expz3.ztup0.zC;
+                          bool zuz395;
+                          zuz395 = zhead_expz3.ztup0.zLM;
+                          bool zuz396;
+                          zuz396 = zhead_expz3.ztup0.zEL;
+                          bool zuz397;
+                          zuz397 = zhead_expz3.ztup0.zSL;
+                          bool zuz398;
+                          zuz398 = zhead_expz3.ztup0.zX;
+                          bool zuz399;
+                          zuz399 = zhead_expz3.ztup0.zASR;
                           enum zExecutionMode zmapping10z3;
                           zmapping10z3 = zhead_expz3.ztup1;
-                          bool zgaz3156;
+                          bool zgaz3184;
                           {
-                            bool zgaz3155;
+                            bool zgaz3183;
                             {
-                              bool zgaz3154;
+                              bool zgaz3182;
                               {
-                                bool zgaz3153;
+                                bool zgaz3181;
                                 {
-                                  bool zgaz3152;
+                                  bool zgaz3180;
                                   {
-                                    bool zgaz3151;
-                                    zgaz3151 = sailgen_execution_mode_encdec_forwards_matches(zmapping10z3);
-                                    bool zgsz3419;
-                                    if (zgaz3151) {  zgsz3419 = eq_bool(zuz3152, false);  } else {  zgsz3419 = false;  }
-                                    zgaz3152 = zgsz3419;
+                                    bool zgaz3179;
+                                    {
+                                      bool zgaz3178;
+                                      {
+                                        bool zgaz3177;
+                                        zgaz3177 = sailgen_execution_mode_encdec_forwards_matches(zmapping10z3);
+                                        bool zgsz3294;
+                                        if (zgaz3177) {  zgsz3294 = eq_bool(zuz399, false);  } else {
+                                          zgsz3294 = false;
+                                        }
+                                        zgaz3178 = zgsz3294;
+                                      }
+                                      bool zgsz3295;
+                                      if (zgaz3178) {  zgsz3295 = eq_bool(zuz398, false);  } else {
+                                        zgsz3295 = false;
+                                      }
+                                      zgaz3179 = zgsz3295;
+                                    }
+                                    bool zgsz3296;
+                                    if (zgaz3179) {  zgsz3296 = eq_bool(zuz397, false);  } else {  zgsz3296 = false;  }
+                                    zgaz3180 = zgsz3296;
                                   }
-                                  bool zgsz3420;
-                                  if (zgaz3152) {  zgsz3420 = eq_bool(zuz3151, false);  } else {  zgsz3420 = false;  }
-                                  zgaz3153 = zgsz3420;
+                                  bool zgsz3297;
+                                  if (zgaz3180) {  zgsz3297 = eq_bool(zuz396, false);  } else {  zgsz3297 = false;  }
+                                  zgaz3181 = zgsz3297;
                                 }
-                                bool zgsz3421;
-                                if (zgaz3153) {  zgsz3421 = eq_bool(zuz3150, true);  } else {  zgsz3421 = false;  }
-                                zgaz3154 = zgsz3421;
+                                bool zgsz3298;
+                                if (zgaz3181) {  zgsz3298 = eq_bool(zuz395, true);  } else {  zgsz3298 = false;  }
+                                zgaz3182 = zgsz3298;
                               }
-                              bool zgsz3422;
-                              if (zgaz3154) {  zgsz3422 = eq_bool(zuz3149, true);  } else {  zgsz3422 = false;  }
-                              zgaz3155 = zgsz3422;
+                              bool zgsz3299;
+                              if (zgaz3182) {  zgsz3299 = eq_bool(zuz394, true);  } else {  zgsz3299 = false;  }
+                              zgaz3183 = zgsz3299;
                             }
-                            bool zgsz3423;
-                            if (zgaz3155) {  zgsz3423 = eq_bool(zuz3148, true);  } else {  zgsz3423 = false;  }
-                            zgaz3156 = zgsz3423;
+                            bool zgsz3300;
+                            if (zgaz3183) {  zgsz3300 = eq_bool(zuz393, true);  } else {  zgsz3300 = false;  }
+                            zgaz3184 = zgsz3300;
                           }
-                          bool zgsz3424;
-                          if (zgaz3156) {  zgsz3424 = eq_bool(zuz3147, true);  } else {  zgsz3424 = false;  }
-                          bool zgsz3428;
-                          zgsz3428 = zgsz3424;
-                          if (!(zgsz3428)) {
-
-
-
-
-
-
-                            goto case_385;
-                          }
-                          uint64_t zgaz3150;
-                          zgaz3150 = sailgen_execution_mode_encdec_forwards_infallible(zmapping10z3);
-                          struct zoptionzIbzK zgsz3425;
-                          CREATE(zoptionzIbzK)(&zgsz3425);
+                          bool zgsz3301;
+                          if (zgaz3184) {  zgsz3301 = eq_bool(zuz392, true);  } else {  zgsz3301 = false;  }
+                          bool zgsz3305;
+                          zgsz3305 = zgsz3301;
+                          if (!(zgsz3305)) {  goto case_297;  }
+                          uint64_t zgaz3176;
+                          zgaz3176 = sailgen_execution_mode_encdec_forwards_infallible(zmapping10z3);
+                          struct zoptionzIbzK zgsz3302;
+                          CREATE(zoptionzIbzK)(&zgsz3302);
                           {
-                            uint64_t zb__0;
-                            zb__0 = zgaz3150;
-                            bool zgsz3427;
-                            zgsz3427 = (zb__0 == UINT64_C(0b0));
-                            if (!(zgsz3427)) {
-
-                              goto case_388;
-                            }
+                            uint64_t zb__3;
+                            zb__3 = zgaz3176;
+                            bool zgsz3304;
+                            zgsz3304 = (zb__3 == UINT64_C(0b0));
+                            if (!(zgsz3304)) {  goto case_300;  }
                             {
-                              RECREATE(lbits)(&zghz3108);
-                              CONVERT_OF(lbits, fbits)(&zghz3108, UINT64_C(0b11111), UINT64_C(5) , true);
-                              sailgen_SomezIbzK(&zgsz3425, zghz3108);
+                              RECREATE(lbits)(&zghz3112);
+                              CONVERT_OF(lbits, fbits)(&zghz3112, UINT64_C(0b10111), UINT64_C(5) , true);
+                              sailgen_SomezIbzK(&zgsz3302, zghz3112);
                             }
-                            goto finish_match_386;
+                            goto finish_match_298;
                           }
-                        case_388: ;
+                        case_300: ;
                           {
-                            sailgen_NonezIbzK(&zgsz3425, UNIT);
-                            goto finish_match_386;
+                            sailgen_NonezIbzK(&zgsz3302, UNIT);
+                            goto finish_match_298;
                           }
-                        case_387: ;
-                        finish_match_386: ;
-                          COPY(zoptionzIbzK)(&zgaz3157, zgsz3425);
-                          KILL(zoptionzIbzK)(&zgsz3425);
-                          goto finish_match_383;
+                        case_299: ;
+                        finish_match_298: ;
+                          COPY(zoptionzIbzK)(&zgaz3185, zgsz3302);
+                          KILL(zoptionzIbzK)(&zgsz3302);
+                          goto finish_match_295;
                         }
-                      case_385: ;
+                      case_297: ;
                         {
-                          sailgen_NonezIbzK(&zgaz3157, UNIT);
-                          goto finish_match_383;
+                          sailgen_NonezIbzK(&zgaz3185, UNIT);
+                          goto finish_match_295;
                         }
-                      case_384: ;
-                      finish_match_383: ;
+                      case_296: ;
+                      finish_match_295: ;
                       }
-                      uint64_t zgsz3429;
+                      uint64_t zgsz3306;
                       {
-                        if (zgaz3157.kind != Kind_zSomezIbzK) goto case_390;
-                        zgsz3429 = CONVERT_OF(fbits, lbits)(zgaz3157.zSomezIbzK, true);
-                        goto finish_match_389;
+                        if (zgaz3185.kind != Kind_zSomezIbzK) goto case_329;
+                        zgsz3306 = CONVERT_OF(fbits, lbits)(zgaz3185.variants.zSomezIbzK, true);
+                        goto finish_match_301;
                       }
-                    case_390: ;
-                      sail_match_failure("ap_m_encdec_backwards_infallible");
-                    finish_match_389: ;
-                      zgsz3416 = zgsz3429;
-                      KILL(zoptionzIbzK)(&zgaz3157);
-                      goto finish_match_381;
-                    }
-                  case_382: ;
-                  finish_match_381: ;
-                    zgsz3403 = zgsz3416;
-                    KILL(zoptionzIbzK)(&zgaz3149);
-                    goto finish_match_373;
-                  }
-                case_374: ;
-                finish_match_373: ;
-                  zgsz3390 = zgsz3403;
-                  KILL(zoptionzIbzK)(&zgaz3141);
-                  goto finish_match_365;
-                }
-              case_366: ;
-              finish_match_365: ;
-                zgsz3377 = zgsz3390;
-                KILL(zoptionzIbzK)(&zgaz3133);
-                goto finish_match_357;
-              }
-            case_358: ;
-            finish_match_357: ;
-              zgsz3364 = zgsz3377;
-              KILL(zoptionzIbzK)(&zgaz3122);
-              goto finish_match_349;
-            }
-          case_350: ;
-          finish_match_349: ;
-            zgsz3351 = zgsz3364;
-            KILL(zoptionzIbzK)(&zgaz3111);
-            goto finish_match_341;
-          }
-        case_342: ;
-        finish_match_341: ;
-          zgsz3338 = zgsz3351;
-          KILL(zoptionzIbzK)(&zgaz3100);
-          goto finish_match_333;
-        }
-      case_334: ;
-      finish_match_333: ;
-        zgsz3325 = zgsz3338;
-        KILL(zoptionzIbzK)(&zgaz389);
-        goto finish_match_325;
-      }
-    case_326: ;
-    finish_match_325: ;
-      zgsz3312 = zgsz3325;
-      KILL(zoptionzIbzK)(&zgaz381);
-      goto finish_match_317;
-    }
-  case_318: ;
-  finish_match_317: ;
-    zcbz348 = zgsz3312;
-    KILL(zoptionzIbzK)(&zgaz373);
-    goto finish_match_309;
-  }
-case_310: ;
-finish_match_309: ;
-  KILL(zoptionzIbzK)(&zgaz365);
+                    case_329: ;
+                      {
+                        __label__ case_328, case_310, finish_match_309;
 
-end_function_401: ;
-  return zcbz348;
-end_block_exception_402: ;
+                        /* complete */
+                        struct zoptionzIbzK zgaz3195;
+                        CREATE(zoptionzIbzK)(&zgaz3195);
+                        {
+                          __label__ case_305, case_304, finish_match_303;
+
+                          {
+                            __label__ case_308, case_307, finish_match_306;
+
+                            bool zuz3101;
+                            zuz3101 = zhead_expz3.ztup0.zR;
+                            bool zuz3102;
+                            zuz3102 = zhead_expz3.ztup0.zW;
+                            bool zuz3103;
+                            zuz3103 = zhead_expz3.ztup0.zC;
+                            bool zuz3104;
+                            zuz3104 = zhead_expz3.ztup0.zLM;
+                            bool zuz3105;
+                            zuz3105 = zhead_expz3.ztup0.zEL;
+                            bool zuz3106;
+                            zuz3106 = zhead_expz3.ztup0.zSL;
+                            bool zuz3107;
+                            zuz3107 = zhead_expz3.ztup0.zX;
+                            bool zuz3108;
+                            zuz3108 = zhead_expz3.ztup0.zASR;
+                            enum zExecutionMode zmapping11z3;
+                            zmapping11z3 = zhead_expz3.ztup1;
+                            bool zgaz3194;
+                            {
+                              bool zgaz3193;
+                              {
+                                bool zgaz3192;
+                                {
+                                  bool zgaz3191;
+                                  {
+                                    bool zgaz3190;
+                                    {
+                                      bool zgaz3189;
+                                      {
+                                        bool zgaz3188;
+                                        {
+                                          bool zgaz3187;
+                                          zgaz3187 = sailgen_execution_mode_encdec_forwards_matches(zmapping11z3);
+                                          bool zgsz3309;
+                                          if (zgaz3187) {  zgsz3309 = eq_bool(zuz3108, false);  } else {
+                                            zgsz3309 = false;
+                                          }
+                                          zgaz3188 = zgsz3309;
+                                        }
+                                        bool zgsz3310;
+                                        if (zgaz3188) {  zgsz3310 = eq_bool(zuz3107, false);  } else {
+                                          zgsz3310 = false;
+                                        }
+                                        zgaz3189 = zgsz3310;
+                                      }
+                                      bool zgsz3311;
+                                      if (zgaz3189) {  zgsz3311 = eq_bool(zuz3106, false);  } else {
+                                        zgsz3311 = false;
+                                      }
+                                      zgaz3190 = zgsz3311;
+                                    }
+                                    bool zgsz3312;
+                                    if (zgaz3190) {  zgsz3312 = eq_bool(zuz3105, true);  } else {  zgsz3312 = false;  }
+                                    zgaz3191 = zgsz3312;
+                                  }
+                                  bool zgsz3313;
+                                  if (zgaz3191) {  zgsz3313 = eq_bool(zuz3104, true);  } else {  zgsz3313 = false;  }
+                                  zgaz3192 = zgsz3313;
+                                }
+                                bool zgsz3314;
+                                if (zgaz3192) {  zgsz3314 = eq_bool(zuz3103, true);  } else {  zgsz3314 = false;  }
+                                zgaz3193 = zgsz3314;
+                              }
+                              bool zgsz3315;
+                              if (zgaz3193) {  zgsz3315 = eq_bool(zuz3102, false);  } else {  zgsz3315 = false;  }
+                              zgaz3194 = zgsz3315;
+                            }
+                            bool zgsz3316;
+                            if (zgaz3194) {  zgsz3316 = eq_bool(zuz3101, true);  } else {  zgsz3316 = false;  }
+                            bool zgsz3320;
+                            zgsz3320 = zgsz3316;
+                            if (!(zgsz3320)) {  goto case_305;  }
+                            uint64_t zgaz3186;
+                            zgaz3186 = sailgen_execution_mode_encdec_forwards_infallible(zmapping11z3);
+                            struct zoptionzIbzK zgsz3317;
+                            CREATE(zoptionzIbzK)(&zgsz3317);
+                            {
+                              uint64_t zb__2;
+                              zb__2 = zgaz3186;
+                              bool zgsz3319;
+                              zgsz3319 = (zb__2 == UINT64_C(0b0));
+                              if (!(zgsz3319)) {  goto case_308;  }
+                              {
+                                RECREATE(lbits)(&zghz3111);
+                                CONVERT_OF(lbits, fbits)(&zghz3111, UINT64_C(0b11011), UINT64_C(5) , true);
+                                sailgen_SomezIbzK(&zgsz3317, zghz3111);
+                              }
+                              goto finish_match_306;
+                            }
+                          case_308: ;
+                            {
+                              sailgen_NonezIbzK(&zgsz3317, UNIT);
+                              goto finish_match_306;
+                            }
+                          case_307: ;
+                          finish_match_306: ;
+                            COPY(zoptionzIbzK)(&zgaz3195, zgsz3317);
+                            KILL(zoptionzIbzK)(&zgsz3317);
+                            goto finish_match_303;
+                          }
+                        case_305: ;
+                          {
+                            sailgen_NonezIbzK(&zgaz3195, UNIT);
+                            goto finish_match_303;
+                          }
+                        case_304: ;
+                        finish_match_303: ;
+                        }
+                        uint64_t zgsz3321;
+                        {
+                          if (zgaz3195.kind != Kind_zSomezIbzK) goto case_328;
+                          zgsz3321 = CONVERT_OF(fbits, lbits)(zgaz3195.variants.zSomezIbzK, true);
+                          goto finish_match_309;
+                        }
+                      case_328: ;
+                        {
+                          __label__ case_327, case_318, finish_match_317;
+
+                          /* complete */
+                          struct zoptionzIbzK zgaz3205;
+                          CREATE(zoptionzIbzK)(&zgaz3205);
+                          {
+                            __label__ case_313, case_312, finish_match_311;
+
+                            {
+                              __label__ case_316, case_315, finish_match_314;
+
+                              bool zuz3110;
+                              zuz3110 = zhead_expz3.ztup0.zR;
+                              bool zuz3111;
+                              zuz3111 = zhead_expz3.ztup0.zW;
+                              bool zuz3112;
+                              zuz3112 = zhead_expz3.ztup0.zC;
+                              bool zuz3113;
+                              zuz3113 = zhead_expz3.ztup0.zLM;
+                              bool zuz3114;
+                              zuz3114 = zhead_expz3.ztup0.zEL;
+                              bool zuz3115;
+                              zuz3115 = zhead_expz3.ztup0.zSL;
+                              bool zuz3116;
+                              zuz3116 = zhead_expz3.ztup0.zX;
+                              bool zuz3117;
+                              zuz3117 = zhead_expz3.ztup0.zASR;
+                              enum zExecutionMode zmapping12z3;
+                              zmapping12z3 = zhead_expz3.ztup1;
+                              bool zgaz3204;
+                              {
+                                bool zgaz3203;
+                                {
+                                  bool zgaz3202;
+                                  {
+                                    bool zgaz3201;
+                                    {
+                                      bool zgaz3200;
+                                      {
+                                        bool zgaz3199;
+                                        {
+                                          bool zgaz3198;
+                                          {
+                                            bool zgaz3197;
+                                            zgaz3197 = sailgen_execution_mode_encdec_forwards_matches(zmapping12z3);
+                                            bool zgsz3324;
+                                            if (zgaz3197) {  zgsz3324 = eq_bool(zuz3117, false);  } else {
+                                              zgsz3324 = false;
+                                            }
+                                            zgaz3198 = zgsz3324;
+                                          }
+                                          bool zgsz3325;
+                                          if (zgaz3198) {  zgsz3325 = eq_bool(zuz3116, false);  } else {
+                                            zgsz3325 = false;
+                                          }
+                                          zgaz3199 = zgsz3325;
+                                        }
+                                        bool zgsz3326;
+                                        if (zgaz3199) {  zgsz3326 = eq_bool(zuz3115, true);  } else {
+                                          zgsz3326 = false;
+                                        }
+                                        zgaz3200 = zgsz3326;
+                                      }
+                                      bool zgsz3327;
+                                      if (zgaz3200) {  zgsz3327 = eq_bool(zuz3114, true);  } else {
+                                        zgsz3327 = false;
+                                      }
+                                      zgaz3201 = zgsz3327;
+                                    }
+                                    bool zgsz3328;
+                                    if (zgaz3201) {  zgsz3328 = eq_bool(zuz3113, true);  } else {  zgsz3328 = false;  }
+                                    zgaz3202 = zgsz3328;
+                                  }
+                                  bool zgsz3329;
+                                  if (zgaz3202) {  zgsz3329 = eq_bool(zuz3112, true);  } else {  zgsz3329 = false;  }
+                                  zgaz3203 = zgsz3329;
+                                }
+                                bool zgsz3330;
+                                if (zgaz3203) {  zgsz3330 = eq_bool(zuz3111, true);  } else {  zgsz3330 = false;  }
+                                zgaz3204 = zgsz3330;
+                              }
+                              bool zgsz3331;
+                              if (zgaz3204) {  zgsz3331 = eq_bool(zuz3110, true);  } else {  zgsz3331 = false;  }
+                              bool zgsz3335;
+                              zgsz3335 = zgsz3331;
+                              if (!(zgsz3335)) {  goto case_313;  }
+                              uint64_t zgaz3196;
+                              zgaz3196 = sailgen_execution_mode_encdec_forwards_infallible(zmapping12z3);
+                              struct zoptionzIbzK zgsz3332;
+                              CREATE(zoptionzIbzK)(&zgsz3332);
+                              {
+                                uint64_t zb__1;
+                                zb__1 = zgaz3196;
+                                bool zgsz3334;
+                                zgsz3334 = (zb__1 == UINT64_C(0b0));
+                                if (!(zgsz3334)) {  goto case_316;  }
+                                {
+                                  RECREATE(lbits)(&zghz3110);
+                                  CONVERT_OF(lbits, fbits)(&zghz3110, UINT64_C(0b11110), UINT64_C(5) , true);
+                                  sailgen_SomezIbzK(&zgsz3332, zghz3110);
+                                }
+                                goto finish_match_314;
+                              }
+                            case_316: ;
+                              {
+                                sailgen_NonezIbzK(&zgsz3332, UNIT);
+                                goto finish_match_314;
+                              }
+                            case_315: ;
+                            finish_match_314: ;
+                              COPY(zoptionzIbzK)(&zgaz3205, zgsz3332);
+                              KILL(zoptionzIbzK)(&zgsz3332);
+                              goto finish_match_311;
+                            }
+                          case_313: ;
+                            {
+                              sailgen_NonezIbzK(&zgaz3205, UNIT);
+                              goto finish_match_311;
+                            }
+                          case_312: ;
+                          finish_match_311: ;
+                          }
+                          uint64_t zgsz3336;
+                          {
+                            if (zgaz3205.kind != Kind_zSomezIbzK) goto case_327;
+                            zgsz3336 = CONVERT_OF(fbits, lbits)(zgaz3205.variants.zSomezIbzK, true);
+                            goto finish_match_317;
+                          }
+                        case_327: ;
+                          {
+                            __label__ case_326, finish_match_325;
+
+                            /* complete */
+                            struct zoptionzIbzK zgaz3215;
+                            CREATE(zoptionzIbzK)(&zgaz3215);
+                            {
+                              __label__ case_321, case_320, finish_match_319;
+
+                              {
+                                __label__ case_324, case_323, finish_match_322;
+
+                                bool zuz3119;
+                                zuz3119 = zhead_expz3.ztup0.zR;
+                                bool zuz3120;
+                                zuz3120 = zhead_expz3.ztup0.zW;
+                                bool zuz3121;
+                                zuz3121 = zhead_expz3.ztup0.zC;
+                                bool zuz3122;
+                                zuz3122 = zhead_expz3.ztup0.zLM;
+                                bool zuz3123;
+                                zuz3123 = zhead_expz3.ztup0.zEL;
+                                bool zuz3124;
+                                zuz3124 = zhead_expz3.ztup0.zSL;
+                                bool zuz3125;
+                                zuz3125 = zhead_expz3.ztup0.zX;
+                                bool zuz3126;
+                                zuz3126 = zhead_expz3.ztup0.zASR;
+                                enum zExecutionMode zmapping13z3;
+                                zmapping13z3 = zhead_expz3.ztup1;
+                                bool zgaz3214;
+                                {
+                                  bool zgaz3213;
+                                  {
+                                    bool zgaz3212;
+                                    {
+                                      bool zgaz3211;
+                                      {
+                                        bool zgaz3210;
+                                        {
+                                          bool zgaz3209;
+                                          {
+                                            bool zgaz3208;
+                                            {
+                                              bool zgaz3207;
+                                              zgaz3207 = sailgen_execution_mode_encdec_forwards_matches(zmapping13z3);
+                                              bool zgsz3339;
+                                              if (zgaz3207) {  zgsz3339 = eq_bool(zuz3126, false);  } else {
+                                                zgsz3339 = false;
+                                              }
+                                              zgaz3208 = zgsz3339;
+                                            }
+                                            bool zgsz3340;
+                                            if (zgaz3208) {  zgsz3340 = eq_bool(zuz3125, false);  } else {
+                                              zgsz3340 = false;
+                                            }
+                                            zgaz3209 = zgsz3340;
+                                          }
+                                          bool zgsz3341;
+                                          if (zgaz3209) {  zgsz3341 = eq_bool(zuz3124, false);  } else {
+                                            zgsz3341 = false;
+                                          }
+                                          zgaz3210 = zgsz3341;
+                                        }
+                                        bool zgsz3342;
+                                        if (zgaz3210) {  zgsz3342 = eq_bool(zuz3123, true);  } else {
+                                          zgsz3342 = false;
+                                        }
+                                        zgaz3211 = zgsz3342;
+                                      }
+                                      bool zgsz3343;
+                                      if (zgaz3211) {  zgsz3343 = eq_bool(zuz3122, true);  } else {
+                                        zgsz3343 = false;
+                                      }
+                                      zgaz3212 = zgsz3343;
+                                    }
+                                    bool zgsz3344;
+                                    if (zgaz3212) {  zgsz3344 = eq_bool(zuz3121, true);  } else {  zgsz3344 = false;  }
+                                    zgaz3213 = zgsz3344;
+                                  }
+                                  bool zgsz3345;
+                                  if (zgaz3213) {  zgsz3345 = eq_bool(zuz3120, true);  } else {  zgsz3345 = false;  }
+                                  zgaz3214 = zgsz3345;
+                                }
+                                bool zgsz3346;
+                                if (zgaz3214) {  zgsz3346 = eq_bool(zuz3119, true);  } else {  zgsz3346 = false;  }
+                                bool zgsz3350;
+                                zgsz3350 = zgsz3346;
+                                if (!(zgsz3350)) {  goto case_321;  }
+                                uint64_t zgaz3206;
+                                zgaz3206 = sailgen_execution_mode_encdec_forwards_infallible(zmapping13z3);
+                                struct zoptionzIbzK zgsz3347;
+                                CREATE(zoptionzIbzK)(&zgsz3347);
+                                {
+                                  uint64_t zb__0;
+                                  zb__0 = zgaz3206;
+                                  bool zgsz3349;
+                                  zgsz3349 = (zb__0 == UINT64_C(0b0));
+                                  if (!(zgsz3349)) {  goto case_324;  }
+                                  {
+                                    RECREATE(lbits)(&zghz3109);
+                                    CONVERT_OF(lbits, fbits)(&zghz3109, UINT64_C(0b11111), UINT64_C(5) , true);
+                                    sailgen_SomezIbzK(&zgsz3347, zghz3109);
+                                  }
+                                  goto finish_match_322;
+                                }
+                              case_324: ;
+                                {
+                                  sailgen_NonezIbzK(&zgsz3347, UNIT);
+                                  goto finish_match_322;
+                                }
+                              case_323: ;
+                              finish_match_322: ;
+                                COPY(zoptionzIbzK)(&zgaz3215, zgsz3347);
+                                KILL(zoptionzIbzK)(&zgsz3347);
+                                goto finish_match_319;
+                              }
+                            case_321: ;
+                              {
+                                sailgen_NonezIbzK(&zgaz3215, UNIT);
+                                goto finish_match_319;
+                              }
+                            case_320: ;
+                            finish_match_319: ;
+                            }
+                            uint64_t zgsz3351;
+                            {
+                              if (zgaz3215.kind != Kind_zSomezIbzK) goto case_326;
+                              zgsz3351 = CONVERT_OF(fbits, lbits)(zgaz3215.variants.zSomezIbzK, true);
+                              goto finish_match_325;
+                            }
+                          case_326: ;
+                            sail_match_failure("ap_m_encdec_backwards");
+                          finish_match_325: ;
+                            zgsz3336 = zgsz3351;
+                            KILL(zoptionzIbzK)(&zgaz3215);
+                            goto finish_match_317;
+                          }
+                        case_318: ;
+                        finish_match_317: ;
+                          zgsz3321 = zgsz3336;
+                          KILL(zoptionzIbzK)(&zgaz3205);
+                          goto finish_match_309;
+                        }
+                      case_310: ;
+                      finish_match_309: ;
+                        zgsz3306 = zgsz3321;
+                        KILL(zoptionzIbzK)(&zgaz3195);
+                        goto finish_match_301;
+                      }
+                    case_302: ;
+                    finish_match_301: ;
+                      zgsz3291 = zgsz3306;
+                      KILL(zoptionzIbzK)(&zgaz3185);
+                      goto finish_match_293;
+                    }
+                  case_294: ;
+                  finish_match_293: ;
+                    zgsz3276 = zgsz3291;
+                    KILL(zoptionzIbzK)(&zgaz3175);
+                    goto finish_match_285;
+                  }
+                case_286: ;
+                finish_match_285: ;
+                  zgsz3261 = zgsz3276;
+                  KILL(zoptionzIbzK)(&zgaz3165);
+                  goto finish_match_277;
+                }
+              case_278: ;
+              finish_match_277: ;
+                zgsz3246 = zgsz3261;
+                KILL(zoptionzIbzK)(&zgaz3155);
+                goto finish_match_269;
+              }
+            case_270: ;
+            finish_match_269: ;
+              zgsz3231 = zgsz3246;
+              KILL(zoptionzIbzK)(&zgaz3142);
+              goto finish_match_261;
+            }
+          case_262: ;
+          finish_match_261: ;
+            zgsz3216 = zgsz3231;
+            KILL(zoptionzIbzK)(&zgaz3129);
+            goto finish_match_253;
+          }
+        case_254: ;
+        finish_match_253: ;
+          zgsz3201 = zgsz3216;
+          KILL(zoptionzIbzK)(&zgaz3116);
+          goto finish_match_245;
+        }
+      case_246: ;
+      finish_match_245: ;
+        zgsz3186 = zgsz3201;
+        KILL(zoptionzIbzK)(&zgaz3103);
+        goto finish_match_237;
+      }
+    case_238: ;
+    finish_match_237: ;
+      zgsz3171 = zgsz3186;
+      KILL(zoptionzIbzK)(&zgaz393);
+      goto finish_match_229;
+    }
+  case_230: ;
+  finish_match_229: ;
+    zcbz349 = zgsz3171;
+    KILL(zoptionzIbzK)(&zgaz383);
+    goto finish_match_221;
+  }
+case_222: ;
+finish_match_221: ;
+  KILL(zoptionzIbzK)(&zgaz373);
+end_function_340: ;
+  return zcbz349;
+end_block_exception_341: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 
 
-static void finish_sailgen_ap_m_encdec_backwards_infallible(void)
+static void finish_sailgen_ap_m_encdec_backwards(void)
 {
+  KILL(lbits)(&zghz3122);
+  KILL(lbits)(&zghz3121);
+  KILL(lbits)(&zghz3120);
+  KILL(lbits)(&zghz3119);
   KILL(lbits)(&zghz3118);
   KILL(lbits)(&zghz3117);
   KILL(lbits)(&zghz3116);
@@ -5961,192 +5002,57 @@ static void finish_sailgen_ap_m_encdec_backwards_infallible(void)
   KILL(lbits)(&zghz3111);
   KILL(lbits)(&zghz3110);
   KILL(lbits)(&zghz3109);
-  KILL(lbits)(&zghz3108);
 }
 
-static bool sailgen_ap_m_encdec_forwards_matches(uint64_t zargz3)
+static uint64_t sailgen_ap_m_encdec_backwards_infallible(struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9);
+
+lbits zghz3123;
+lbits zghz3124;
+lbits zghz3125;
+lbits zghz3126;
+lbits zghz3127;
+lbits zghz3128;
+lbits zghz3129;
+lbits zghz3130;
+lbits zghz3131;
+lbits zghz3132;
+lbits zghz3133;
+lbits zghz3134;
+lbits zghz3135;
+lbits zghz3136;
+
+static void startup_sailgen_ap_m_encdec_backwards_infallible(void)
 {
-  __label__ case_416, case_415, case_414, case_413, case_412, case_411, case_410, case_409, case_408, case_407, case_406, case_405, finish_match_404, end_function_417, end_block_exception_418;
-
-  bool zcbz349;
-  {
-    uint64_t zv__33;
-    zv__33 = zargz3;
-    bool zgsz3463;
-    zgsz3463 = (zv__33 == UINT64_C(0b00000));
-    if (!(zgsz3463)) {
-
-      goto case_416;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_416: ;
-  {
-    uint64_t zv__36;
-    zv__36 = zargz3;
-    bool zgsz3462;
-    zgsz3462 = (zv__36 == UINT64_C(0b00001));
-    if (!(zgsz3462)) {
-
-      goto case_415;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_415: ;
-  {
-    uint64_t zv__39;
-    zv__39 = zargz3;
-    bool zgsz3461;
-    zgsz3461 = (zv__39 == UINT64_C(0b00100));
-    if (!(zgsz3461)) {
-
-      goto case_414;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_414: ;
-  {
-    uint64_t zv__42;
-    zv__42 = zargz3;
-    bool zgsz3460;
-    zgsz3460 = (zv__42 == UINT64_C(0b00101));
-    if (!(zgsz3460)) {
-
-      goto case_413;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_413: ;
-  {
-    uint64_t zv__45;
-    zv__45 = zargz3;
-    uint64_t zgaz3158;
-    zgaz3158 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__45 >> INT64_C(1)));
-    bool zgsz3459;
-    zgsz3459 = (zgaz3158 == UINT64_C(0x4));
-    if (!(zgsz3459)) {
-
-      goto case_412;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_412: ;
-  {
-    uint64_t zv__48;
-    zv__48 = zargz3;
-    uint64_t zgaz3159;
-    zgaz3159 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__48 >> INT64_C(1)));
-    bool zgsz3458;
-    zgsz3458 = (zgaz3159 == UINT64_C(0x5));
-    if (!(zgsz3458)) {
-
-      goto case_411;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_411: ;
-  {
-    uint64_t zv__51;
-    zv__51 = zargz3;
-    uint64_t zgaz3160;
-    zgaz3160 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__51 >> INT64_C(1)));
-    bool zgsz3457;
-    zgsz3457 = (zgaz3160 == UINT64_C(0x6));
-    if (!(zgsz3457)) {
-
-      goto case_410;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_410: ;
-  {
-    uint64_t zv__54;
-    zv__54 = zargz3;
-    uint64_t zgaz3161;
-    zgaz3161 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__54 >> INT64_C(1)));
-    bool zgsz3456;
-    zgsz3456 = (zgaz3161 == UINT64_C(0x7));
-    if (!(zgsz3456)) {
-
-      goto case_409;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_409: ;
-  {
-    uint64_t zv__57;
-    zv__57 = zargz3;
-    bool zgsz3455;
-    zgsz3455 = (zv__57 == UINT64_C(0b10011));
-    if (!(zgsz3455)) {
-
-      goto case_408;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_408: ;
-  {
-    uint64_t zv__60;
-    zv__60 = zargz3;
-    bool zgsz3454;
-    zgsz3454 = (zv__60 == UINT64_C(0b11011));
-    if (!(zgsz3454)) {
-
-      goto case_407;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_407: ;
-  {
-    uint64_t zv__63;
-    zv__63 = zargz3;
-    bool zgsz3453;
-    zgsz3453 = (zv__63 == UINT64_C(0b11111));
-    if (!(zgsz3453)) {
-
-      goto case_406;
-    }
-    zcbz349 = true;
-    goto finish_match_404;
-  }
-case_406: ;
-  {
-    zcbz349 = false;
-    goto finish_match_404;
-  }
-case_405: ;
-finish_match_404: ;
-end_function_417: ;
-  return zcbz349;
-end_block_exception_418: ;
-
-  return false;
+  CREATE(lbits)(&zghz3123);
+  CREATE(lbits)(&zghz3124);
+  CREATE(lbits)(&zghz3125);
+  CREATE(lbits)(&zghz3126);
+  CREATE(lbits)(&zghz3127);
+  CREATE(lbits)(&zghz3128);
+  CREATE(lbits)(&zghz3129);
+  CREATE(lbits)(&zghz3130);
+  CREATE(lbits)(&zghz3131);
+  CREATE(lbits)(&zghz3132);
+  CREATE(lbits)(&zghz3133);
+  CREATE(lbits)(&zghz3134);
+  CREATE(lbits)(&zghz3135);
+  CREATE(lbits)(&zghz3136);
 }
 
-static bool sailgen_ap_m_encdec_backwards_matches(struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zargz3)
+static uint64_t sailgen_ap_m_encdec_backwards_infallible(struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zargz3)
 {
-  __label__ case_520, case_427, finish_match_426, end_function_521, end_block_exception_522;
+  __label__ case_466, case_349, finish_match_348, end_function_467, end_block_exception_468;
 
-  bool zcbz350;
+  uint64_t zcbz350;
   struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zhead_expz3;
   zhead_expz3 = zargz3;
-  struct zoptionzIozK zgaz3169;
-  CREATE(zoptionzIozK)(&zgaz3169);
+  struct zoptionzIbzK zgaz373;
+  CREATE(zoptionzIbzK)(&zgaz373);
   {
-    __label__ case_422, case_421, finish_match_420;
+    __label__ case_344, case_343, finish_match_342;
 
     {
-      __label__ case_425, case_424, finish_match_423;
+      __label__ case_347, case_346, finish_match_345;
 
       bool zp0z3;
       zp0z3 = zhead_expz3.ztup0.zR;
@@ -6157,1288 +5063,2022 @@ static bool sailgen_ap_m_encdec_backwards_matches(struct ztuple_z8z5structz0zzAr
       bool zp3z3;
       zp3z3 = zhead_expz3.ztup0.zLM;
       bool zp4z3;
-      zp4z3 = zhead_expz3.ztup0.zX;
+      zp4z3 = zhead_expz3.ztup0.zEL;
       bool zp5z3;
-      zp5z3 = zhead_expz3.ztup0.zASR;
+      zp5z3 = zhead_expz3.ztup0.zSL;
+      bool zp6z3;
+      zp6z3 = zhead_expz3.ztup0.zX;
+      bool zp7z3;
+      zp7z3 = zhead_expz3.ztup0.zASR;
       enum zExecutionMode zmapping0z3;
       zmapping0z3 = zhead_expz3.ztup1;
-      bool zgaz3168;
+      bool zgaz372;
       {
-        bool zgaz3167;
+        bool zgaz371;
         {
-          bool zgaz3166;
+          bool zgaz370;
           {
-            bool zgaz3165;
+            bool zgaz369;
             {
-              bool zgaz3164;
+              bool zgaz368;
               {
-                bool zgaz3163;
-                zgaz3163 = sailgen_execution_mode_encdec_forwards_matches(zmapping0z3);
-                bool zgsz3466;
-                if (zgaz3163) {  zgsz3466 = eq_bool(zp5z3, false);  } else {  zgsz3466 = false;  }
-                zgaz3164 = zgsz3466;
+                bool zgaz367;
+                {
+                  bool zgaz366;
+                  {
+                    bool zgaz365;
+                    zgaz365 = sailgen_execution_mode_encdec_forwards_matches(zmapping0z3);
+                    bool zgsz3381;
+                    if (zgaz365) {  zgsz3381 = eq_bool(zp7z3, false);  } else {  zgsz3381 = false;  }
+                    zgaz366 = zgsz3381;
+                  }
+                  bool zgsz3382;
+                  if (zgaz366) {  zgsz3382 = eq_bool(zp6z3, false);  } else {  zgsz3382 = false;  }
+                  zgaz367 = zgsz3382;
+                }
+                bool zgsz3383;
+                if (zgaz367) {  zgsz3383 = eq_bool(zp5z3, false);  } else {  zgsz3383 = false;  }
+                zgaz368 = zgsz3383;
               }
-              bool zgsz3467;
-              if (zgaz3164) {  zgsz3467 = eq_bool(zp4z3, false);  } else {  zgsz3467 = false;  }
-              zgaz3165 = zgsz3467;
+              bool zgsz3384;
+              if (zgaz368) {  zgsz3384 = eq_bool(zp4z3, false);  } else {  zgsz3384 = false;  }
+              zgaz369 = zgsz3384;
             }
-            bool zgsz3468;
-            if (zgaz3165) {  zgsz3468 = eq_bool(zp3z3, false);  } else {  zgsz3468 = false;  }
-            zgaz3166 = zgsz3468;
+            bool zgsz3385;
+            if (zgaz369) {  zgsz3385 = eq_bool(zp3z3, false);  } else {  zgsz3385 = false;  }
+            zgaz370 = zgsz3385;
           }
-          bool zgsz3469;
-          if (zgaz3166) {  zgsz3469 = eq_bool(zp2z3, false);  } else {  zgsz3469 = false;  }
-          zgaz3167 = zgsz3469;
+          bool zgsz3386;
+          if (zgaz370) {  zgsz3386 = eq_bool(zp2z3, false);  } else {  zgsz3386 = false;  }
+          zgaz371 = zgsz3386;
         }
-        bool zgsz3470;
-        if (zgaz3167) {  zgsz3470 = eq_bool(zp1z3, false);  } else {  zgsz3470 = false;  }
-        zgaz3168 = zgsz3470;
+        bool zgsz3387;
+        if (zgaz371) {  zgsz3387 = eq_bool(zp1z3, false);  } else {  zgsz3387 = false;  }
+        zgaz372 = zgsz3387;
       }
-      bool zgsz3471;
-      if (zgaz3168) {  zgsz3471 = eq_bool(zp0z3, false);  } else {  zgsz3471 = false;  }
-      bool zgsz3475;
-      zgsz3475 = zgsz3471;
-      if (!(zgsz3475)) {
-
-
-
-
-
-
-        goto case_422;
-      }
-      uint64_t zgaz3162;
-      zgaz3162 = sailgen_execution_mode_encdec_forwards_infallible(zmapping0z3);
-      struct zoptionzIozK zgsz3472;
-      CREATE(zoptionzIozK)(&zgsz3472);
+      bool zgsz3388;
+      if (zgaz372) {  zgsz3388 = eq_bool(zp0z3, false);  } else {  zgsz3388 = false;  }
+      bool zgsz3392;
+      zgsz3392 = zgsz3388;
+      if (!(zgsz3392)) {  goto case_344;  }
+      uint64_t zgaz364;
+      zgaz364 = sailgen_execution_mode_encdec_forwards_infallible(zmapping0z3);
+      struct zoptionzIbzK zgsz3389;
+      CREATE(zoptionzIbzK)(&zgsz3389);
       {
-        uint64_t zb__6;
-        zb__6 = zgaz3162;
-        bool zgsz3474;
-        zgsz3474 = (zb__6 == UINT64_C(0b0));
-        if (!(zgsz3474)) {
-
-          goto case_425;
+        uint64_t zb__9;
+        zb__9 = zgaz364;
+        bool zgsz3391;
+        zgsz3391 = (zb__9 == UINT64_C(0b0));
+        if (!(zgsz3391)) {  goto case_347;  }
+        {
+          RECREATE(lbits)(&zghz3136);
+          CONVERT_OF(lbits, fbits)(&zghz3136, UINT64_C(0b00000), UINT64_C(5) , true);
+          sailgen_SomezIbzK(&zgsz3389, zghz3136);
         }
-        sailgen_SomezIozK(&zgsz3472, true);
-        goto finish_match_423;
+        goto finish_match_345;
       }
-    case_425: ;
+    case_347: ;
       {
-        sailgen_NonezIozK(&zgsz3472, UNIT);
-        goto finish_match_423;
+        sailgen_NonezIbzK(&zgsz3389, UNIT);
+        goto finish_match_345;
       }
-    case_424: ;
-    finish_match_423: ;
-      COPY(zoptionzIozK)(&zgaz3169, zgsz3472);
-      KILL(zoptionzIozK)(&zgsz3472);
-      goto finish_match_420;
+    case_346: ;
+    finish_match_345: ;
+      COPY(zoptionzIbzK)(&zgaz373, zgsz3389);
+      KILL(zoptionzIbzK)(&zgsz3389);
+      goto finish_match_342;
     }
-  case_422: ;
+  case_344: ;
     {
-      sailgen_NonezIozK(&zgaz3169, UNIT);
-      goto finish_match_420;
+      sailgen_NonezIbzK(&zgaz373, UNIT);
+      goto finish_match_342;
     }
-  case_421: ;
-  finish_match_420: ;
+  case_343: ;
+  finish_match_342: ;
   }
-  bool zgsz3476;
   {
-    if (zgaz3169.kind != Kind_zSomezIozK) goto case_520;
-    zgsz3476 = zgaz3169.zSomezIozK;
-    goto finish_match_426;
+    if (zgaz373.kind != Kind_zSomezIbzK) goto case_466;
+    uint64_t zresult;
+    zresult = CONVERT_OF(fbits, lbits)(zgaz373.variants.zSomezIbzK, true);
+    zcbz350 = zresult;
+    goto finish_match_348;
   }
-case_520: ;
+case_466: ;
   {
-    __label__ case_519, case_435, finish_match_434;
+    __label__ case_465, case_357, finish_match_356;
 
     /* complete */
-    struct zoptionzIozK zgaz3177;
-    CREATE(zoptionzIozK)(&zgaz3177);
+    struct zoptionzIbzK zgaz383;
+    CREATE(zoptionzIbzK)(&zgaz383);
     {
-      __label__ case_430, case_429, finish_match_428;
+      __label__ case_352, case_351, finish_match_350;
 
       {
-        __label__ case_433, case_432, finish_match_431;
+        __label__ case_355, case_354, finish_match_353;
 
-        bool zuz3154;
-        zuz3154 = zhead_expz3.ztup0.zR;
-        bool zuz3155;
-        zuz3155 = zhead_expz3.ztup0.zW;
-        bool zuz3156;
-        zuz3156 = zhead_expz3.ztup0.zC;
-        bool zuz3157;
-        zuz3157 = zhead_expz3.ztup0.zLM;
-        bool zuz3158;
-        zuz3158 = zhead_expz3.ztup0.zX;
-        bool zuz3159;
-        zuz3159 = zhead_expz3.ztup0.zASR;
+        bool zuz3128;
+        zuz3128 = zhead_expz3.ztup0.zR;
+        bool zuz3129;
+        zuz3129 = zhead_expz3.ztup0.zW;
+        bool zuz3130;
+        zuz3130 = zhead_expz3.ztup0.zC;
+        bool zuz3131;
+        zuz3131 = zhead_expz3.ztup0.zLM;
+        bool zuz3132;
+        zuz3132 = zhead_expz3.ztup0.zEL;
+        bool zuz3133;
+        zuz3133 = zhead_expz3.ztup0.zSL;
+        bool zuz3134;
+        zuz3134 = zhead_expz3.ztup0.zX;
+        bool zuz3135;
+        zuz3135 = zhead_expz3.ztup0.zASR;
         enum zExecutionMode zmapping1z3;
         zmapping1z3 = zhead_expz3.ztup1;
-        bool zgaz3176;
+        bool zgaz382;
         {
-          bool zgaz3175;
+          bool zgaz381;
           {
-            bool zgaz3174;
+            bool zgaz380;
             {
-              bool zgaz3173;
+              bool zgaz379;
               {
-                bool zgaz3172;
+                bool zgaz378;
                 {
-                  bool zgaz3171;
-                  zgaz3171 = sailgen_execution_mode_encdec_forwards_matches(zmapping1z3);
-                  bool zgsz3479;
-                  if (zgaz3171) {  zgsz3479 = eq_bool(zuz3159, false);  } else {  zgsz3479 = false;  }
-                  zgaz3172 = zgsz3479;
+                  bool zgaz377;
+                  {
+                    bool zgaz376;
+                    {
+                      bool zgaz375;
+                      zgaz375 = sailgen_execution_mode_encdec_forwards_matches(zmapping1z3);
+                      bool zgsz3396;
+                      if (zgaz375) {  zgsz3396 = eq_bool(zuz3135, false);  } else {  zgsz3396 = false;  }
+                      zgaz376 = zgsz3396;
+                    }
+                    bool zgsz3397;
+                    if (zgaz376) {  zgsz3397 = eq_bool(zuz3134, false);  } else {  zgsz3397 = false;  }
+                    zgaz377 = zgsz3397;
+                  }
+                  bool zgsz3398;
+                  if (zgaz377) {  zgsz3398 = eq_bool(zuz3133, false);  } else {  zgsz3398 = false;  }
+                  zgaz378 = zgsz3398;
                 }
-                bool zgsz3480;
-                if (zgaz3172) {  zgsz3480 = eq_bool(zuz3158, false);  } else {  zgsz3480 = false;  }
-                zgaz3173 = zgsz3480;
+                bool zgsz3399;
+                if (zgaz378) {  zgsz3399 = eq_bool(zuz3132, false);  } else {  zgsz3399 = false;  }
+                zgaz379 = zgsz3399;
               }
-              bool zgsz3481;
-              if (zgaz3173) {  zgsz3481 = eq_bool(zuz3157, false);  } else {  zgsz3481 = false;  }
-              zgaz3174 = zgsz3481;
+              bool zgsz3400;
+              if (zgaz379) {  zgsz3400 = eq_bool(zuz3131, false);  } else {  zgsz3400 = false;  }
+              zgaz380 = zgsz3400;
             }
-            bool zgsz3482;
-            if (zgaz3174) {  zgsz3482 = eq_bool(zuz3156, false);  } else {  zgsz3482 = false;  }
-            zgaz3175 = zgsz3482;
+            bool zgsz3401;
+            if (zgaz380) {  zgsz3401 = eq_bool(zuz3130, false);  } else {  zgsz3401 = false;  }
+            zgaz381 = zgsz3401;
           }
-          bool zgsz3483;
-          if (zgaz3175) {  zgsz3483 = eq_bool(zuz3155, false);  } else {  zgsz3483 = false;  }
-          zgaz3176 = zgsz3483;
+          bool zgsz3402;
+          if (zgaz381) {  zgsz3402 = eq_bool(zuz3129, false);  } else {  zgsz3402 = false;  }
+          zgaz382 = zgsz3402;
         }
-        bool zgsz3484;
-        if (zgaz3176) {  zgsz3484 = eq_bool(zuz3154, true);  } else {  zgsz3484 = false;  }
-        bool zgsz3488;
-        zgsz3488 = zgsz3484;
-        if (!(zgsz3488)) {
-
-
-
-
-
-
-          goto case_430;
-        }
-        uint64_t zgaz3170;
-        zgaz3170 = sailgen_execution_mode_encdec_forwards_infallible(zmapping1z3);
-        struct zoptionzIozK zgsz3485;
-        CREATE(zoptionzIozK)(&zgsz3485);
+        bool zgsz3403;
+        if (zgaz382) {  zgsz3403 = eq_bool(zuz3128, true);  } else {  zgsz3403 = false;  }
+        bool zgsz3407;
+        zgsz3407 = zgsz3403;
+        if (!(zgsz3407)) {  goto case_352;  }
+        uint64_t zgaz374;
+        zgaz374 = sailgen_execution_mode_encdec_forwards_infallible(zmapping1z3);
+        struct zoptionzIbzK zgsz3404;
+        CREATE(zoptionzIbzK)(&zgsz3404);
         {
-          uint64_t zb__5;
-          zb__5 = zgaz3170;
-          bool zgsz3487;
-          zgsz3487 = (zb__5 == UINT64_C(0b0));
-          if (!(zgsz3487)) {
-
-            goto case_433;
+          uint64_t zb__8;
+          zb__8 = zgaz374;
+          bool zgsz3406;
+          zgsz3406 = (zb__8 == UINT64_C(0b0));
+          if (!(zgsz3406)) {  goto case_355;  }
+          {
+            RECREATE(lbits)(&zghz3135);
+            CONVERT_OF(lbits, fbits)(&zghz3135, UINT64_C(0b00001), UINT64_C(5) , true);
+            sailgen_SomezIbzK(&zgsz3404, zghz3135);
           }
-          sailgen_SomezIozK(&zgsz3485, true);
-          goto finish_match_431;
+          goto finish_match_353;
         }
-      case_433: ;
+      case_355: ;
         {
-          sailgen_NonezIozK(&zgsz3485, UNIT);
-          goto finish_match_431;
+          sailgen_NonezIbzK(&zgsz3404, UNIT);
+          goto finish_match_353;
         }
-      case_432: ;
-      finish_match_431: ;
-        COPY(zoptionzIozK)(&zgaz3177, zgsz3485);
-        KILL(zoptionzIozK)(&zgsz3485);
-        goto finish_match_428;
+      case_354: ;
+      finish_match_353: ;
+        COPY(zoptionzIbzK)(&zgaz383, zgsz3404);
+        KILL(zoptionzIbzK)(&zgsz3404);
+        goto finish_match_350;
       }
-    case_430: ;
+    case_352: ;
       {
-        sailgen_NonezIozK(&zgaz3177, UNIT);
-        goto finish_match_428;
+        sailgen_NonezIbzK(&zgaz383, UNIT);
+        goto finish_match_350;
       }
-    case_429: ;
-    finish_match_428: ;
+    case_351: ;
+    finish_match_350: ;
     }
-    bool zgsz3489;
+    uint64_t zgsz3408;
     {
-      if (zgaz3177.kind != Kind_zSomezIozK) goto case_519;
-      zgsz3489 = zgaz3177.zSomezIozK;
-      goto finish_match_434;
+      if (zgaz383.kind != Kind_zSomezIbzK) goto case_465;
+      zgsz3408 = CONVERT_OF(fbits, lbits)(zgaz383.variants.zSomezIbzK, true);
+      goto finish_match_356;
     }
-  case_519: ;
+  case_465: ;
     {
-      __label__ case_518, case_443, finish_match_442;
+      __label__ case_464, case_365, finish_match_364;
 
       /* complete */
-      struct zoptionzIozK zgaz3185;
-      CREATE(zoptionzIozK)(&zgaz3185);
+      struct zoptionzIbzK zgaz393;
+      CREATE(zoptionzIbzK)(&zgaz393);
       {
-        __label__ case_438, case_437, finish_match_436;
+        __label__ case_360, case_359, finish_match_358;
 
         {
-          __label__ case_441, case_440, finish_match_439;
+          __label__ case_363, case_362, finish_match_361;
 
-          bool zuz3161;
-          zuz3161 = zhead_expz3.ztup0.zR;
-          bool zuz3162;
-          zuz3162 = zhead_expz3.ztup0.zW;
-          bool zuz3163;
-          zuz3163 = zhead_expz3.ztup0.zC;
-          bool zuz3164;
-          zuz3164 = zhead_expz3.ztup0.zLM;
-          bool zuz3165;
-          zuz3165 = zhead_expz3.ztup0.zX;
-          bool zuz3166;
-          zuz3166 = zhead_expz3.ztup0.zASR;
+          bool zuz3137;
+          zuz3137 = zhead_expz3.ztup0.zR;
+          bool zuz3138;
+          zuz3138 = zhead_expz3.ztup0.zW;
+          bool zuz3139;
+          zuz3139 = zhead_expz3.ztup0.zC;
+          bool zuz3140;
+          zuz3140 = zhead_expz3.ztup0.zLM;
+          bool zuz3141;
+          zuz3141 = zhead_expz3.ztup0.zEL;
+          bool zuz3142;
+          zuz3142 = zhead_expz3.ztup0.zSL;
+          bool zuz3143;
+          zuz3143 = zhead_expz3.ztup0.zX;
+          bool zuz3144;
+          zuz3144 = zhead_expz3.ztup0.zASR;
           enum zExecutionMode zmapping2z3;
           zmapping2z3 = zhead_expz3.ztup1;
-          bool zgaz3184;
+          bool zgaz392;
           {
-            bool zgaz3183;
+            bool zgaz391;
             {
-              bool zgaz3182;
+              bool zgaz390;
               {
-                bool zgaz3181;
+                bool zgaz389;
                 {
-                  bool zgaz3180;
+                  bool zgaz388;
                   {
-                    bool zgaz3179;
-                    zgaz3179 = sailgen_execution_mode_encdec_forwards_matches(zmapping2z3);
-                    bool zgsz3492;
-                    if (zgaz3179) {  zgsz3492 = eq_bool(zuz3166, false);  } else {  zgsz3492 = false;  }
-                    zgaz3180 = zgsz3492;
+                    bool zgaz387;
+                    {
+                      bool zgaz386;
+                      {
+                        bool zgaz385;
+                        zgaz385 = sailgen_execution_mode_encdec_forwards_matches(zmapping2z3);
+                        bool zgsz3411;
+                        if (zgaz385) {  zgsz3411 = eq_bool(zuz3144, false);  } else {  zgsz3411 = false;  }
+                        zgaz386 = zgsz3411;
+                      }
+                      bool zgsz3412;
+                      if (zgaz386) {  zgsz3412 = eq_bool(zuz3143, false);  } else {  zgsz3412 = false;  }
+                      zgaz387 = zgsz3412;
+                    }
+                    bool zgsz3413;
+                    if (zgaz387) {  zgsz3413 = eq_bool(zuz3142, false);  } else {  zgsz3413 = false;  }
+                    zgaz388 = zgsz3413;
                   }
-                  bool zgsz3493;
-                  if (zgaz3180) {  zgsz3493 = eq_bool(zuz3165, false);  } else {  zgsz3493 = false;  }
-                  zgaz3181 = zgsz3493;
+                  bool zgsz3414;
+                  if (zgaz388) {  zgsz3414 = eq_bool(zuz3141, false);  } else {  zgsz3414 = false;  }
+                  zgaz389 = zgsz3414;
                 }
-                bool zgsz3494;
-                if (zgaz3181) {  zgsz3494 = eq_bool(zuz3164, false);  } else {  zgsz3494 = false;  }
-                zgaz3182 = zgsz3494;
+                bool zgsz3415;
+                if (zgaz389) {  zgsz3415 = eq_bool(zuz3140, false);  } else {  zgsz3415 = false;  }
+                zgaz390 = zgsz3415;
               }
-              bool zgsz3495;
-              if (zgaz3182) {  zgsz3495 = eq_bool(zuz3163, false);  } else {  zgsz3495 = false;  }
-              zgaz3183 = zgsz3495;
+              bool zgsz3416;
+              if (zgaz390) {  zgsz3416 = eq_bool(zuz3139, false);  } else {  zgsz3416 = false;  }
+              zgaz391 = zgsz3416;
             }
-            bool zgsz3496;
-            if (zgaz3183) {  zgsz3496 = eq_bool(zuz3162, true);  } else {  zgsz3496 = false;  }
-            zgaz3184 = zgsz3496;
+            bool zgsz3417;
+            if (zgaz391) {  zgsz3417 = eq_bool(zuz3138, true);  } else {  zgsz3417 = false;  }
+            zgaz392 = zgsz3417;
           }
-          bool zgsz3497;
-          if (zgaz3184) {  zgsz3497 = eq_bool(zuz3161, false);  } else {  zgsz3497 = false;  }
-          bool zgsz3501;
-          zgsz3501 = zgsz3497;
-          if (!(zgsz3501)) {
-
-
-
-
-
-
-            goto case_438;
-          }
-          uint64_t zgaz3178;
-          zgaz3178 = sailgen_execution_mode_encdec_forwards_infallible(zmapping2z3);
-          struct zoptionzIozK zgsz3498;
-          CREATE(zoptionzIozK)(&zgsz3498);
+          bool zgsz3418;
+          if (zgaz392) {  zgsz3418 = eq_bool(zuz3137, false);  } else {  zgsz3418 = false;  }
+          bool zgsz3422;
+          zgsz3422 = zgsz3418;
+          if (!(zgsz3422)) {  goto case_360;  }
+          uint64_t zgaz384;
+          zgaz384 = sailgen_execution_mode_encdec_forwards_infallible(zmapping2z3);
+          struct zoptionzIbzK zgsz3419;
+          CREATE(zoptionzIbzK)(&zgsz3419);
           {
-            uint64_t zb__4;
-            zb__4 = zgaz3178;
-            bool zgsz3500;
-            zgsz3500 = (zb__4 == UINT64_C(0b0));
-            if (!(zgsz3500)) {
-
-              goto case_441;
+            uint64_t zb__7;
+            zb__7 = zgaz384;
+            bool zgsz3421;
+            zgsz3421 = (zb__7 == UINT64_C(0b0));
+            if (!(zgsz3421)) {  goto case_363;  }
+            {
+              RECREATE(lbits)(&zghz3134);
+              CONVERT_OF(lbits, fbits)(&zghz3134, UINT64_C(0b00100), UINT64_C(5) , true);
+              sailgen_SomezIbzK(&zgsz3419, zghz3134);
             }
-            sailgen_SomezIozK(&zgsz3498, true);
-            goto finish_match_439;
+            goto finish_match_361;
           }
-        case_441: ;
+        case_363: ;
           {
-            sailgen_NonezIozK(&zgsz3498, UNIT);
-            goto finish_match_439;
+            sailgen_NonezIbzK(&zgsz3419, UNIT);
+            goto finish_match_361;
           }
-        case_440: ;
-        finish_match_439: ;
-          COPY(zoptionzIozK)(&zgaz3185, zgsz3498);
-          KILL(zoptionzIozK)(&zgsz3498);
-          goto finish_match_436;
+        case_362: ;
+        finish_match_361: ;
+          COPY(zoptionzIbzK)(&zgaz393, zgsz3419);
+          KILL(zoptionzIbzK)(&zgsz3419);
+          goto finish_match_358;
         }
-      case_438: ;
+      case_360: ;
         {
-          sailgen_NonezIozK(&zgaz3185, UNIT);
-          goto finish_match_436;
+          sailgen_NonezIbzK(&zgaz393, UNIT);
+          goto finish_match_358;
         }
-      case_437: ;
-      finish_match_436: ;
+      case_359: ;
+      finish_match_358: ;
       }
-      bool zgsz3502;
+      uint64_t zgsz3423;
       {
-        if (zgaz3185.kind != Kind_zSomezIozK) goto case_518;
-        zgsz3502 = zgaz3185.zSomezIozK;
-        goto finish_match_442;
+        if (zgaz393.kind != Kind_zSomezIbzK) goto case_464;
+        zgsz3423 = CONVERT_OF(fbits, lbits)(zgaz393.variants.zSomezIbzK, true);
+        goto finish_match_364;
       }
-    case_518: ;
+    case_464: ;
       {
-        __label__ case_517, case_451, finish_match_450;
+        __label__ case_463, case_373, finish_match_372;
 
         /* complete */
-        struct zoptionzIozK zgaz3193;
-        CREATE(zoptionzIozK)(&zgaz3193);
+        struct zoptionzIbzK zgaz3103;
+        CREATE(zoptionzIbzK)(&zgaz3103);
         {
-          __label__ case_446, case_445, finish_match_444;
+          __label__ case_368, case_367, finish_match_366;
 
           {
-            __label__ case_449, case_448, finish_match_447;
+            __label__ case_371, case_370, finish_match_369;
 
-            bool zuz3168;
-            zuz3168 = zhead_expz3.ztup0.zR;
-            bool zuz3169;
-            zuz3169 = zhead_expz3.ztup0.zW;
-            bool zuz3170;
-            zuz3170 = zhead_expz3.ztup0.zC;
-            bool zuz3171;
-            zuz3171 = zhead_expz3.ztup0.zLM;
-            bool zuz3172;
-            zuz3172 = zhead_expz3.ztup0.zX;
-            bool zuz3173;
-            zuz3173 = zhead_expz3.ztup0.zASR;
+            bool zuz3146;
+            zuz3146 = zhead_expz3.ztup0.zR;
+            bool zuz3147;
+            zuz3147 = zhead_expz3.ztup0.zW;
+            bool zuz3148;
+            zuz3148 = zhead_expz3.ztup0.zC;
+            bool zuz3149;
+            zuz3149 = zhead_expz3.ztup0.zLM;
+            bool zuz3150;
+            zuz3150 = zhead_expz3.ztup0.zEL;
+            bool zuz3151;
+            zuz3151 = zhead_expz3.ztup0.zSL;
+            bool zuz3152;
+            zuz3152 = zhead_expz3.ztup0.zX;
+            bool zuz3153;
+            zuz3153 = zhead_expz3.ztup0.zASR;
             enum zExecutionMode zmapping3z3;
             zmapping3z3 = zhead_expz3.ztup1;
-            bool zgaz3192;
+            bool zgaz3102;
             {
-              bool zgaz3191;
+              bool zgaz3101;
               {
-                bool zgaz3190;
+                bool zgaz3100;
                 {
-                  bool zgaz3189;
+                  bool zgaz399;
                   {
-                    bool zgaz3188;
+                    bool zgaz398;
                     {
-                      bool zgaz3187;
-                      zgaz3187 = sailgen_execution_mode_encdec_forwards_matches(zmapping3z3);
-                      bool zgsz3505;
-                      if (zgaz3187) {  zgsz3505 = eq_bool(zuz3173, false);  } else {  zgsz3505 = false;  }
-                      zgaz3188 = zgsz3505;
+                      bool zgaz397;
+                      {
+                        bool zgaz396;
+                        {
+                          bool zgaz395;
+                          zgaz395 = sailgen_execution_mode_encdec_forwards_matches(zmapping3z3);
+                          bool zgsz3426;
+                          if (zgaz395) {  zgsz3426 = eq_bool(zuz3153, false);  } else {  zgsz3426 = false;  }
+                          zgaz396 = zgsz3426;
+                        }
+                        bool zgsz3427;
+                        if (zgaz396) {  zgsz3427 = eq_bool(zuz3152, false);  } else {  zgsz3427 = false;  }
+                        zgaz397 = zgsz3427;
+                      }
+                      bool zgsz3428;
+                      if (zgaz397) {  zgsz3428 = eq_bool(zuz3151, false);  } else {  zgsz3428 = false;  }
+                      zgaz398 = zgsz3428;
                     }
-                    bool zgsz3506;
-                    if (zgaz3188) {  zgsz3506 = eq_bool(zuz3172, false);  } else {  zgsz3506 = false;  }
-                    zgaz3189 = zgsz3506;
+                    bool zgsz3429;
+                    if (zgaz398) {  zgsz3429 = eq_bool(zuz3150, false);  } else {  zgsz3429 = false;  }
+                    zgaz399 = zgsz3429;
                   }
-                  bool zgsz3507;
-                  if (zgaz3189) {  zgsz3507 = eq_bool(zuz3171, false);  } else {  zgsz3507 = false;  }
-                  zgaz3190 = zgsz3507;
+                  bool zgsz3430;
+                  if (zgaz399) {  zgsz3430 = eq_bool(zuz3149, false);  } else {  zgsz3430 = false;  }
+                  zgaz3100 = zgsz3430;
                 }
-                bool zgsz3508;
-                if (zgaz3190) {  zgsz3508 = eq_bool(zuz3170, false);  } else {  zgsz3508 = false;  }
-                zgaz3191 = zgsz3508;
+                bool zgsz3431;
+                if (zgaz3100) {  zgsz3431 = eq_bool(zuz3148, false);  } else {  zgsz3431 = false;  }
+                zgaz3101 = zgsz3431;
               }
-              bool zgsz3509;
-              if (zgaz3191) {  zgsz3509 = eq_bool(zuz3169, true);  } else {  zgsz3509 = false;  }
-              zgaz3192 = zgsz3509;
+              bool zgsz3432;
+              if (zgaz3101) {  zgsz3432 = eq_bool(zuz3147, true);  } else {  zgsz3432 = false;  }
+              zgaz3102 = zgsz3432;
             }
-            bool zgsz3510;
-            if (zgaz3192) {  zgsz3510 = eq_bool(zuz3168, true);  } else {  zgsz3510 = false;  }
-            bool zgsz3514;
-            zgsz3514 = zgsz3510;
-            if (!(zgsz3514)) {
-
-
-
-
-
-
-              goto case_446;
-            }
-            uint64_t zgaz3186;
-            zgaz3186 = sailgen_execution_mode_encdec_forwards_infallible(zmapping3z3);
-            struct zoptionzIozK zgsz3511;
-            CREATE(zoptionzIozK)(&zgsz3511);
+            bool zgsz3433;
+            if (zgaz3102) {  zgsz3433 = eq_bool(zuz3146, true);  } else {  zgsz3433 = false;  }
+            bool zgsz3437;
+            zgsz3437 = zgsz3433;
+            if (!(zgsz3437)) {  goto case_368;  }
+            uint64_t zgaz394;
+            zgaz394 = sailgen_execution_mode_encdec_forwards_infallible(zmapping3z3);
+            struct zoptionzIbzK zgsz3434;
+            CREATE(zoptionzIbzK)(&zgsz3434);
             {
-              uint64_t zb__3;
-              zb__3 = zgaz3186;
-              bool zgsz3513;
-              zgsz3513 = (zb__3 == UINT64_C(0b0));
-              if (!(zgsz3513)) {
-
-                goto case_449;
+              uint64_t zb__6;
+              zb__6 = zgaz394;
+              bool zgsz3436;
+              zgsz3436 = (zb__6 == UINT64_C(0b0));
+              if (!(zgsz3436)) {  goto case_371;  }
+              {
+                RECREATE(lbits)(&zghz3133);
+                CONVERT_OF(lbits, fbits)(&zghz3133, UINT64_C(0b00101), UINT64_C(5) , true);
+                sailgen_SomezIbzK(&zgsz3434, zghz3133);
               }
-              sailgen_SomezIozK(&zgsz3511, true);
-              goto finish_match_447;
+              goto finish_match_369;
             }
-          case_449: ;
+          case_371: ;
             {
-              sailgen_NonezIozK(&zgsz3511, UNIT);
-              goto finish_match_447;
+              sailgen_NonezIbzK(&zgsz3434, UNIT);
+              goto finish_match_369;
             }
-          case_448: ;
-          finish_match_447: ;
-            COPY(zoptionzIozK)(&zgaz3193, zgsz3511);
-            KILL(zoptionzIozK)(&zgsz3511);
-            goto finish_match_444;
+          case_370: ;
+          finish_match_369: ;
+            COPY(zoptionzIbzK)(&zgaz3103, zgsz3434);
+            KILL(zoptionzIbzK)(&zgsz3434);
+            goto finish_match_366;
           }
-        case_446: ;
+        case_368: ;
           {
-            sailgen_NonezIozK(&zgaz3193, UNIT);
-            goto finish_match_444;
+            sailgen_NonezIbzK(&zgaz3103, UNIT);
+            goto finish_match_366;
           }
-        case_445: ;
-        finish_match_444: ;
+        case_367: ;
+        finish_match_366: ;
         }
-        bool zgsz3515;
+        uint64_t zgsz3438;
         {
-          if (zgaz3193.kind != Kind_zSomezIozK) goto case_517;
-          zgsz3515 = zgaz3193.zSomezIozK;
-          goto finish_match_450;
+          if (zgaz3103.kind != Kind_zSomezIbzK) goto case_463;
+          zgsz3438 = CONVERT_OF(fbits, lbits)(zgaz3103.variants.zSomezIbzK, true);
+          goto finish_match_372;
         }
-      case_517: ;
+      case_463: ;
         {
-          __label__ case_516, case_459, finish_match_458;
+          __label__ case_462, case_381, finish_match_380;
 
           /* complete */
-          struct zoptionzIozK zgaz3201;
-          CREATE(zoptionzIozK)(&zgaz3201);
+          struct zoptionzIbzK zgaz3116;
+          CREATE(zoptionzIbzK)(&zgaz3116);
           {
-            __label__ case_454, case_453, finish_match_452;
+            __label__ case_376, case_375, finish_match_374;
 
             {
-              __label__ case_457, case_456, finish_match_455;
+              __label__ case_379, case_378, finish_match_377;
 
-              bool zuz3175;
-              zuz3175 = zhead_expz3.ztup0.zR;
-              bool zuz3176;
-              zuz3176 = zhead_expz3.ztup0.zW;
-              bool zuz3177;
-              zuz3177 = zhead_expz3.ztup0.zC;
-              bool zuz3178;
-              zuz3178 = zhead_expz3.ztup0.zLM;
-              bool zuz3179;
-              zuz3179 = zhead_expz3.ztup0.zX;
-              bool zuz3180;
-              zuz3180 = zhead_expz3.ztup0.zASR;
+              bool zuz3155;
+              zuz3155 = zhead_expz3.ztup0.zR;
+              bool zuz3156;
+              zuz3156 = zhead_expz3.ztup0.zW;
+              bool zuz3157;
+              zuz3157 = zhead_expz3.ztup0.zC;
+              bool zuz3158;
+              zuz3158 = zhead_expz3.ztup0.zLM;
+              bool zuz3159;
+              zuz3159 = zhead_expz3.ztup0.zEL;
+              bool zuz3160;
+              zuz3160 = zhead_expz3.ztup0.zSL;
+              bool zuz3161;
+              zuz3161 = zhead_expz3.ztup0.zX;
+              bool zuz3162;
+              zuz3162 = zhead_expz3.ztup0.zASR;
               enum zExecutionMode zmapping4z3;
               zmapping4z3 = zhead_expz3.ztup1;
-              bool zgaz3200;
+              bool zgaz3115;
               {
-                bool zgaz3199;
+                bool zgaz3114;
                 {
-                  bool zgaz3198;
+                  bool zgaz3113;
                   {
-                    bool zgaz3197;
+                    bool zgaz3112;
                     {
-                      bool zgaz3196;
+                      bool zgaz3111;
                       {
-                        bool zgaz3195;
-                        zgaz3195 = sailgen_execution_mode_encdec_forwards_matches(zmapping4z3);
-                        bool zgsz3518;
-                        if (zgaz3195) {  zgsz3518 = eq_bool(zuz3180, true);  } else {  zgsz3518 = false;  }
-                        zgaz3196 = zgsz3518;
+                        bool zgaz3110;
+                        {
+                          bool zgaz3109;
+                          {
+                            bool zgaz3108;
+                            zgaz3108 = sailgen_execution_mode_encdec_forwards_matches(zmapping4z3);
+                            bool zgsz3441;
+                            if (zgaz3108) {  zgsz3441 = eq_bool(zuz3162, true);  } else {  zgsz3441 = false;  }
+                            zgaz3109 = zgsz3441;
+                          }
+                          bool zgsz3442;
+                          if (zgaz3109) {  zgsz3442 = eq_bool(zuz3161, true);  } else {  zgsz3442 = false;  }
+                          zgaz3110 = zgsz3442;
+                        }
+                        bool zgsz3443;
+                        if (zgaz3110) {  zgsz3443 = eq_bool(zuz3160, true);  } else {  zgsz3443 = false;  }
+                        zgaz3111 = zgsz3443;
                       }
-                      bool zgsz3519;
-                      if (zgaz3196) {  zgsz3519 = eq_bool(zuz3179, true);  } else {  zgsz3519 = false;  }
-                      zgaz3197 = zgsz3519;
+                      bool zgsz3444;
+                      if (zgaz3111) {  zgsz3444 = eq_bool(zuz3159, true);  } else {  zgsz3444 = false;  }
+                      zgaz3112 = zgsz3444;
                     }
-                    bool zgsz3520;
-                    if (zgaz3197) {  zgsz3520 = eq_bool(zuz3178, true);  } else {  zgsz3520 = false;  }
-                    zgaz3198 = zgsz3520;
+                    bool zgsz3445;
+                    if (zgaz3112) {  zgsz3445 = eq_bool(zuz3158, true);  } else {  zgsz3445 = false;  }
+                    zgaz3113 = zgsz3445;
                   }
-                  bool zgsz3521;
-                  if (zgaz3198) {  zgsz3521 = eq_bool(zuz3177, true);  } else {  zgsz3521 = false;  }
-                  zgaz3199 = zgsz3521;
+                  bool zgsz3446;
+                  if (zgaz3113) {  zgsz3446 = eq_bool(zuz3157, true);  } else {  zgsz3446 = false;  }
+                  zgaz3114 = zgsz3446;
                 }
-                bool zgsz3522;
-                if (zgaz3199) {  zgsz3522 = eq_bool(zuz3176, true);  } else {  zgsz3522 = false;  }
-                zgaz3200 = zgsz3522;
+                bool zgsz3447;
+                if (zgaz3114) {  zgsz3447 = eq_bool(zuz3156, true);  } else {  zgsz3447 = false;  }
+                zgaz3115 = zgsz3447;
               }
-              bool zgsz3523;
-              if (zgaz3200) {  zgsz3523 = eq_bool(zuz3175, true);  } else {  zgsz3523 = false;  }
-              bool zgsz3527;
-              zgsz3527 = zgsz3523;
-              if (!(zgsz3527)) {
-
-
-
-
-
-
-                goto case_454;
-              }
-              uint64_t zgaz3194;
-              zgaz3194 = sailgen_execution_mode_encdec_forwards_infallible(zmapping4z3);
-              struct zoptionzIozK zgsz3524;
-              CREATE(zoptionzIozK)(&zgsz3524);
+              bool zgsz3448;
+              if (zgaz3115) {  zgsz3448 = eq_bool(zuz3155, true);  } else {  zgsz3448 = false;  }
+              bool zgsz3452;
+              zgsz3452 = zgsz3448;
+              if (!(zgsz3452)) {  goto case_376;  }
+              uint64_t zgaz3104;
+              zgaz3104 = sailgen_execution_mode_encdec_forwards_infallible(zmapping4z3);
+              struct zoptionzIbzK zgsz3449;
+              CREATE(zoptionzIbzK)(&zgsz3449);
               {
                 uint64_t zm;
-                zm = zgaz3194;
-                sailgen_SomezIozK(&zgsz3524, true);
-                goto finish_match_455;
+                zm = zgaz3104;
+                uint64_t zgaz3107;
+                {
+                  uint64_t zgaz3106;
+                  {
+                    uint64_t zgaz3105;
+                    zgaz3105 = zm;
+                    zgaz3106 = (UINT64_C(0b00) << 1) | zgaz3105;
+                  }
+                  zgaz3107 = (UINT64_C(0b01) << 3) | zgaz3106;
+                }
+                {
+                  RECREATE(lbits)(&zghz3132);
+                  CONVERT_OF(lbits, fbits)(&zghz3132, zgaz3107, UINT64_C(5) , true);
+                  sailgen_SomezIbzK(&zgsz3449, zghz3132);
+                }
+                goto finish_match_377;
               }
-            case_457: ;
+            case_379: ;
               {
-                sailgen_NonezIozK(&zgsz3524, UNIT);
-                goto finish_match_455;
+                sailgen_NonezIbzK(&zgsz3449, UNIT);
+                goto finish_match_377;
               }
-            case_456: ;
-            finish_match_455: ;
-              COPY(zoptionzIozK)(&zgaz3201, zgsz3524);
-              KILL(zoptionzIozK)(&zgsz3524);
-              goto finish_match_452;
+            case_378: ;
+            finish_match_377: ;
+              COPY(zoptionzIbzK)(&zgaz3116, zgsz3449);
+              KILL(zoptionzIbzK)(&zgsz3449);
+              goto finish_match_374;
             }
-          case_454: ;
+          case_376: ;
             {
-              sailgen_NonezIozK(&zgaz3201, UNIT);
-              goto finish_match_452;
+              sailgen_NonezIbzK(&zgaz3116, UNIT);
+              goto finish_match_374;
             }
-          case_453: ;
-          finish_match_452: ;
+          case_375: ;
+          finish_match_374: ;
           }
-          bool zgsz3528;
+          uint64_t zgsz3453;
           {
-            if (zgaz3201.kind != Kind_zSomezIozK) goto case_516;
-            zgsz3528 = zgaz3201.zSomezIozK;
-            goto finish_match_458;
+            if (zgaz3116.kind != Kind_zSomezIbzK) goto case_462;
+            zgsz3453 = CONVERT_OF(fbits, lbits)(zgaz3116.variants.zSomezIbzK, true);
+            goto finish_match_380;
           }
-        case_516: ;
+        case_462: ;
           {
-            __label__ case_515, case_467, finish_match_466;
+            __label__ case_461, case_389, finish_match_388;
 
             /* complete */
-            struct zoptionzIozK zgaz3209;
-            CREATE(zoptionzIozK)(&zgaz3209);
+            struct zoptionzIbzK zgaz3129;
+            CREATE(zoptionzIbzK)(&zgaz3129);
             {
-              __label__ case_462, case_461, finish_match_460;
+              __label__ case_384, case_383, finish_match_382;
 
               {
-                __label__ case_465, case_464, finish_match_463;
+                __label__ case_387, case_386, finish_match_385;
 
-                bool zuz3182;
-                zuz3182 = zhead_expz3.ztup0.zR;
-                bool zuz3183;
-                zuz3183 = zhead_expz3.ztup0.zW;
-                bool zuz3184;
-                zuz3184 = zhead_expz3.ztup0.zC;
-                bool zuz3185;
-                zuz3185 = zhead_expz3.ztup0.zLM;
-                bool zuz3186;
-                zuz3186 = zhead_expz3.ztup0.zX;
-                bool zuz3187;
-                zuz3187 = zhead_expz3.ztup0.zASR;
+                bool zuz3164;
+                zuz3164 = zhead_expz3.ztup0.zR;
+                bool zuz3165;
+                zuz3165 = zhead_expz3.ztup0.zW;
+                bool zuz3166;
+                zuz3166 = zhead_expz3.ztup0.zC;
+                bool zuz3167;
+                zuz3167 = zhead_expz3.ztup0.zLM;
+                bool zuz3168;
+                zuz3168 = zhead_expz3.ztup0.zEL;
+                bool zuz3169;
+                zuz3169 = zhead_expz3.ztup0.zSL;
+                bool zuz3170;
+                zuz3170 = zhead_expz3.ztup0.zX;
+                bool zuz3171;
+                zuz3171 = zhead_expz3.ztup0.zASR;
                 enum zExecutionMode zmapping5z3;
                 zmapping5z3 = zhead_expz3.ztup1;
-                bool zgaz3208;
+                bool zgaz3128;
                 {
-                  bool zgaz3207;
+                  bool zgaz3127;
                   {
-                    bool zgaz3206;
+                    bool zgaz3126;
                     {
-                      bool zgaz3205;
+                      bool zgaz3125;
                       {
-                        bool zgaz3204;
+                        bool zgaz3124;
                         {
-                          bool zgaz3203;
-                          zgaz3203 = sailgen_execution_mode_encdec_forwards_matches(zmapping5z3);
-                          bool zgsz3531;
-                          if (zgaz3203) {  zgsz3531 = eq_bool(zuz3187, false);  } else {  zgsz3531 = false;  }
-                          zgaz3204 = zgsz3531;
+                          bool zgaz3123;
+                          {
+                            bool zgaz3122;
+                            {
+                              bool zgaz3121;
+                              zgaz3121 = sailgen_execution_mode_encdec_forwards_matches(zmapping5z3);
+                              bool zgsz3456;
+                              if (zgaz3121) {  zgsz3456 = eq_bool(zuz3171, false);  } else {  zgsz3456 = false;  }
+                              zgaz3122 = zgsz3456;
+                            }
+                            bool zgsz3457;
+                            if (zgaz3122) {  zgsz3457 = eq_bool(zuz3170, true);  } else {  zgsz3457 = false;  }
+                            zgaz3123 = zgsz3457;
+                          }
+                          bool zgsz3458;
+                          if (zgaz3123) {  zgsz3458 = eq_bool(zuz3169, true);  } else {  zgsz3458 = false;  }
+                          zgaz3124 = zgsz3458;
                         }
-                        bool zgsz3532;
-                        if (zgaz3204) {  zgsz3532 = eq_bool(zuz3186, true);  } else {  zgsz3532 = false;  }
-                        zgaz3205 = zgsz3532;
+                        bool zgsz3459;
+                        if (zgaz3124) {  zgsz3459 = eq_bool(zuz3168, true);  } else {  zgsz3459 = false;  }
+                        zgaz3125 = zgsz3459;
                       }
-                      bool zgsz3533;
-                      if (zgaz3205) {  zgsz3533 = eq_bool(zuz3185, true);  } else {  zgsz3533 = false;  }
-                      zgaz3206 = zgsz3533;
+                      bool zgsz3460;
+                      if (zgaz3125) {  zgsz3460 = eq_bool(zuz3167, true);  } else {  zgsz3460 = false;  }
+                      zgaz3126 = zgsz3460;
                     }
-                    bool zgsz3534;
-                    if (zgaz3206) {  zgsz3534 = eq_bool(zuz3184, true);  } else {  zgsz3534 = false;  }
-                    zgaz3207 = zgsz3534;
+                    bool zgsz3461;
+                    if (zgaz3126) {  zgsz3461 = eq_bool(zuz3166, true);  } else {  zgsz3461 = false;  }
+                    zgaz3127 = zgsz3461;
                   }
-                  bool zgsz3535;
-                  if (zgaz3207) {  zgsz3535 = eq_bool(zuz3183, false);  } else {  zgsz3535 = false;  }
-                  zgaz3208 = zgsz3535;
+                  bool zgsz3462;
+                  if (zgaz3127) {  zgsz3462 = eq_bool(zuz3165, false);  } else {  zgsz3462 = false;  }
+                  zgaz3128 = zgsz3462;
                 }
-                bool zgsz3536;
-                if (zgaz3208) {  zgsz3536 = eq_bool(zuz3182, true);  } else {  zgsz3536 = false;  }
-                bool zgsz3540;
-                zgsz3540 = zgsz3536;
-                if (!(zgsz3540)) {
-
-
-
-
-
-
-                  goto case_462;
-                }
-                uint64_t zgaz3202;
-                zgaz3202 = sailgen_execution_mode_encdec_forwards_infallible(zmapping5z3);
-                struct zoptionzIozK zgsz3537;
-                CREATE(zoptionzIozK)(&zgsz3537);
+                bool zgsz3463;
+                if (zgaz3128) {  zgsz3463 = eq_bool(zuz3164, true);  } else {  zgsz3463 = false;  }
+                bool zgsz3467;
+                zgsz3467 = zgsz3463;
+                if (!(zgsz3467)) {  goto case_384;  }
+                uint64_t zgaz3117;
+                zgaz3117 = sailgen_execution_mode_encdec_forwards_infallible(zmapping5z3);
+                struct zoptionzIbzK zgsz3464;
+                CREATE(zoptionzIbzK)(&zgsz3464);
                 {
-                  uint64_t zuz3188;
-                  zuz3188 = zgaz3202;
-                  sailgen_SomezIozK(&zgsz3537, true);
-                  goto finish_match_463;
+                  uint64_t zuz3172;
+                  zuz3172 = zgaz3117;
+                  uint64_t zgaz3120;
+                  {
+                    uint64_t zgaz3119;
+                    {
+                      uint64_t zgaz3118;
+                      zgaz3118 = zuz3172;
+                      zgaz3119 = (UINT64_C(0b01) << 1) | zgaz3118;
+                    }
+                    zgaz3120 = (UINT64_C(0b01) << 3) | zgaz3119;
+                  }
+                  {
+                    RECREATE(lbits)(&zghz3131);
+                    CONVERT_OF(lbits, fbits)(&zghz3131, zgaz3120, UINT64_C(5) , true);
+                    sailgen_SomezIbzK(&zgsz3464, zghz3131);
+                  }
+                  goto finish_match_385;
                 }
-              case_465: ;
+              case_387: ;
                 {
-                  sailgen_NonezIozK(&zgsz3537, UNIT);
-                  goto finish_match_463;
+                  sailgen_NonezIbzK(&zgsz3464, UNIT);
+                  goto finish_match_385;
                 }
-              case_464: ;
-              finish_match_463: ;
-                COPY(zoptionzIozK)(&zgaz3209, zgsz3537);
-                KILL(zoptionzIozK)(&zgsz3537);
-                goto finish_match_460;
+              case_386: ;
+              finish_match_385: ;
+                COPY(zoptionzIbzK)(&zgaz3129, zgsz3464);
+                KILL(zoptionzIbzK)(&zgsz3464);
+                goto finish_match_382;
               }
-            case_462: ;
+            case_384: ;
               {
-                sailgen_NonezIozK(&zgaz3209, UNIT);
-                goto finish_match_460;
+                sailgen_NonezIbzK(&zgaz3129, UNIT);
+                goto finish_match_382;
               }
-            case_461: ;
-            finish_match_460: ;
+            case_383: ;
+            finish_match_382: ;
             }
-            bool zgsz3541;
+            uint64_t zgsz3468;
             {
-              if (zgaz3209.kind != Kind_zSomezIozK) goto case_515;
-              zgsz3541 = zgaz3209.zSomezIozK;
-              goto finish_match_466;
+              if (zgaz3129.kind != Kind_zSomezIbzK) goto case_461;
+              zgsz3468 = CONVERT_OF(fbits, lbits)(zgaz3129.variants.zSomezIbzK, true);
+              goto finish_match_388;
             }
-          case_515: ;
+          case_461: ;
             {
-              __label__ case_514, case_475, finish_match_474;
+              __label__ case_460, case_397, finish_match_396;
 
               /* complete */
-              struct zoptionzIozK zgaz3217;
-              CREATE(zoptionzIozK)(&zgaz3217);
+              struct zoptionzIbzK zgaz3142;
+              CREATE(zoptionzIbzK)(&zgaz3142);
               {
-                __label__ case_470, case_469, finish_match_468;
+                __label__ case_392, case_391, finish_match_390;
 
                 {
-                  __label__ case_473, case_472, finish_match_471;
+                  __label__ case_395, case_394, finish_match_393;
 
-                  bool zuz3190;
-                  zuz3190 = zhead_expz3.ztup0.zR;
-                  bool zuz3191;
-                  zuz3191 = zhead_expz3.ztup0.zW;
-                  bool zuz3192;
-                  zuz3192 = zhead_expz3.ztup0.zC;
-                  bool zuz3193;
-                  zuz3193 = zhead_expz3.ztup0.zLM;
-                  bool zuz3194;
-                  zuz3194 = zhead_expz3.ztup0.zX;
-                  bool zuz3195;
-                  zuz3195 = zhead_expz3.ztup0.zASR;
+                  bool zuz3174;
+                  zuz3174 = zhead_expz3.ztup0.zR;
+                  bool zuz3175;
+                  zuz3175 = zhead_expz3.ztup0.zW;
+                  bool zuz3176;
+                  zuz3176 = zhead_expz3.ztup0.zC;
+                  bool zuz3177;
+                  zuz3177 = zhead_expz3.ztup0.zLM;
+                  bool zuz3178;
+                  zuz3178 = zhead_expz3.ztup0.zEL;
+                  bool zuz3179;
+                  zuz3179 = zhead_expz3.ztup0.zSL;
+                  bool zuz3180;
+                  zuz3180 = zhead_expz3.ztup0.zX;
+                  bool zuz3181;
+                  zuz3181 = zhead_expz3.ztup0.zASR;
                   enum zExecutionMode zmapping6z3;
                   zmapping6z3 = zhead_expz3.ztup1;
-                  bool zgaz3216;
+                  bool zgaz3141;
                   {
-                    bool zgaz3215;
+                    bool zgaz3140;
                     {
-                      bool zgaz3214;
+                      bool zgaz3139;
                       {
-                        bool zgaz3213;
+                        bool zgaz3138;
                         {
-                          bool zgaz3212;
+                          bool zgaz3137;
                           {
-                            bool zgaz3211;
-                            zgaz3211 = sailgen_execution_mode_encdec_forwards_matches(zmapping6z3);
-                            bool zgsz3544;
-                            if (zgaz3211) {  zgsz3544 = eq_bool(zuz3195, false);  } else {  zgsz3544 = false;  }
-                            zgaz3212 = zgsz3544;
+                            bool zgaz3136;
+                            {
+                              bool zgaz3135;
+                              {
+                                bool zgaz3134;
+                                zgaz3134 = sailgen_execution_mode_encdec_forwards_matches(zmapping6z3);
+                                bool zgsz3471;
+                                if (zgaz3134) {  zgsz3471 = eq_bool(zuz3181, false);  } else {  zgsz3471 = false;  }
+                                zgaz3135 = zgsz3471;
+                              }
+                              bool zgsz3472;
+                              if (zgaz3135) {  zgsz3472 = eq_bool(zuz3180, true);  } else {  zgsz3472 = false;  }
+                              zgaz3136 = zgsz3472;
+                            }
+                            bool zgsz3473;
+                            if (zgaz3136) {  zgsz3473 = eq_bool(zuz3179, true);  } else {  zgsz3473 = false;  }
+                            zgaz3137 = zgsz3473;
                           }
-                          bool zgsz3545;
-                          if (zgaz3212) {  zgsz3545 = eq_bool(zuz3194, true);  } else {  zgsz3545 = false;  }
-                          zgaz3213 = zgsz3545;
+                          bool zgsz3474;
+                          if (zgaz3137) {  zgsz3474 = eq_bool(zuz3178, true);  } else {  zgsz3474 = false;  }
+                          zgaz3138 = zgsz3474;
                         }
-                        bool zgsz3546;
-                        if (zgaz3213) {  zgsz3546 = eq_bool(zuz3193, true);  } else {  zgsz3546 = false;  }
-                        zgaz3214 = zgsz3546;
+                        bool zgsz3475;
+                        if (zgaz3138) {  zgsz3475 = eq_bool(zuz3177, true);  } else {  zgsz3475 = false;  }
+                        zgaz3139 = zgsz3475;
                       }
-                      bool zgsz3547;
-                      if (zgaz3214) {  zgsz3547 = eq_bool(zuz3192, true);  } else {  zgsz3547 = false;  }
-                      zgaz3215 = zgsz3547;
+                      bool zgsz3476;
+                      if (zgaz3139) {  zgsz3476 = eq_bool(zuz3176, true);  } else {  zgsz3476 = false;  }
+                      zgaz3140 = zgsz3476;
                     }
-                    bool zgsz3548;
-                    if (zgaz3215) {  zgsz3548 = eq_bool(zuz3191, true);  } else {  zgsz3548 = false;  }
-                    zgaz3216 = zgsz3548;
+                    bool zgsz3477;
+                    if (zgaz3140) {  zgsz3477 = eq_bool(zuz3175, true);  } else {  zgsz3477 = false;  }
+                    zgaz3141 = zgsz3477;
                   }
-                  bool zgsz3549;
-                  if (zgaz3216) {  zgsz3549 = eq_bool(zuz3190, true);  } else {  zgsz3549 = false;  }
-                  bool zgsz3553;
-                  zgsz3553 = zgsz3549;
-                  if (!(zgsz3553)) {
-
-
-
-
-
-
-                    goto case_470;
-                  }
-                  uint64_t zgaz3210;
-                  zgaz3210 = sailgen_execution_mode_encdec_forwards_infallible(zmapping6z3);
-                  struct zoptionzIozK zgsz3550;
-                  CREATE(zoptionzIozK)(&zgsz3550);
+                  bool zgsz3478;
+                  if (zgaz3141) {  zgsz3478 = eq_bool(zuz3174, true);  } else {  zgsz3478 = false;  }
+                  bool zgsz3482;
+                  zgsz3482 = zgsz3478;
+                  if (!(zgsz3482)) {  goto case_392;  }
+                  uint64_t zgaz3130;
+                  zgaz3130 = sailgen_execution_mode_encdec_forwards_infallible(zmapping6z3);
+                  struct zoptionzIbzK zgsz3479;
+                  CREATE(zoptionzIbzK)(&zgsz3479);
                   {
-                    uint64_t zuz3196;
-                    zuz3196 = zgaz3210;
-                    sailgen_SomezIozK(&zgsz3550, true);
-                    goto finish_match_471;
+                    uint64_t zuz3182;
+                    zuz3182 = zgaz3130;
+                    uint64_t zgaz3133;
+                    {
+                      uint64_t zgaz3132;
+                      {
+                        uint64_t zgaz3131;
+                        zgaz3131 = zuz3182;
+                        zgaz3132 = (UINT64_C(0b10) << 1) | zgaz3131;
+                      }
+                      zgaz3133 = (UINT64_C(0b01) << 3) | zgaz3132;
+                    }
+                    {
+                      RECREATE(lbits)(&zghz3130);
+                      CONVERT_OF(lbits, fbits)(&zghz3130, zgaz3133, UINT64_C(5) , true);
+                      sailgen_SomezIbzK(&zgsz3479, zghz3130);
+                    }
+                    goto finish_match_393;
                   }
-                case_473: ;
+                case_395: ;
                   {
-                    sailgen_NonezIozK(&zgsz3550, UNIT);
-                    goto finish_match_471;
+                    sailgen_NonezIbzK(&zgsz3479, UNIT);
+                    goto finish_match_393;
                   }
-                case_472: ;
-                finish_match_471: ;
-                  COPY(zoptionzIozK)(&zgaz3217, zgsz3550);
-                  KILL(zoptionzIozK)(&zgsz3550);
-                  goto finish_match_468;
+                case_394: ;
+                finish_match_393: ;
+                  COPY(zoptionzIbzK)(&zgaz3142, zgsz3479);
+                  KILL(zoptionzIbzK)(&zgsz3479);
+                  goto finish_match_390;
                 }
-              case_470: ;
+              case_392: ;
                 {
-                  sailgen_NonezIozK(&zgaz3217, UNIT);
-                  goto finish_match_468;
+                  sailgen_NonezIbzK(&zgaz3142, UNIT);
+                  goto finish_match_390;
                 }
-              case_469: ;
-              finish_match_468: ;
+              case_391: ;
+              finish_match_390: ;
               }
-              bool zgsz3554;
+              uint64_t zgsz3483;
               {
-                if (zgaz3217.kind != Kind_zSomezIozK) goto case_514;
-                zgsz3554 = zgaz3217.zSomezIozK;
-                goto finish_match_474;
+                if (zgaz3142.kind != Kind_zSomezIbzK) goto case_460;
+                zgsz3483 = CONVERT_OF(fbits, lbits)(zgaz3142.variants.zSomezIbzK, true);
+                goto finish_match_396;
               }
-            case_514: ;
+            case_460: ;
               {
-                __label__ case_513, case_483, finish_match_482;
+                __label__ case_459, case_405, finish_match_404;
 
                 /* complete */
-                struct zoptionzIozK zgaz3225;
-                CREATE(zoptionzIozK)(&zgaz3225);
+                struct zoptionzIbzK zgaz3155;
+                CREATE(zoptionzIbzK)(&zgaz3155);
                 {
-                  __label__ case_478, case_477, finish_match_476;
+                  __label__ case_400, case_399, finish_match_398;
 
                   {
-                    __label__ case_481, case_480, finish_match_479;
+                    __label__ case_403, case_402, finish_match_401;
 
-                    bool zuz3198;
-                    zuz3198 = zhead_expz3.ztup0.zR;
-                    bool zuz3199;
-                    zuz3199 = zhead_expz3.ztup0.zW;
-                    bool zuz3200;
-                    zuz3200 = zhead_expz3.ztup0.zC;
-                    bool zuz3201;
-                    zuz3201 = zhead_expz3.ztup0.zLM;
-                    bool zuz3202;
-                    zuz3202 = zhead_expz3.ztup0.zX;
-                    bool zuz3203;
-                    zuz3203 = zhead_expz3.ztup0.zASR;
+                    bool zuz3184;
+                    zuz3184 = zhead_expz3.ztup0.zR;
+                    bool zuz3185;
+                    zuz3185 = zhead_expz3.ztup0.zW;
+                    bool zuz3186;
+                    zuz3186 = zhead_expz3.ztup0.zC;
+                    bool zuz3187;
+                    zuz3187 = zhead_expz3.ztup0.zLM;
+                    bool zuz3188;
+                    zuz3188 = zhead_expz3.ztup0.zEL;
+                    bool zuz3189;
+                    zuz3189 = zhead_expz3.ztup0.zSL;
+                    bool zuz3190;
+                    zuz3190 = zhead_expz3.ztup0.zX;
+                    bool zuz3191;
+                    zuz3191 = zhead_expz3.ztup0.zASR;
                     enum zExecutionMode zmapping7z3;
                     zmapping7z3 = zhead_expz3.ztup1;
-                    bool zgaz3224;
+                    bool zgaz3154;
                     {
-                      bool zgaz3223;
+                      bool zgaz3153;
                       {
-                        bool zgaz3222;
+                        bool zgaz3152;
                         {
-                          bool zgaz3221;
+                          bool zgaz3151;
                           {
-                            bool zgaz3220;
+                            bool zgaz3150;
                             {
-                              bool zgaz3219;
-                              zgaz3219 = sailgen_execution_mode_encdec_forwards_matches(zmapping7z3);
-                              bool zgsz3557;
-                              if (zgaz3219) {  zgsz3557 = eq_bool(zuz3203, false);  } else {  zgsz3557 = false;  }
-                              zgaz3220 = zgsz3557;
+                              bool zgaz3149;
+                              {
+                                bool zgaz3148;
+                                {
+                                  bool zgaz3147;
+                                  zgaz3147 = sailgen_execution_mode_encdec_forwards_matches(zmapping7z3);
+                                  bool zgsz3486;
+                                  if (zgaz3147) {  zgsz3486 = eq_bool(zuz3191, false);  } else {  zgsz3486 = false;  }
+                                  zgaz3148 = zgsz3486;
+                                }
+                                bool zgsz3487;
+                                if (zgaz3148) {  zgsz3487 = eq_bool(zuz3190, true);  } else {  zgsz3487 = false;  }
+                                zgaz3149 = zgsz3487;
+                              }
+                              bool zgsz3488;
+                              if (zgaz3149) {  zgsz3488 = eq_bool(zuz3189, false);  } else {  zgsz3488 = false;  }
+                              zgaz3150 = zgsz3488;
                             }
-                            bool zgsz3558;
-                            if (zgaz3220) {  zgsz3558 = eq_bool(zuz3202, true);  } else {  zgsz3558 = false;  }
-                            zgaz3221 = zgsz3558;
+                            bool zgsz3489;
+                            if (zgaz3150) {  zgsz3489 = eq_bool(zuz3188, false);  } else {  zgsz3489 = false;  }
+                            zgaz3151 = zgsz3489;
                           }
-                          bool zgsz3559;
-                          if (zgaz3221) {  zgsz3559 = eq_bool(zuz3201, false);  } else {  zgsz3559 = false;  }
-                          zgaz3222 = zgsz3559;
+                          bool zgsz3490;
+                          if (zgaz3151) {  zgsz3490 = eq_bool(zuz3187, false);  } else {  zgsz3490 = false;  }
+                          zgaz3152 = zgsz3490;
                         }
-                        bool zgsz3560;
-                        if (zgaz3222) {  zgsz3560 = eq_bool(zuz3200, false);  } else {  zgsz3560 = false;  }
-                        zgaz3223 = zgsz3560;
+                        bool zgsz3491;
+                        if (zgaz3152) {  zgsz3491 = eq_bool(zuz3186, false);  } else {  zgsz3491 = false;  }
+                        zgaz3153 = zgsz3491;
                       }
-                      bool zgsz3561;
-                      if (zgaz3223) {  zgsz3561 = eq_bool(zuz3199, true);  } else {  zgsz3561 = false;  }
-                      zgaz3224 = zgsz3561;
+                      bool zgsz3492;
+                      if (zgaz3153) {  zgsz3492 = eq_bool(zuz3185, true);  } else {  zgsz3492 = false;  }
+                      zgaz3154 = zgsz3492;
                     }
-                    bool zgsz3562;
-                    if (zgaz3224) {  zgsz3562 = eq_bool(zuz3198, true);  } else {  zgsz3562 = false;  }
-                    bool zgsz3566;
-                    zgsz3566 = zgsz3562;
-                    if (!(zgsz3566)) {
-
-
-
-
-
-
-                      goto case_478;
-                    }
-                    uint64_t zgaz3218;
-                    zgaz3218 = sailgen_execution_mode_encdec_forwards_infallible(zmapping7z3);
-                    struct zoptionzIozK zgsz3563;
-                    CREATE(zoptionzIozK)(&zgsz3563);
+                    bool zgsz3493;
+                    if (zgaz3154) {  zgsz3493 = eq_bool(zuz3184, true);  } else {  zgsz3493 = false;  }
+                    bool zgsz3497;
+                    zgsz3497 = zgsz3493;
+                    if (!(zgsz3497)) {  goto case_400;  }
+                    uint64_t zgaz3143;
+                    zgaz3143 = sailgen_execution_mode_encdec_forwards_infallible(zmapping7z3);
+                    struct zoptionzIbzK zgsz3494;
+                    CREATE(zoptionzIbzK)(&zgsz3494);
                     {
-                      uint64_t zuz3204;
-                      zuz3204 = zgaz3218;
-                      sailgen_SomezIozK(&zgsz3563, true);
-                      goto finish_match_479;
+                      uint64_t zuz3192;
+                      zuz3192 = zgaz3143;
+                      uint64_t zgaz3146;
+                      {
+                        uint64_t zgaz3145;
+                        {
+                          uint64_t zgaz3144;
+                          zgaz3144 = zuz3192;
+                          zgaz3145 = (UINT64_C(0b11) << 1) | zgaz3144;
+                        }
+                        zgaz3146 = (UINT64_C(0b01) << 3) | zgaz3145;
+                      }
+                      {
+                        RECREATE(lbits)(&zghz3129);
+                        CONVERT_OF(lbits, fbits)(&zghz3129, zgaz3146, UINT64_C(5) , true);
+                        sailgen_SomezIbzK(&zgsz3494, zghz3129);
+                      }
+                      goto finish_match_401;
                     }
-                  case_481: ;
+                  case_403: ;
                     {
-                      sailgen_NonezIozK(&zgsz3563, UNIT);
-                      goto finish_match_479;
+                      sailgen_NonezIbzK(&zgsz3494, UNIT);
+                      goto finish_match_401;
                     }
-                  case_480: ;
-                  finish_match_479: ;
-                    COPY(zoptionzIozK)(&zgaz3225, zgsz3563);
-                    KILL(zoptionzIozK)(&zgsz3563);
-                    goto finish_match_476;
+                  case_402: ;
+                  finish_match_401: ;
+                    COPY(zoptionzIbzK)(&zgaz3155, zgsz3494);
+                    KILL(zoptionzIbzK)(&zgsz3494);
+                    goto finish_match_398;
                   }
-                case_478: ;
+                case_400: ;
                   {
-                    sailgen_NonezIozK(&zgaz3225, UNIT);
-                    goto finish_match_476;
+                    sailgen_NonezIbzK(&zgaz3155, UNIT);
+                    goto finish_match_398;
                   }
-                case_477: ;
-                finish_match_476: ;
+                case_399: ;
+                finish_match_398: ;
                 }
-                bool zgsz3567;
+                uint64_t zgsz3498;
                 {
-                  if (zgaz3225.kind != Kind_zSomezIozK) goto case_513;
-                  zgsz3567 = zgaz3225.zSomezIozK;
-                  goto finish_match_482;
+                  if (zgaz3155.kind != Kind_zSomezIbzK) goto case_459;
+                  zgsz3498 = CONVERT_OF(fbits, lbits)(zgaz3155.variants.zSomezIbzK, true);
+                  goto finish_match_404;
                 }
-              case_513: ;
+              case_459: ;
                 {
-                  __label__ case_512, case_491, finish_match_490;
+                  __label__ case_458, case_413, finish_match_412;
 
                   /* complete */
-                  struct zoptionzIozK zgaz3233;
-                  CREATE(zoptionzIozK)(&zgaz3233);
+                  struct zoptionzIbzK zgaz3165;
+                  CREATE(zoptionzIbzK)(&zgaz3165);
                   {
-                    __label__ case_486, case_485, finish_match_484;
+                    __label__ case_408, case_407, finish_match_406;
 
                     {
-                      __label__ case_489, case_488, finish_match_487;
+                      __label__ case_411, case_410, finish_match_409;
 
-                      bool zuz3206;
-                      zuz3206 = zhead_expz3.ztup0.zR;
-                      bool zuz3207;
-                      zuz3207 = zhead_expz3.ztup0.zW;
-                      bool zuz3208;
-                      zuz3208 = zhead_expz3.ztup0.zC;
-                      bool zuz3209;
-                      zuz3209 = zhead_expz3.ztup0.zLM;
-                      bool zuz3210;
-                      zuz3210 = zhead_expz3.ztup0.zX;
-                      bool zuz3211;
-                      zuz3211 = zhead_expz3.ztup0.zASR;
+                      bool zuz3194;
+                      zuz3194 = zhead_expz3.ztup0.zR;
+                      bool zuz3195;
+                      zuz3195 = zhead_expz3.ztup0.zW;
+                      bool zuz3196;
+                      zuz3196 = zhead_expz3.ztup0.zC;
+                      bool zuz3197;
+                      zuz3197 = zhead_expz3.ztup0.zLM;
+                      bool zuz3198;
+                      zuz3198 = zhead_expz3.ztup0.zEL;
+                      bool zuz3199;
+                      zuz3199 = zhead_expz3.ztup0.zSL;
+                      bool zuz3200;
+                      zuz3200 = zhead_expz3.ztup0.zX;
+                      bool zuz3201;
+                      zuz3201 = zhead_expz3.ztup0.zASR;
                       enum zExecutionMode zmapping8z3;
                       zmapping8z3 = zhead_expz3.ztup1;
-                      bool zgaz3232;
+                      bool zgaz3164;
                       {
-                        bool zgaz3231;
+                        bool zgaz3163;
                         {
-                          bool zgaz3230;
+                          bool zgaz3162;
                           {
-                            bool zgaz3229;
+                            bool zgaz3161;
                             {
-                              bool zgaz3228;
+                              bool zgaz3160;
                               {
-                                bool zgaz3227;
-                                zgaz3227 = sailgen_execution_mode_encdec_forwards_matches(zmapping8z3);
-                                bool zgsz3570;
-                                if (zgaz3227) {  zgsz3570 = eq_bool(zuz3211, false);  } else {  zgsz3570 = false;  }
-                                zgaz3228 = zgsz3570;
+                                bool zgaz3159;
+                                {
+                                  bool zgaz3158;
+                                  {
+                                    bool zgaz3157;
+                                    zgaz3157 = sailgen_execution_mode_encdec_forwards_matches(zmapping8z3);
+                                    bool zgsz3501;
+                                    if (zgaz3157) {  zgsz3501 = eq_bool(zuz3201, false);  } else {  zgsz3501 = false;  }
+                                    zgaz3158 = zgsz3501;
+                                  }
+                                  bool zgsz3502;
+                                  if (zgaz3158) {  zgsz3502 = eq_bool(zuz3200, false);  } else {  zgsz3502 = false;  }
+                                  zgaz3159 = zgsz3502;
+                                }
+                                bool zgsz3503;
+                                if (zgaz3159) {  zgsz3503 = eq_bool(zuz3199, false);  } else {  zgsz3503 = false;  }
+                                zgaz3160 = zgsz3503;
                               }
-                              bool zgsz3571;
-                              if (zgaz3228) {  zgsz3571 = eq_bool(zuz3210, false);  } else {  zgsz3571 = false;  }
-                              zgaz3229 = zgsz3571;
+                              bool zgsz3504;
+                              if (zgaz3160) {  zgsz3504 = eq_bool(zuz3198, false);  } else {  zgsz3504 = false;  }
+                              zgaz3161 = zgsz3504;
                             }
-                            bool zgsz3572;
-                            if (zgaz3229) {  zgsz3572 = eq_bool(zuz3209, false);  } else {  zgsz3572 = false;  }
-                            zgaz3230 = zgsz3572;
+                            bool zgsz3505;
+                            if (zgaz3161) {  zgsz3505 = eq_bool(zuz3197, false);  } else {  zgsz3505 = false;  }
+                            zgaz3162 = zgsz3505;
                           }
-                          bool zgsz3573;
-                          if (zgaz3230) {  zgsz3573 = eq_bool(zuz3208, true);  } else {  zgsz3573 = false;  }
-                          zgaz3231 = zgsz3573;
+                          bool zgsz3506;
+                          if (zgaz3162) {  zgsz3506 = eq_bool(zuz3196, true);  } else {  zgsz3506 = false;  }
+                          zgaz3163 = zgsz3506;
                         }
-                        bool zgsz3574;
-                        if (zgaz3231) {  zgsz3574 = eq_bool(zuz3207, false);  } else {  zgsz3574 = false;  }
-                        zgaz3232 = zgsz3574;
+                        bool zgsz3507;
+                        if (zgaz3163) {  zgsz3507 = eq_bool(zuz3195, false);  } else {  zgsz3507 = false;  }
+                        zgaz3164 = zgsz3507;
                       }
-                      bool zgsz3575;
-                      if (zgaz3232) {  zgsz3575 = eq_bool(zuz3206, true);  } else {  zgsz3575 = false;  }
-                      bool zgsz3579;
-                      zgsz3579 = zgsz3575;
-                      if (!(zgsz3579)) {
-
-
-
-
-
-
-                        goto case_486;
-                      }
-                      uint64_t zgaz3226;
-                      zgaz3226 = sailgen_execution_mode_encdec_forwards_infallible(zmapping8z3);
-                      struct zoptionzIozK zgsz3576;
-                      CREATE(zoptionzIozK)(&zgsz3576);
+                      bool zgsz3508;
+                      if (zgaz3164) {  zgsz3508 = eq_bool(zuz3194, true);  } else {  zgsz3508 = false;  }
+                      bool zgsz3512;
+                      zgsz3512 = zgsz3508;
+                      if (!(zgsz3512)) {  goto case_408;  }
+                      uint64_t zgaz3156;
+                      zgaz3156 = sailgen_execution_mode_encdec_forwards_infallible(zmapping8z3);
+                      struct zoptionzIbzK zgsz3509;
+                      CREATE(zoptionzIbzK)(&zgsz3509);
                       {
-                        uint64_t zb__2;
-                        zb__2 = zgaz3226;
-                        bool zgsz3578;
-                        zgsz3578 = (zb__2 == UINT64_C(0b0));
-                        if (!(zgsz3578)) {
-
-                          goto case_489;
+                        uint64_t zb__5;
+                        zb__5 = zgaz3156;
+                        bool zgsz3511;
+                        zgsz3511 = (zb__5 == UINT64_C(0b0));
+                        if (!(zgsz3511)) {  goto case_411;  }
+                        {
+                          RECREATE(lbits)(&zghz3128);
+                          CONVERT_OF(lbits, fbits)(&zghz3128, UINT64_C(0b10011), UINT64_C(5) , true);
+                          sailgen_SomezIbzK(&zgsz3509, zghz3128);
                         }
-                        sailgen_SomezIozK(&zgsz3576, true);
-                        goto finish_match_487;
+                        goto finish_match_409;
                       }
-                    case_489: ;
+                    case_411: ;
                       {
-                        sailgen_NonezIozK(&zgsz3576, UNIT);
-                        goto finish_match_487;
+                        sailgen_NonezIbzK(&zgsz3509, UNIT);
+                        goto finish_match_409;
                       }
-                    case_488: ;
-                    finish_match_487: ;
-                      COPY(zoptionzIozK)(&zgaz3233, zgsz3576);
-                      KILL(zoptionzIozK)(&zgsz3576);
-                      goto finish_match_484;
+                    case_410: ;
+                    finish_match_409: ;
+                      COPY(zoptionzIbzK)(&zgaz3165, zgsz3509);
+                      KILL(zoptionzIbzK)(&zgsz3509);
+                      goto finish_match_406;
                     }
-                  case_486: ;
+                  case_408: ;
                     {
-                      sailgen_NonezIozK(&zgaz3233, UNIT);
-                      goto finish_match_484;
+                      sailgen_NonezIbzK(&zgaz3165, UNIT);
+                      goto finish_match_406;
                     }
-                  case_485: ;
-                  finish_match_484: ;
+                  case_407: ;
+                  finish_match_406: ;
                   }
-                  bool zgsz3580;
+                  uint64_t zgsz3513;
                   {
-                    if (zgaz3233.kind != Kind_zSomezIozK) goto case_512;
-                    zgsz3580 = zgaz3233.zSomezIozK;
-                    goto finish_match_490;
+                    if (zgaz3165.kind != Kind_zSomezIbzK) goto case_458;
+                    zgsz3513 = CONVERT_OF(fbits, lbits)(zgaz3165.variants.zSomezIbzK, true);
+                    goto finish_match_412;
                   }
-                case_512: ;
+                case_458: ;
                   {
-                    __label__ case_511, case_499, finish_match_498;
+                    __label__ case_457, case_421, finish_match_420;
 
                     /* complete */
-                    struct zoptionzIozK zgaz3241;
-                    CREATE(zoptionzIozK)(&zgaz3241);
+                    struct zoptionzIbzK zgaz3175;
+                    CREATE(zoptionzIbzK)(&zgaz3175);
                     {
-                      __label__ case_494, case_493, finish_match_492;
+                      __label__ case_416, case_415, finish_match_414;
 
                       {
-                        __label__ case_497, case_496, finish_match_495;
+                        __label__ case_419, case_418, finish_match_417;
 
-                        bool zuz3213;
-                        zuz3213 = zhead_expz3.ztup0.zR;
-                        bool zuz3214;
-                        zuz3214 = zhead_expz3.ztup0.zW;
-                        bool zuz3215;
-                        zuz3215 = zhead_expz3.ztup0.zC;
-                        bool zuz3216;
-                        zuz3216 = zhead_expz3.ztup0.zLM;
-                        bool zuz3217;
-                        zuz3217 = zhead_expz3.ztup0.zX;
-                        bool zuz3218;
-                        zuz3218 = zhead_expz3.ztup0.zASR;
+                        bool zuz3203;
+                        zuz3203 = zhead_expz3.ztup0.zR;
+                        bool zuz3204;
+                        zuz3204 = zhead_expz3.ztup0.zW;
+                        bool zuz3205;
+                        zuz3205 = zhead_expz3.ztup0.zC;
+                        bool zuz3206;
+                        zuz3206 = zhead_expz3.ztup0.zLM;
+                        bool zuz3207;
+                        zuz3207 = zhead_expz3.ztup0.zEL;
+                        bool zuz3208;
+                        zuz3208 = zhead_expz3.ztup0.zSL;
+                        bool zuz3209;
+                        zuz3209 = zhead_expz3.ztup0.zX;
+                        bool zuz3210;
+                        zuz3210 = zhead_expz3.ztup0.zASR;
                         enum zExecutionMode zmapping9z3;
                         zmapping9z3 = zhead_expz3.ztup1;
-                        bool zgaz3240;
+                        bool zgaz3174;
                         {
-                          bool zgaz3239;
+                          bool zgaz3173;
                           {
-                            bool zgaz3238;
+                            bool zgaz3172;
                             {
-                              bool zgaz3237;
+                              bool zgaz3171;
                               {
-                                bool zgaz3236;
+                                bool zgaz3170;
                                 {
-                                  bool zgaz3235;
-                                  zgaz3235 = sailgen_execution_mode_encdec_forwards_matches(zmapping9z3);
-                                  bool zgsz3583;
-                                  if (zgaz3235) {  zgsz3583 = eq_bool(zuz3218, false);  } else {  zgsz3583 = false;  }
-                                  zgaz3236 = zgsz3583;
+                                  bool zgaz3169;
+                                  {
+                                    bool zgaz3168;
+                                    {
+                                      bool zgaz3167;
+                                      zgaz3167 = sailgen_execution_mode_encdec_forwards_matches(zmapping9z3);
+                                      bool zgsz3516;
+                                      if (zgaz3167) {  zgsz3516 = eq_bool(zuz3210, false);  } else {
+                                        zgsz3516 = false;
+                                      }
+                                      zgaz3168 = zgsz3516;
+                                    }
+                                    bool zgsz3517;
+                                    if (zgaz3168) {  zgsz3517 = eq_bool(zuz3209, false);  } else {  zgsz3517 = false;  }
+                                    zgaz3169 = zgsz3517;
+                                  }
+                                  bool zgsz3518;
+                                  if (zgaz3169) {  zgsz3518 = eq_bool(zuz3208, true);  } else {  zgsz3518 = false;  }
+                                  zgaz3170 = zgsz3518;
                                 }
-                                bool zgsz3584;
-                                if (zgaz3236) {  zgsz3584 = eq_bool(zuz3217, false);  } else {  zgsz3584 = false;  }
-                                zgaz3237 = zgsz3584;
+                                bool zgsz3519;
+                                if (zgaz3170) {  zgsz3519 = eq_bool(zuz3207, false);  } else {  zgsz3519 = false;  }
+                                zgaz3171 = zgsz3519;
                               }
-                              bool zgsz3585;
-                              if (zgaz3237) {  zgsz3585 = eq_bool(zuz3216, true);  } else {  zgsz3585 = false;  }
-                              zgaz3238 = zgsz3585;
+                              bool zgsz3520;
+                              if (zgaz3171) {  zgsz3520 = eq_bool(zuz3206, true);  } else {  zgsz3520 = false;  }
+                              zgaz3172 = zgsz3520;
                             }
-                            bool zgsz3586;
-                            if (zgaz3238) {  zgsz3586 = eq_bool(zuz3215, true);  } else {  zgsz3586 = false;  }
-                            zgaz3239 = zgsz3586;
+                            bool zgsz3521;
+                            if (zgaz3172) {  zgsz3521 = eq_bool(zuz3205, true);  } else {  zgsz3521 = false;  }
+                            zgaz3173 = zgsz3521;
                           }
-                          bool zgsz3587;
-                          if (zgaz3239) {  zgsz3587 = eq_bool(zuz3214, false);  } else {  zgsz3587 = false;  }
-                          zgaz3240 = zgsz3587;
+                          bool zgsz3522;
+                          if (zgaz3173) {  zgsz3522 = eq_bool(zuz3204, true);  } else {  zgsz3522 = false;  }
+                          zgaz3174 = zgsz3522;
                         }
-                        bool zgsz3588;
-                        if (zgaz3240) {  zgsz3588 = eq_bool(zuz3213, true);  } else {  zgsz3588 = false;  }
-                        bool zgsz3592;
-                        zgsz3592 = zgsz3588;
-                        if (!(zgsz3592)) {
-
-
-
-
-
-
-                          goto case_494;
-                        }
-                        uint64_t zgaz3234;
-                        zgaz3234 = sailgen_execution_mode_encdec_forwards_infallible(zmapping9z3);
-                        struct zoptionzIozK zgsz3589;
-                        CREATE(zoptionzIozK)(&zgsz3589);
+                        bool zgsz3523;
+                        if (zgaz3174) {  zgsz3523 = eq_bool(zuz3203, true);  } else {  zgsz3523 = false;  }
+                        bool zgsz3527;
+                        zgsz3527 = zgsz3523;
+                        if (!(zgsz3527)) {  goto case_416;  }
+                        uint64_t zgaz3166;
+                        zgaz3166 = sailgen_execution_mode_encdec_forwards_infallible(zmapping9z3);
+                        struct zoptionzIbzK zgsz3524;
+                        CREATE(zoptionzIbzK)(&zgsz3524);
                         {
-                          uint64_t zb__1;
-                          zb__1 = zgaz3234;
-                          bool zgsz3591;
-                          zgsz3591 = (zb__1 == UINT64_C(0b0));
-                          if (!(zgsz3591)) {
-
-                            goto case_497;
+                          uint64_t zb__4;
+                          zb__4 = zgaz3166;
+                          bool zgsz3526;
+                          zgsz3526 = (zb__4 == UINT64_C(0b0));
+                          if (!(zgsz3526)) {  goto case_419;  }
+                          {
+                            RECREATE(lbits)(&zghz3127);
+                            CONVERT_OF(lbits, fbits)(&zghz3127, UINT64_C(0b10110), UINT64_C(5) , true);
+                            sailgen_SomezIbzK(&zgsz3524, zghz3127);
                           }
-                          sailgen_SomezIozK(&zgsz3589, true);
-                          goto finish_match_495;
+                          goto finish_match_417;
                         }
-                      case_497: ;
+                      case_419: ;
                         {
-                          sailgen_NonezIozK(&zgsz3589, UNIT);
-                          goto finish_match_495;
+                          sailgen_NonezIbzK(&zgsz3524, UNIT);
+                          goto finish_match_417;
                         }
-                      case_496: ;
-                      finish_match_495: ;
-                        COPY(zoptionzIozK)(&zgaz3241, zgsz3589);
-                        KILL(zoptionzIozK)(&zgsz3589);
-                        goto finish_match_492;
+                      case_418: ;
+                      finish_match_417: ;
+                        COPY(zoptionzIbzK)(&zgaz3175, zgsz3524);
+                        KILL(zoptionzIbzK)(&zgsz3524);
+                        goto finish_match_414;
                       }
-                    case_494: ;
+                    case_416: ;
                       {
-                        sailgen_NonezIozK(&zgaz3241, UNIT);
-                        goto finish_match_492;
+                        sailgen_NonezIbzK(&zgaz3175, UNIT);
+                        goto finish_match_414;
                       }
-                    case_493: ;
-                    finish_match_492: ;
+                    case_415: ;
+                    finish_match_414: ;
                     }
-                    bool zgsz3593;
+                    uint64_t zgsz3528;
                     {
-                      if (zgaz3241.kind != Kind_zSomezIozK) goto case_511;
-                      zgsz3593 = zgaz3241.zSomezIozK;
-                      goto finish_match_498;
+                      if (zgaz3175.kind != Kind_zSomezIbzK) goto case_457;
+                      zgsz3528 = CONVERT_OF(fbits, lbits)(zgaz3175.variants.zSomezIbzK, true);
+                      goto finish_match_420;
                     }
-                  case_511: ;
+                  case_457: ;
                     {
-                      __label__ case_510, case_507, finish_match_506;
+                      __label__ case_456, case_429, finish_match_428;
 
                       /* complete */
-                      struct zoptionzIozK zgaz3249;
-                      CREATE(zoptionzIozK)(&zgaz3249);
+                      struct zoptionzIbzK zgaz3185;
+                      CREATE(zoptionzIbzK)(&zgaz3185);
                       {
-                        __label__ case_502, case_501, finish_match_500;
+                        __label__ case_424, case_423, finish_match_422;
 
                         {
-                          __label__ case_505, case_504, finish_match_503;
+                          __label__ case_427, case_426, finish_match_425;
 
-                          bool zuz3220;
-                          zuz3220 = zhead_expz3.ztup0.zR;
-                          bool zuz3221;
-                          zuz3221 = zhead_expz3.ztup0.zW;
-                          bool zuz3222;
-                          zuz3222 = zhead_expz3.ztup0.zC;
-                          bool zuz3223;
-                          zuz3223 = zhead_expz3.ztup0.zLM;
-                          bool zuz3224;
-                          zuz3224 = zhead_expz3.ztup0.zX;
-                          bool zuz3225;
-                          zuz3225 = zhead_expz3.ztup0.zASR;
+                          bool zuz3212;
+                          zuz3212 = zhead_expz3.ztup0.zR;
+                          bool zuz3213;
+                          zuz3213 = zhead_expz3.ztup0.zW;
+                          bool zuz3214;
+                          zuz3214 = zhead_expz3.ztup0.zC;
+                          bool zuz3215;
+                          zuz3215 = zhead_expz3.ztup0.zLM;
+                          bool zuz3216;
+                          zuz3216 = zhead_expz3.ztup0.zEL;
+                          bool zuz3217;
+                          zuz3217 = zhead_expz3.ztup0.zSL;
+                          bool zuz3218;
+                          zuz3218 = zhead_expz3.ztup0.zX;
+                          bool zuz3219;
+                          zuz3219 = zhead_expz3.ztup0.zASR;
                           enum zExecutionMode zmapping10z3;
                           zmapping10z3 = zhead_expz3.ztup1;
-                          bool zgaz3248;
+                          bool zgaz3184;
                           {
-                            bool zgaz3247;
+                            bool zgaz3183;
                             {
-                              bool zgaz3246;
+                              bool zgaz3182;
                               {
-                                bool zgaz3245;
+                                bool zgaz3181;
                                 {
-                                  bool zgaz3244;
+                                  bool zgaz3180;
                                   {
-                                    bool zgaz3243;
-                                    zgaz3243 = sailgen_execution_mode_encdec_forwards_matches(zmapping10z3);
-                                    bool zgsz3596;
-                                    if (zgaz3243) {  zgsz3596 = eq_bool(zuz3225, false);  } else {  zgsz3596 = false;  }
-                                    zgaz3244 = zgsz3596;
+                                    bool zgaz3179;
+                                    {
+                                      bool zgaz3178;
+                                      {
+                                        bool zgaz3177;
+                                        zgaz3177 = sailgen_execution_mode_encdec_forwards_matches(zmapping10z3);
+                                        bool zgsz3531;
+                                        if (zgaz3177) {  zgsz3531 = eq_bool(zuz3219, false);  } else {
+                                          zgsz3531 = false;
+                                        }
+                                        zgaz3178 = zgsz3531;
+                                      }
+                                      bool zgsz3532;
+                                      if (zgaz3178) {  zgsz3532 = eq_bool(zuz3218, false);  } else {
+                                        zgsz3532 = false;
+                                      }
+                                      zgaz3179 = zgsz3532;
+                                    }
+                                    bool zgsz3533;
+                                    if (zgaz3179) {  zgsz3533 = eq_bool(zuz3217, false);  } else {  zgsz3533 = false;  }
+                                    zgaz3180 = zgsz3533;
                                   }
-                                  bool zgsz3597;
-                                  if (zgaz3244) {  zgsz3597 = eq_bool(zuz3224, false);  } else {  zgsz3597 = false;  }
-                                  zgaz3245 = zgsz3597;
+                                  bool zgsz3534;
+                                  if (zgaz3180) {  zgsz3534 = eq_bool(zuz3216, false);  } else {  zgsz3534 = false;  }
+                                  zgaz3181 = zgsz3534;
                                 }
-                                bool zgsz3598;
-                                if (zgaz3245) {  zgsz3598 = eq_bool(zuz3223, true);  } else {  zgsz3598 = false;  }
-                                zgaz3246 = zgsz3598;
+                                bool zgsz3535;
+                                if (zgaz3181) {  zgsz3535 = eq_bool(zuz3215, true);  } else {  zgsz3535 = false;  }
+                                zgaz3182 = zgsz3535;
                               }
-                              bool zgsz3599;
-                              if (zgaz3246) {  zgsz3599 = eq_bool(zuz3222, true);  } else {  zgsz3599 = false;  }
-                              zgaz3247 = zgsz3599;
+                              bool zgsz3536;
+                              if (zgaz3182) {  zgsz3536 = eq_bool(zuz3214, true);  } else {  zgsz3536 = false;  }
+                              zgaz3183 = zgsz3536;
                             }
-                            bool zgsz3600;
-                            if (zgaz3247) {  zgsz3600 = eq_bool(zuz3221, true);  } else {  zgsz3600 = false;  }
-                            zgaz3248 = zgsz3600;
+                            bool zgsz3537;
+                            if (zgaz3183) {  zgsz3537 = eq_bool(zuz3213, true);  } else {  zgsz3537 = false;  }
+                            zgaz3184 = zgsz3537;
                           }
-                          bool zgsz3601;
-                          if (zgaz3248) {  zgsz3601 = eq_bool(zuz3220, true);  } else {  zgsz3601 = false;  }
-                          bool zgsz3605;
-                          zgsz3605 = zgsz3601;
-                          if (!(zgsz3605)) {
-
-
-
-
-
-
-                            goto case_502;
-                          }
-                          uint64_t zgaz3242;
-                          zgaz3242 = sailgen_execution_mode_encdec_forwards_infallible(zmapping10z3);
-                          struct zoptionzIozK zgsz3602;
-                          CREATE(zoptionzIozK)(&zgsz3602);
+                          bool zgsz3538;
+                          if (zgaz3184) {  zgsz3538 = eq_bool(zuz3212, true);  } else {  zgsz3538 = false;  }
+                          bool zgsz3542;
+                          zgsz3542 = zgsz3538;
+                          if (!(zgsz3542)) {  goto case_424;  }
+                          uint64_t zgaz3176;
+                          zgaz3176 = sailgen_execution_mode_encdec_forwards_infallible(zmapping10z3);
+                          struct zoptionzIbzK zgsz3539;
+                          CREATE(zoptionzIbzK)(&zgsz3539);
                           {
-                            uint64_t zb__0;
-                            zb__0 = zgaz3242;
-                            bool zgsz3604;
-                            zgsz3604 = (zb__0 == UINT64_C(0b0));
-                            if (!(zgsz3604)) {
-
-                              goto case_505;
+                            uint64_t zb__3;
+                            zb__3 = zgaz3176;
+                            bool zgsz3541;
+                            zgsz3541 = (zb__3 == UINT64_C(0b0));
+                            if (!(zgsz3541)) {  goto case_427;  }
+                            {
+                              RECREATE(lbits)(&zghz3126);
+                              CONVERT_OF(lbits, fbits)(&zghz3126, UINT64_C(0b10111), UINT64_C(5) , true);
+                              sailgen_SomezIbzK(&zgsz3539, zghz3126);
                             }
-                            sailgen_SomezIozK(&zgsz3602, true);
-                            goto finish_match_503;
+                            goto finish_match_425;
                           }
-                        case_505: ;
+                        case_427: ;
                           {
-                            sailgen_NonezIozK(&zgsz3602, UNIT);
-                            goto finish_match_503;
+                            sailgen_NonezIbzK(&zgsz3539, UNIT);
+                            goto finish_match_425;
                           }
-                        case_504: ;
-                        finish_match_503: ;
-                          COPY(zoptionzIozK)(&zgaz3249, zgsz3602);
-                          KILL(zoptionzIozK)(&zgsz3602);
-                          goto finish_match_500;
+                        case_426: ;
+                        finish_match_425: ;
+                          COPY(zoptionzIbzK)(&zgaz3185, zgsz3539);
+                          KILL(zoptionzIbzK)(&zgsz3539);
+                          goto finish_match_422;
                         }
-                      case_502: ;
+                      case_424: ;
                         {
-                          sailgen_NonezIozK(&zgaz3249, UNIT);
-                          goto finish_match_500;
+                          sailgen_NonezIbzK(&zgaz3185, UNIT);
+                          goto finish_match_422;
                         }
-                      case_501: ;
-                      finish_match_500: ;
+                      case_423: ;
+                      finish_match_422: ;
                       }
-                      bool zgsz3606;
+                      uint64_t zgsz3543;
                       {
-                        if (zgaz3249.kind != Kind_zSomezIozK) goto case_510;
-                        zgsz3606 = zgaz3249.zSomezIozK;
-                        goto finish_match_506;
+                        if (zgaz3185.kind != Kind_zSomezIbzK) goto case_456;
+                        zgsz3543 = CONVERT_OF(fbits, lbits)(zgaz3185.variants.zSomezIbzK, true);
+                        goto finish_match_428;
                       }
-                    case_510: ;
+                    case_456: ;
                       {
-                        __label__ case_509, finish_match_508;
+                        __label__ case_455, case_437, finish_match_436;
 
                         /* complete */
-                        bool zgsz3607;
+                        struct zoptionzIbzK zgaz3195;
+                        CREATE(zoptionzIbzK)(&zgaz3195);
                         {
-                          zgsz3607 = false;
-                          goto finish_match_508;
+                          __label__ case_432, case_431, finish_match_430;
+
+                          {
+                            __label__ case_435, case_434, finish_match_433;
+
+                            bool zuz3221;
+                            zuz3221 = zhead_expz3.ztup0.zR;
+                            bool zuz3222;
+                            zuz3222 = zhead_expz3.ztup0.zW;
+                            bool zuz3223;
+                            zuz3223 = zhead_expz3.ztup0.zC;
+                            bool zuz3224;
+                            zuz3224 = zhead_expz3.ztup0.zLM;
+                            bool zuz3225;
+                            zuz3225 = zhead_expz3.ztup0.zEL;
+                            bool zuz3226;
+                            zuz3226 = zhead_expz3.ztup0.zSL;
+                            bool zuz3227;
+                            zuz3227 = zhead_expz3.ztup0.zX;
+                            bool zuz3228;
+                            zuz3228 = zhead_expz3.ztup0.zASR;
+                            enum zExecutionMode zmapping11z3;
+                            zmapping11z3 = zhead_expz3.ztup1;
+                            bool zgaz3194;
+                            {
+                              bool zgaz3193;
+                              {
+                                bool zgaz3192;
+                                {
+                                  bool zgaz3191;
+                                  {
+                                    bool zgaz3190;
+                                    {
+                                      bool zgaz3189;
+                                      {
+                                        bool zgaz3188;
+                                        {
+                                          bool zgaz3187;
+                                          zgaz3187 = sailgen_execution_mode_encdec_forwards_matches(zmapping11z3);
+                                          bool zgsz3546;
+                                          if (zgaz3187) {  zgsz3546 = eq_bool(zuz3228, false);  } else {
+                                            zgsz3546 = false;
+                                          }
+                                          zgaz3188 = zgsz3546;
+                                        }
+                                        bool zgsz3547;
+                                        if (zgaz3188) {  zgsz3547 = eq_bool(zuz3227, false);  } else {
+                                          zgsz3547 = false;
+                                        }
+                                        zgaz3189 = zgsz3547;
+                                      }
+                                      bool zgsz3548;
+                                      if (zgaz3189) {  zgsz3548 = eq_bool(zuz3226, false);  } else {
+                                        zgsz3548 = false;
+                                      }
+                                      zgaz3190 = zgsz3548;
+                                    }
+                                    bool zgsz3549;
+                                    if (zgaz3190) {  zgsz3549 = eq_bool(zuz3225, true);  } else {  zgsz3549 = false;  }
+                                    zgaz3191 = zgsz3549;
+                                  }
+                                  bool zgsz3550;
+                                  if (zgaz3191) {  zgsz3550 = eq_bool(zuz3224, true);  } else {  zgsz3550 = false;  }
+                                  zgaz3192 = zgsz3550;
+                                }
+                                bool zgsz3551;
+                                if (zgaz3192) {  zgsz3551 = eq_bool(zuz3223, true);  } else {  zgsz3551 = false;  }
+                                zgaz3193 = zgsz3551;
+                              }
+                              bool zgsz3552;
+                              if (zgaz3193) {  zgsz3552 = eq_bool(zuz3222, false);  } else {  zgsz3552 = false;  }
+                              zgaz3194 = zgsz3552;
+                            }
+                            bool zgsz3553;
+                            if (zgaz3194) {  zgsz3553 = eq_bool(zuz3221, true);  } else {  zgsz3553 = false;  }
+                            bool zgsz3557;
+                            zgsz3557 = zgsz3553;
+                            if (!(zgsz3557)) {  goto case_432;  }
+                            uint64_t zgaz3186;
+                            zgaz3186 = sailgen_execution_mode_encdec_forwards_infallible(zmapping11z3);
+                            struct zoptionzIbzK zgsz3554;
+                            CREATE(zoptionzIbzK)(&zgsz3554);
+                            {
+                              uint64_t zb__2;
+                              zb__2 = zgaz3186;
+                              bool zgsz3556;
+                              zgsz3556 = (zb__2 == UINT64_C(0b0));
+                              if (!(zgsz3556)) {  goto case_435;  }
+                              {
+                                RECREATE(lbits)(&zghz3125);
+                                CONVERT_OF(lbits, fbits)(&zghz3125, UINT64_C(0b11011), UINT64_C(5) , true);
+                                sailgen_SomezIbzK(&zgsz3554, zghz3125);
+                              }
+                              goto finish_match_433;
+                            }
+                          case_435: ;
+                            {
+                              sailgen_NonezIbzK(&zgsz3554, UNIT);
+                              goto finish_match_433;
+                            }
+                          case_434: ;
+                          finish_match_433: ;
+                            COPY(zoptionzIbzK)(&zgaz3195, zgsz3554);
+                            KILL(zoptionzIbzK)(&zgsz3554);
+                            goto finish_match_430;
+                          }
+                        case_432: ;
+                          {
+                            sailgen_NonezIbzK(&zgaz3195, UNIT);
+                            goto finish_match_430;
+                          }
+                        case_431: ;
+                        finish_match_430: ;
                         }
-                      case_509: ;
-                        sail_match_failure("ap_m_encdec_backwards_matches");
-                      finish_match_508: ;
-                        zgsz3606 = zgsz3607;
-                        goto finish_match_506;
+                        uint64_t zgsz3558;
+                        {
+                          if (zgaz3195.kind != Kind_zSomezIbzK) goto case_455;
+                          zgsz3558 = CONVERT_OF(fbits, lbits)(zgaz3195.variants.zSomezIbzK, true);
+                          goto finish_match_436;
+                        }
+                      case_455: ;
+                        {
+                          __label__ case_454, case_445, finish_match_444;
+
+                          /* complete */
+                          struct zoptionzIbzK zgaz3205;
+                          CREATE(zoptionzIbzK)(&zgaz3205);
+                          {
+                            __label__ case_440, case_439, finish_match_438;
+
+                            {
+                              __label__ case_443, case_442, finish_match_441;
+
+                              bool zuz3230;
+                              zuz3230 = zhead_expz3.ztup0.zR;
+                              bool zuz3231;
+                              zuz3231 = zhead_expz3.ztup0.zW;
+                              bool zuz3232;
+                              zuz3232 = zhead_expz3.ztup0.zC;
+                              bool zuz3233;
+                              zuz3233 = zhead_expz3.ztup0.zLM;
+                              bool zuz3234;
+                              zuz3234 = zhead_expz3.ztup0.zEL;
+                              bool zuz3235;
+                              zuz3235 = zhead_expz3.ztup0.zSL;
+                              bool zuz3236;
+                              zuz3236 = zhead_expz3.ztup0.zX;
+                              bool zuz3237;
+                              zuz3237 = zhead_expz3.ztup0.zASR;
+                              enum zExecutionMode zmapping12z3;
+                              zmapping12z3 = zhead_expz3.ztup1;
+                              bool zgaz3204;
+                              {
+                                bool zgaz3203;
+                                {
+                                  bool zgaz3202;
+                                  {
+                                    bool zgaz3201;
+                                    {
+                                      bool zgaz3200;
+                                      {
+                                        bool zgaz3199;
+                                        {
+                                          bool zgaz3198;
+                                          {
+                                            bool zgaz3197;
+                                            zgaz3197 = sailgen_execution_mode_encdec_forwards_matches(zmapping12z3);
+                                            bool zgsz3561;
+                                            if (zgaz3197) {  zgsz3561 = eq_bool(zuz3237, false);  } else {
+                                              zgsz3561 = false;
+                                            }
+                                            zgaz3198 = zgsz3561;
+                                          }
+                                          bool zgsz3562;
+                                          if (zgaz3198) {  zgsz3562 = eq_bool(zuz3236, false);  } else {
+                                            zgsz3562 = false;
+                                          }
+                                          zgaz3199 = zgsz3562;
+                                        }
+                                        bool zgsz3563;
+                                        if (zgaz3199) {  zgsz3563 = eq_bool(zuz3235, true);  } else {
+                                          zgsz3563 = false;
+                                        }
+                                        zgaz3200 = zgsz3563;
+                                      }
+                                      bool zgsz3564;
+                                      if (zgaz3200) {  zgsz3564 = eq_bool(zuz3234, true);  } else {
+                                        zgsz3564 = false;
+                                      }
+                                      zgaz3201 = zgsz3564;
+                                    }
+                                    bool zgsz3565;
+                                    if (zgaz3201) {  zgsz3565 = eq_bool(zuz3233, true);  } else {  zgsz3565 = false;  }
+                                    zgaz3202 = zgsz3565;
+                                  }
+                                  bool zgsz3566;
+                                  if (zgaz3202) {  zgsz3566 = eq_bool(zuz3232, true);  } else {  zgsz3566 = false;  }
+                                  zgaz3203 = zgsz3566;
+                                }
+                                bool zgsz3567;
+                                if (zgaz3203) {  zgsz3567 = eq_bool(zuz3231, true);  } else {  zgsz3567 = false;  }
+                                zgaz3204 = zgsz3567;
+                              }
+                              bool zgsz3568;
+                              if (zgaz3204) {  zgsz3568 = eq_bool(zuz3230, true);  } else {  zgsz3568 = false;  }
+                              bool zgsz3572;
+                              zgsz3572 = zgsz3568;
+                              if (!(zgsz3572)) {  goto case_440;  }
+                              uint64_t zgaz3196;
+                              zgaz3196 = sailgen_execution_mode_encdec_forwards_infallible(zmapping12z3);
+                              struct zoptionzIbzK zgsz3569;
+                              CREATE(zoptionzIbzK)(&zgsz3569);
+                              {
+                                uint64_t zb__1;
+                                zb__1 = zgaz3196;
+                                bool zgsz3571;
+                                zgsz3571 = (zb__1 == UINT64_C(0b0));
+                                if (!(zgsz3571)) {  goto case_443;  }
+                                {
+                                  RECREATE(lbits)(&zghz3124);
+                                  CONVERT_OF(lbits, fbits)(&zghz3124, UINT64_C(0b11110), UINT64_C(5) , true);
+                                  sailgen_SomezIbzK(&zgsz3569, zghz3124);
+                                }
+                                goto finish_match_441;
+                              }
+                            case_443: ;
+                              {
+                                sailgen_NonezIbzK(&zgsz3569, UNIT);
+                                goto finish_match_441;
+                              }
+                            case_442: ;
+                            finish_match_441: ;
+                              COPY(zoptionzIbzK)(&zgaz3205, zgsz3569);
+                              KILL(zoptionzIbzK)(&zgsz3569);
+                              goto finish_match_438;
+                            }
+                          case_440: ;
+                            {
+                              sailgen_NonezIbzK(&zgaz3205, UNIT);
+                              goto finish_match_438;
+                            }
+                          case_439: ;
+                          finish_match_438: ;
+                          }
+                          uint64_t zgsz3573;
+                          {
+                            if (zgaz3205.kind != Kind_zSomezIbzK) goto case_454;
+                            zgsz3573 = CONVERT_OF(fbits, lbits)(zgaz3205.variants.zSomezIbzK, true);
+                            goto finish_match_444;
+                          }
+                        case_454: ;
+                          {
+                            __label__ case_453, finish_match_452;
+
+                            /* complete */
+                            struct zoptionzIbzK zgaz3215;
+                            CREATE(zoptionzIbzK)(&zgaz3215);
+                            {
+                              __label__ case_448, case_447, finish_match_446;
+
+                              {
+                                __label__ case_451, case_450, finish_match_449;
+
+                                bool zuz3239;
+                                zuz3239 = zhead_expz3.ztup0.zR;
+                                bool zuz3240;
+                                zuz3240 = zhead_expz3.ztup0.zW;
+                                bool zuz3241;
+                                zuz3241 = zhead_expz3.ztup0.zC;
+                                bool zuz3242;
+                                zuz3242 = zhead_expz3.ztup0.zLM;
+                                bool zuz3243;
+                                zuz3243 = zhead_expz3.ztup0.zEL;
+                                bool zuz3244;
+                                zuz3244 = zhead_expz3.ztup0.zSL;
+                                bool zuz3245;
+                                zuz3245 = zhead_expz3.ztup0.zX;
+                                bool zuz3246;
+                                zuz3246 = zhead_expz3.ztup0.zASR;
+                                enum zExecutionMode zmapping13z3;
+                                zmapping13z3 = zhead_expz3.ztup1;
+                                bool zgaz3214;
+                                {
+                                  bool zgaz3213;
+                                  {
+                                    bool zgaz3212;
+                                    {
+                                      bool zgaz3211;
+                                      {
+                                        bool zgaz3210;
+                                        {
+                                          bool zgaz3209;
+                                          {
+                                            bool zgaz3208;
+                                            {
+                                              bool zgaz3207;
+                                              zgaz3207 = sailgen_execution_mode_encdec_forwards_matches(zmapping13z3);
+                                              bool zgsz3576;
+                                              if (zgaz3207) {  zgsz3576 = eq_bool(zuz3246, false);  } else {
+                                                zgsz3576 = false;
+                                              }
+                                              zgaz3208 = zgsz3576;
+                                            }
+                                            bool zgsz3577;
+                                            if (zgaz3208) {  zgsz3577 = eq_bool(zuz3245, false);  } else {
+                                              zgsz3577 = false;
+                                            }
+                                            zgaz3209 = zgsz3577;
+                                          }
+                                          bool zgsz3578;
+                                          if (zgaz3209) {  zgsz3578 = eq_bool(zuz3244, false);  } else {
+                                            zgsz3578 = false;
+                                          }
+                                          zgaz3210 = zgsz3578;
+                                        }
+                                        bool zgsz3579;
+                                        if (zgaz3210) {  zgsz3579 = eq_bool(zuz3243, true);  } else {
+                                          zgsz3579 = false;
+                                        }
+                                        zgaz3211 = zgsz3579;
+                                      }
+                                      bool zgsz3580;
+                                      if (zgaz3211) {  zgsz3580 = eq_bool(zuz3242, true);  } else {
+                                        zgsz3580 = false;
+                                      }
+                                      zgaz3212 = zgsz3580;
+                                    }
+                                    bool zgsz3581;
+                                    if (zgaz3212) {  zgsz3581 = eq_bool(zuz3241, true);  } else {  zgsz3581 = false;  }
+                                    zgaz3213 = zgsz3581;
+                                  }
+                                  bool zgsz3582;
+                                  if (zgaz3213) {  zgsz3582 = eq_bool(zuz3240, true);  } else {  zgsz3582 = false;  }
+                                  zgaz3214 = zgsz3582;
+                                }
+                                bool zgsz3583;
+                                if (zgaz3214) {  zgsz3583 = eq_bool(zuz3239, true);  } else {  zgsz3583 = false;  }
+                                bool zgsz3587;
+                                zgsz3587 = zgsz3583;
+                                if (!(zgsz3587)) {  goto case_448;  }
+                                uint64_t zgaz3206;
+                                zgaz3206 = sailgen_execution_mode_encdec_forwards_infallible(zmapping13z3);
+                                struct zoptionzIbzK zgsz3584;
+                                CREATE(zoptionzIbzK)(&zgsz3584);
+                                {
+                                  uint64_t zb__0;
+                                  zb__0 = zgaz3206;
+                                  bool zgsz3586;
+                                  zgsz3586 = (zb__0 == UINT64_C(0b0));
+                                  if (!(zgsz3586)) {  goto case_451;  }
+                                  {
+                                    RECREATE(lbits)(&zghz3123);
+                                    CONVERT_OF(lbits, fbits)(&zghz3123, UINT64_C(0b11111), UINT64_C(5) , true);
+                                    sailgen_SomezIbzK(&zgsz3584, zghz3123);
+                                  }
+                                  goto finish_match_449;
+                                }
+                              case_451: ;
+                                {
+                                  sailgen_NonezIbzK(&zgsz3584, UNIT);
+                                  goto finish_match_449;
+                                }
+                              case_450: ;
+                              finish_match_449: ;
+                                COPY(zoptionzIbzK)(&zgaz3215, zgsz3584);
+                                KILL(zoptionzIbzK)(&zgsz3584);
+                                goto finish_match_446;
+                              }
+                            case_448: ;
+                              {
+                                sailgen_NonezIbzK(&zgaz3215, UNIT);
+                                goto finish_match_446;
+                              }
+                            case_447: ;
+                            finish_match_446: ;
+                            }
+                            uint64_t zgsz3588;
+                            {
+                              if (zgaz3215.kind != Kind_zSomezIbzK) goto case_453;
+                              zgsz3588 = CONVERT_OF(fbits, lbits)(zgaz3215.variants.zSomezIbzK, true);
+                              goto finish_match_452;
+                            }
+                          case_453: ;
+                            sail_match_failure("ap_m_encdec_backwards_infallible");
+                          finish_match_452: ;
+                            zgsz3573 = zgsz3588;
+                            KILL(zoptionzIbzK)(&zgaz3215);
+                            goto finish_match_444;
+                          }
+                        case_445: ;
+                        finish_match_444: ;
+                          zgsz3558 = zgsz3573;
+                          KILL(zoptionzIbzK)(&zgaz3205);
+                          goto finish_match_436;
+                        }
+                      case_437: ;
+                      finish_match_436: ;
+                        zgsz3543 = zgsz3558;
+                        KILL(zoptionzIbzK)(&zgaz3195);
+                        goto finish_match_428;
                       }
-                    case_507: ;
-                    finish_match_506: ;
-                      zgsz3593 = zgsz3606;
-                      KILL(zoptionzIozK)(&zgaz3249);
-                      goto finish_match_498;
+                    case_429: ;
+                    finish_match_428: ;
+                      zgsz3528 = zgsz3543;
+                      KILL(zoptionzIbzK)(&zgaz3185);
+                      goto finish_match_420;
                     }
-                  case_499: ;
-                  finish_match_498: ;
-                    zgsz3580 = zgsz3593;
-                    KILL(zoptionzIozK)(&zgaz3241);
-                    goto finish_match_490;
+                  case_421: ;
+                  finish_match_420: ;
+                    zgsz3513 = zgsz3528;
+                    KILL(zoptionzIbzK)(&zgaz3175);
+                    goto finish_match_412;
                   }
-                case_491: ;
-                finish_match_490: ;
-                  zgsz3567 = zgsz3580;
-                  KILL(zoptionzIozK)(&zgaz3233);
-                  goto finish_match_482;
+                case_413: ;
+                finish_match_412: ;
+                  zgsz3498 = zgsz3513;
+                  KILL(zoptionzIbzK)(&zgaz3165);
+                  goto finish_match_404;
                 }
-              case_483: ;
-              finish_match_482: ;
-                zgsz3554 = zgsz3567;
-                KILL(zoptionzIozK)(&zgaz3225);
-                goto finish_match_474;
+              case_405: ;
+              finish_match_404: ;
+                zgsz3483 = zgsz3498;
+                KILL(zoptionzIbzK)(&zgaz3155);
+                goto finish_match_396;
               }
-            case_475: ;
-            finish_match_474: ;
-              zgsz3541 = zgsz3554;
-              KILL(zoptionzIozK)(&zgaz3217);
-              goto finish_match_466;
+            case_397: ;
+            finish_match_396: ;
+              zgsz3468 = zgsz3483;
+              KILL(zoptionzIbzK)(&zgaz3142);
+              goto finish_match_388;
             }
-          case_467: ;
-          finish_match_466: ;
-            zgsz3528 = zgsz3541;
-            KILL(zoptionzIozK)(&zgaz3209);
-            goto finish_match_458;
+          case_389: ;
+          finish_match_388: ;
+            zgsz3453 = zgsz3468;
+            KILL(zoptionzIbzK)(&zgaz3129);
+            goto finish_match_380;
           }
-        case_459: ;
-        finish_match_458: ;
-          zgsz3515 = zgsz3528;
-          KILL(zoptionzIozK)(&zgaz3201);
-          goto finish_match_450;
+        case_381: ;
+        finish_match_380: ;
+          zgsz3438 = zgsz3453;
+          KILL(zoptionzIbzK)(&zgaz3116);
+          goto finish_match_372;
         }
-      case_451: ;
-      finish_match_450: ;
-        zgsz3502 = zgsz3515;
-        KILL(zoptionzIozK)(&zgaz3193);
-        goto finish_match_442;
+      case_373: ;
+      finish_match_372: ;
+        zgsz3423 = zgsz3438;
+        KILL(zoptionzIbzK)(&zgaz3103);
+        goto finish_match_364;
       }
-    case_443: ;
-    finish_match_442: ;
-      zgsz3489 = zgsz3502;
-      KILL(zoptionzIozK)(&zgaz3185);
-      goto finish_match_434;
+    case_365: ;
+    finish_match_364: ;
+      zgsz3408 = zgsz3423;
+      KILL(zoptionzIbzK)(&zgaz393);
+      goto finish_match_356;
     }
-  case_435: ;
-  finish_match_434: ;
-    zgsz3476 = zgsz3489;
-    KILL(zoptionzIozK)(&zgaz3177);
-    goto finish_match_426;
+  case_357: ;
+  finish_match_356: ;
+    zcbz350 = zgsz3408;
+    KILL(zoptionzIbzK)(&zgaz383);
+    goto finish_match_348;
   }
-case_427: ;
-finish_match_426: ;
-  zcbz350 = zgsz3476;
-
-  KILL(zoptionzIozK)(&zgaz3169);
-
-end_function_521: ;
+case_349: ;
+finish_match_348: ;
+  KILL(zoptionzIbzK)(&zgaz373);
+end_function_467: ;
   return zcbz350;
-end_block_exception_522: ;
+end_block_exception_468: ;
+
+  return UINT64_C(0xdeadc0de);
+}
+
+
+
+static void finish_sailgen_ap_m_encdec_backwards_infallible(void)
+{
+  KILL(lbits)(&zghz3136);
+  KILL(lbits)(&zghz3135);
+  KILL(lbits)(&zghz3134);
+  KILL(lbits)(&zghz3133);
+  KILL(lbits)(&zghz3132);
+  KILL(lbits)(&zghz3131);
+  KILL(lbits)(&zghz3130);
+  KILL(lbits)(&zghz3129);
+  KILL(lbits)(&zghz3128);
+  KILL(lbits)(&zghz3127);
+  KILL(lbits)(&zghz3126);
+  KILL(lbits)(&zghz3125);
+  KILL(lbits)(&zghz3124);
+  KILL(lbits)(&zghz3123);
+}
+
+static bool sailgen_ap_m_encdec_forwards_matches(uint64_t zargz3)
+{
+  __label__ case_485, case_484, case_483, case_482, case_481, case_480, case_479, case_478, case_477, case_476, case_475, case_474, case_473, case_472, case_471, finish_match_470, end_function_486, end_block_exception_487;
+
+  bool zcbz351;
+  {
+    uint64_t zv__42;
+    zv__42 = zargz3;
+    bool zgsz3631;
+    zgsz3631 = (zv__42 == UINT64_C(0b00000));
+    if (!(zgsz3631)) {  goto case_485;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_485: ;
+  {
+    uint64_t zv__45;
+    zv__45 = zargz3;
+    bool zgsz3630;
+    zgsz3630 = (zv__45 == UINT64_C(0b00001));
+    if (!(zgsz3630)) {  goto case_484;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_484: ;
+  {
+    uint64_t zv__48;
+    zv__48 = zargz3;
+    bool zgsz3629;
+    zgsz3629 = (zv__48 == UINT64_C(0b00100));
+    if (!(zgsz3629)) {  goto case_483;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_483: ;
+  {
+    uint64_t zv__51;
+    zv__51 = zargz3;
+    bool zgsz3628;
+    zgsz3628 = (zv__51 == UINT64_C(0b00101));
+    if (!(zgsz3628)) {  goto case_482;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_482: ;
+  {
+    uint64_t zv__54;
+    zv__54 = zargz3;
+    uint64_t zgaz3216;
+    zgaz3216 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__54 >> INT64_C(1)));
+    bool zgsz3627;
+    zgsz3627 = (zgaz3216 == UINT64_C(0x4));
+    if (!(zgsz3627)) {  goto case_481;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_481: ;
+  {
+    uint64_t zv__57;
+    zv__57 = zargz3;
+    uint64_t zgaz3217;
+    zgaz3217 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__57 >> INT64_C(1)));
+    bool zgsz3626;
+    zgsz3626 = (zgaz3217 == UINT64_C(0x5));
+    if (!(zgsz3626)) {  goto case_480;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_480: ;
+  {
+    uint64_t zv__60;
+    zv__60 = zargz3;
+    uint64_t zgaz3218;
+    zgaz3218 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__60 >> INT64_C(1)));
+    bool zgsz3625;
+    zgsz3625 = (zgaz3218 == UINT64_C(0x6));
+    if (!(zgsz3625)) {  goto case_479;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_479: ;
+  {
+    uint64_t zv__63;
+    zv__63 = zargz3;
+    uint64_t zgaz3219;
+    zgaz3219 = (safe_rshift(UINT64_MAX, 64 - 4) & (zv__63 >> INT64_C(1)));
+    bool zgsz3624;
+    zgsz3624 = (zgaz3219 == UINT64_C(0x7));
+    if (!(zgsz3624)) {  goto case_478;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_478: ;
+  {
+    uint64_t zv__66;
+    zv__66 = zargz3;
+    bool zgsz3623;
+    zgsz3623 = (zv__66 == UINT64_C(0b10011));
+    if (!(zgsz3623)) {  goto case_477;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_477: ;
+  {
+    uint64_t zv__69;
+    zv__69 = zargz3;
+    bool zgsz3622;
+    zgsz3622 = (zv__69 == UINT64_C(0b10110));
+    if (!(zgsz3622)) {  goto case_476;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_476: ;
+  {
+    uint64_t zv__72;
+    zv__72 = zargz3;
+    bool zgsz3621;
+    zgsz3621 = (zv__72 == UINT64_C(0b10111));
+    if (!(zgsz3621)) {  goto case_475;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_475: ;
+  {
+    uint64_t zv__75;
+    zv__75 = zargz3;
+    bool zgsz3620;
+    zgsz3620 = (zv__75 == UINT64_C(0b11011));
+    if (!(zgsz3620)) {  goto case_474;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_474: ;
+  {
+    uint64_t zv__78;
+    zv__78 = zargz3;
+    bool zgsz3619;
+    zgsz3619 = (zv__78 == UINT64_C(0b11110));
+    if (!(zgsz3619)) {  goto case_473;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_473: ;
+  {
+    uint64_t zv__81;
+    zv__81 = zargz3;
+    bool zgsz3618;
+    zgsz3618 = (zv__81 == UINT64_C(0b11111));
+    if (!(zgsz3618)) {  goto case_472;  }
+    zcbz351 = true;
+    goto finish_match_470;
+  }
+case_472: ;
+  {
+    zcbz351 = false;
+    goto finish_match_470;
+  }
+case_471: ;
+finish_match_470: ;
+end_function_486: ;
+  return zcbz351;
+end_block_exception_487: ;
 
   return false;
 }
@@ -7447,11 +7087,10 @@ static uint64_t znull_ap_m;
 static void create_letbind_14(void) {
 
 
-  uint64_t zgsz3631;
-  zgsz3631 = UINT64_C(0b00000);
-  znull_ap_m = zgsz3631;
-
-let_end_523: ;
+  uint64_t zgsz3632;
+  zgsz3632 = UINT64_C(0b00000);
+  znull_ap_m = zgsz3632;
+let_end_488: ;
 }
 static void kill_letbind_14(void) {
 }
@@ -7460,32 +7099,63 @@ static uint64_t zinfinite_ap_m;
 static void create_letbind_15(void) {
 
 
-  uint64_t zgsz3632;
-  zgsz3632 = UINT64_C(0b01001);
-  zinfinite_ap_m = zgsz3632;
-
-let_end_524: ;
+  uint64_t zgsz3633;
+  zgsz3633 = UINT64_C(0b01001);
+  zinfinite_ap_m = zgsz3633;
+let_end_489: ;
 }
 static void kill_letbind_15(void) {
 }
 
 static struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 sailgen_legalizzePermsAndMode(struct zArchPerms, enum zExecutionMode);
 
-struct zArchPerms zghz3119;
-struct zArchPerms zghz3120;
-struct zArchPerms zghz3121;
-struct zArchPerms zghz3122;
-struct zArchPerms zghz3123;
-struct zArchPerms zghz3124;
-struct zArchPerms zghz3125;
-struct zArchPerms zghz3126;
-struct zArchPerms zghz3127;
-struct zArchPerms zghz3128;
-struct zArchPerms zghz3129;
-struct zArchPerms zghz3130;
+struct zArchPerms zghz3137;
+struct zArchPerms zghz3138;
+struct zArchPerms zghz3139;
+struct zArchPerms zghz3140;
+struct zArchPerms zghz3141;
+struct zArchPerms zghz3142;
+struct zArchPerms zghz3143;
+struct zArchPerms zghz3144;
+struct zArchPerms zghz3145;
+struct zArchPerms zghz3146;
+struct zArchPerms zghz3147;
+struct zArchPerms zghz3148;
+struct zArchPerms zghz3149;
+struct zArchPerms zghz3150;
+struct zArchPerms zghz3151;
+struct zArchPerms zghz3152;
+struct zArchPerms zghz3153;
+struct zArchPerms zghz3154;
+struct zArchPerms zghz3155;
+struct zArchPerms zghz3156;
+struct zArchPerms zghz3157;
+struct zArchPerms zghz3158;
+struct zArchPerms zghz3159;
+struct zArchPerms zghz3160;
+struct zArchPerms zghz3161;
+struct zArchPerms zghz3162;
+struct zArchPerms zghz3163;
+struct zArchPerms zghz3164;
 
 static void startup_sailgen_legalizzePermsAndMode(void)
 {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -7502,229 +7172,329 @@ static void startup_sailgen_legalizzePermsAndMode(void)
 
 static struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 sailgen_legalizzePermsAndMode(struct zArchPerms zperms, enum zExecutionMode zmode)
 {
-  __label__ case_527, finish_match_526, end_function_528, end_block_exception_529;
+  __label__ end_function_491, end_block_exception_492;
 
-  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz351;
-  struct zArchPerms zghz3119;
-  {
-    bool zgaz3271;
-    {
-      bool zgaz3270;
-      zgaz3270 = zperms.zR;
-      bool zgsz3637;
-      if (zgaz3270) {
-        bool zgaz3269;
-        zgaz3269 = zperms.zW;
-        bool zgsz3636;
-        if (zgaz3269) {
-          bool zgaz3268;
-          zgaz3268 = zperms.zX;
-          bool zgsz3635;
-          if (zgaz3268) {
-            bool zgaz3267;
-            zgaz3267 = zperms.zASR;
-            bool zgsz3634;
-            if (zgaz3267) {
-              bool zgaz3266;
-              zgaz3266 = zperms.zC;
-              bool zgsz3633;
-              if (zgaz3266) {  zgsz3633 = zperms.zLM;  } else {  zgsz3633 = false;  }
-              zgsz3634 = zgsz3633;
-            } else {  zgsz3634 = false;  }
-            zgsz3635 = zgsz3634;
-          } else {  zgsz3635 = false;  }
-          zgsz3636 = zgsz3635;
-        } else {  zgsz3636 = false;  }
-        zgsz3637 = zgsz3636;
-      } else {  zgsz3637 = false;  }
-      zgaz3271 = zgsz3637;
-    }
-    if (zgaz3271) {  zghz3119 = zperms;  } else {
-      struct zArchPerms zghz3130;
-      zghz3130 = zperms;
-      zghz3130.zASR = false;
-      zghz3119 = zghz3130;
-    }
-  }
-  struct zArchPerms zghz3120;
-  {
-    bool zgaz3265;
-    zgaz3265 = zghz3119.zR;
-    if (zgaz3265) {  zghz3120 = zghz3119;  } else {
-      struct zArchPerms zghz3129;
-      zghz3129 = zghz3119;
-      zghz3129.zC = false;
-      zghz3129.zX = false;
-      zghz3120 = zghz3129;
-    }
-  }
-  struct zArchPerms zghz3121;
-  {
-    bool zgaz3264;
-    {
-      bool zgaz3263;
-      zgaz3263 = zghz3120.zX;
-      bool zgsz3642;
-      if (zgaz3263) {
-        bool zgaz3262;
-        zgaz3262 = zghz3120.zR;
-        bool zgsz3641;
-        if (zgaz3262) {
-          bool zgaz3261;
-          {
-            bool zgaz3259;
-            zgaz3259 = zghz3120.zC;
-            zgaz3261 = not(zgaz3259);
-          }
-          bool zgsz3640;
-          if (zgaz3261) {
-            bool zgaz3260;
-            zgaz3260 = zghz3120.zW;
-            zgsz3640 = not(zgaz3260);
-          } else {  zgsz3640 = false;  }
-          zgsz3641 = zgsz3640;
-        } else {  zgsz3641 = false;  }
-        zgsz3642 = zgsz3641;
-      } else {  zgsz3642 = false;  }
-      zgaz3264 = zgsz3642;
-    }
-    if (zgaz3264) {
-      struct zArchPerms zghz3128;
-      zghz3128 = zghz3120;
-      zghz3128.zX = false;
-      zghz3121 = zghz3128;
-    } else {  zghz3121 = zghz3120;  }
-  }
-  enum zExecutionMode zmodeshadowz33;
+  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz352;
+  struct zArchPerms zghz3137;
   {
     bool zgaz3258;
-    zgaz3258 = zghz3121.zX;
-    if (zgaz3258) {  zmodeshadowz33 = zmode;  } else {
-      zmodeshadowz33 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    }
-  }
-  struct zArchPerms zghz3122;
-  {
-    bool zgaz3257;
-    zgaz3257 = zghz3121.zC;
-    if (zgaz3257) {  zghz3122 = zghz3121;  } else {
-      struct zArchPerms zghz3127;
-      zghz3127 = zghz3121;
-      zghz3127.zLM = false;
-      zghz3122 = zghz3127;
-    }
-  }
-  struct zArchPerms zghz3123;
-  {
-    bool zgaz3256;
     {
-      bool zgaz3255;
-      zgaz3255 = zghz3122.zC;
-      bool zgsz3645;
-      if (zgaz3255) {
-        bool zgaz3254;
-        zgaz3254 = zghz3122.zLM;
-        zgsz3645 = not(zgaz3254);
-      } else {  zgsz3645 = false;  }
-      zgaz3256 = zgsz3645;
+      bool zgaz3257;
+      zgaz3257 = zperms.zR;
+      bool zgsz3640;
+      if (zgaz3257) {
+        bool zgaz3256;
+        zgaz3256 = zperms.zW;
+        bool zgsz3639;
+        if (zgaz3256) {
+          bool zgaz3255;
+          zgaz3255 = zperms.zX;
+          bool zgsz3638;
+          if (zgaz3255) {
+            bool zgaz3254;
+            zgaz3254 = zperms.zASR;
+            bool zgsz3637;
+            if (zgaz3254) {
+              bool zgaz3253;
+              zgaz3253 = zperms.zC;
+              bool zgsz3636;
+              if (zgaz3253) {
+                bool zgaz3252;
+                zgaz3252 = zperms.zLM;
+                bool zgsz3635;
+                if (zgaz3252) {
+                  bool zgaz3251;
+                  zgaz3251 = zperms.zEL;
+                  bool zgsz3634;
+                  if (zgaz3251) {  zgsz3634 = zperms.zSL;  } else {  zgsz3634 = false;  }
+                  zgsz3635 = zgsz3634;
+                } else {  zgsz3635 = false;  }
+                zgsz3636 = zgsz3635;
+              } else {  zgsz3636 = false;  }
+              zgsz3637 = zgsz3636;
+            } else {  zgsz3637 = false;  }
+            zgsz3638 = zgsz3637;
+          } else {  zgsz3638 = false;  }
+          zgsz3639 = zgsz3638;
+        } else {  zgsz3639 = false;  }
+        zgsz3640 = zgsz3639;
+      } else {  zgsz3640 = false;  }
+      zgaz3258 = zgsz3640;
     }
-    if (zgaz3256) {
-      struct zArchPerms zghz3126;
-      zghz3126 = zghz3122;
-      zghz3126.zW = false;
-      zghz3123 = zghz3126;
-    } else {  zghz3123 = zghz3122;  }
+    if (zgaz3258) {  zghz3137 = zperms;  } else {
+      struct zArchPerms zghz3164;
+      zghz3164 = zperms;
+      zghz3164.zASR = false;
+      zghz3137 = zghz3164;
+    }
   }
-  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgaz3253;
+  struct zArchPerms zghz3138;
   {
     bool zgaz3250;
     {
-      struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3647;
-      zgsz3647.ztup0 = zghz3123;
-      zgsz3647.ztup1 = zmodeshadowz33;
-      zgaz3250 = sailgen_ap_m_encdec_backwards_matches(zgsz3647);
+      bool zgaz3249;
+      zgaz3249 = zghz3137.zR;
+      bool zgsz3642;
+      if (zgaz3249) {  zgsz3642 = true;  } else {  zgsz3642 = zghz3137.zW;  }
+      zgaz3250 = zgsz3642;
     }
-    if (zgaz3250) {
-      struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3650;
-      zgsz3650.ztup0 = zghz3123;
-      zgsz3650.ztup1 = zmodeshadowz33;
-      zgaz3253 = zgsz3650;
-    } else {
-      struct zArchPerms zghz3125;
-      {
-        zghz3125 = znull_perms;
-        zghz3125.zC = true;
-        zghz3125.zR = true;
-      }
-      enum zExecutionMode zgaz3252;
-      zgaz3252 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-      struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3649;
-      zgsz3649.ztup0 = zghz3125;
-      zgsz3649.ztup1 = zgaz3252;
-      zgaz3253 = zgsz3649;
+    if (zgaz3250) {  zghz3138 = zghz3137;  } else {
+      struct zArchPerms zghz3163;
+      zghz3163 = zghz3137;
+      zghz3163.zC = false;
+      zghz3138 = zghz3163;
     }
   }
-  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3651;
+  struct zArchPerms zghz3139;
   {
-    struct zArchPerms zghz3124;
-    zghz3124 = zgaz3253.ztup0;
-    enum zExecutionMode zmodeshadowz36;
-    zmodeshadowz36 = zgaz3253.ztup1;
-    zgsz3651.ztup0 = zghz3124;
-    zgsz3651.ztup1 = zmodeshadowz36;
-    goto finish_match_526;
+    bool zgaz3248;
+    zgaz3248 = zghz3138.zR;
+    if (zgaz3248) {  zghz3139 = zghz3138;  } else {
+      struct zArchPerms zghz3162;
+      zghz3162 = zghz3138;
+      zghz3162.zC = false;
+      zghz3139 = zghz3162;
+    }
   }
-case_527: ;
-  sail_match_failure("legalizePermsAndMode");
-finish_match_526: ;
-  zcbz351 = zgsz3651;
-
-
-
-end_function_528: ;
-  return zcbz351;
-end_block_exception_529: ;
-  struct zArchPerms zcbz3102 = { .zASR = false, .zC = false, .zLM = false, .zR = false, .zW = false, .zX = false };
-  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz3101 = { .ztup0 = zcbz3102, .ztup1 = zCapPtrMode };
-  return zcbz3101;
+  struct zArchPerms zghz3140;
+  {
+    bool zgaz3247;
+    zgaz3247 = zghz3139.zR;
+    if (zgaz3247) {  zghz3140 = zghz3139;  } else {
+      struct zArchPerms zghz3161;
+      zghz3161 = zghz3139;
+      zghz3161.zX = false;
+      zghz3140 = zghz3161;
+    }
+  }
+  struct zArchPerms zghz3141;
+  {
+    bool zgaz3246;
+    {
+      bool zgaz3245;
+      {
+        bool zgaz3244;
+        zgaz3244 = zghz3140.zC;
+        zgaz3245 = sailgen_not(zgaz3244);
+      }
+      bool zgsz3646;
+      if (zgaz3245) {  zgsz3646 = true;  } else {  zgsz3646 = zghz3140.zLM;  }
+      zgaz3246 = zgsz3646;
+    }
+    if (zgaz3246) {  zghz3141 = zghz3140;  } else {
+      struct zArchPerms zghz3160;
+      zghz3160 = zghz3140;
+      zghz3160.zW = false;
+      zghz3141 = zghz3160;
+    }
+  }
+  struct zArchPerms zghz3142;
+  {
+    bool zgaz3243;
+    {
+      bool zgaz3242;
+      zgaz3242 = zghz3141.zW;
+      bool zgsz3648;
+      if (zgaz3242) {  zgsz3648 = true;  } else {  zgsz3648 = zghz3141.zC;  }
+      zgaz3243 = zgsz3648;
+    }
+    if (zgaz3243) {  zghz3142 = zghz3141;  } else {
+      struct zArchPerms zghz3159;
+      zghz3159 = zghz3141;
+      zghz3159.zX = false;
+      zghz3142 = zghz3159;
+    }
+  }
+  struct zArchPerms zghz3143;
+  {
+    bool zgaz3241;
+    {
+      bool zgaz3240;
+      zgaz3240 = zghz3142.zC;
+      bool zgsz3650;
+      if (zgaz3240) {  zgsz3650 = zghz3142.zR;  } else {  zgsz3650 = false;  }
+      zgaz3241 = zgsz3650;
+    }
+    if (zgaz3241) {  zghz3143 = zghz3142;  } else {
+      struct zArchPerms zghz3158;
+      zghz3158 = zghz3142;
+      zghz3158.zEL = false;
+      zghz3143 = zghz3158;
+    }
+  }
+  struct zArchPerms zghz3144;
+  {
+    bool zgaz3239;
+    zgaz3239 = zghz3143.zLM;
+    if (zgaz3239) {  zghz3144 = zghz3143;  } else {
+      struct zArchPerms zghz3157;
+      zghz3157 = zghz3143;
+      zghz3157.zEL = false;
+      zghz3144 = zghz3157;
+    }
+  }
+  struct zArchPerms zghz3145;
+  {
+    bool zgaz3238;
+    {
+      bool zgaz3237;
+      zgaz3237 = zghz3144.zC;
+      bool zgsz3653;
+      if (zgaz3237) {  zgsz3653 = zghz3144.zR;  } else {  zgsz3653 = false;  }
+      zgaz3238 = zgsz3653;
+    }
+    if (zgaz3238) {  zghz3145 = zghz3144;  } else {
+      struct zArchPerms zghz3156;
+      zghz3156 = zghz3144;
+      zghz3156.zLM = false;
+      zghz3145 = zghz3156;
+    }
+  }
+  struct zArchPerms zghz3146;
+  {
+    bool zgaz3236;
+    {
+      bool zgaz3235;
+      zgaz3235 = zghz3145.zW;
+      bool zgsz3655;
+      if (zgaz3235) {  zgsz3655 = true;  } else {  zgsz3655 = zghz3145.zEL;  }
+      zgaz3236 = zgsz3655;
+    }
+    if (zgaz3236) {  zghz3146 = zghz3145;  } else {
+      struct zArchPerms zghz3155;
+      zghz3155 = zghz3145;
+      zghz3155.zLM = false;
+      zghz3146 = zghz3155;
+    }
+  }
+  struct zArchPerms zghz3147;
+  {
+    bool zgaz3234;
+    zgaz3234 = zghz3146.zC;
+    if (zgaz3234) {  zghz3147 = zghz3146;  } else {
+      struct zArchPerms zghz3154;
+      zghz3154 = zghz3146;
+      zghz3154.zSL = false;
+      zghz3147 = zghz3154;
+    }
+  }
+  struct zArchPerms zghz3148;
+  {
+    bool zgaz3233;
+    {
+      bool zgaz3232;
+      zgaz3232 = zghz3147.zLM;
+      bool zgsz3659;
+      if (zgaz3232) {
+        bool zgaz3231;
+        zgaz3231 = zghz3147.zX;
+        bool zgsz3658;
+        if (zgaz3231) {  zgsz3658 = true;  } else {  zgsz3658 = zghz3147.zW;  }
+        zgsz3659 = zgsz3658;
+      } else {  zgsz3659 = false;  }
+      zgaz3233 = zgsz3659;
+    }
+    if (zgaz3233) {  zghz3148 = zghz3147;  } else {
+      struct zArchPerms zghz3153;
+      zghz3153 = zghz3147;
+      zghz3153.zSL = false;
+      zghz3148 = zghz3153;
+    }
+  }
+  struct zArchPerms zghz3149;
+  {
+    bool zgaz3230;
+    {
+      bool zgaz3229;
+      {
+        bool zgaz3222;
+        zgaz3222 = zghz3148.zC;
+        bool zgaz3223;
+        zgaz3223 = zghz3148.zLM;
+        zgaz3229 = eq_bool(zgaz3222, zgaz3223);
+      }
+      bool zgsz3662;
+      if (zgaz3229) {
+        bool zgaz3228;
+        {
+          bool zgaz3224;
+          zgaz3224 = zghz3148.zC;
+          bool zgaz3225;
+          zgaz3225 = zghz3148.zEL;
+          zgaz3228 = eq_bool(zgaz3224, zgaz3225);
+        }
+        bool zgsz3661;
+        if (zgaz3228) {
+          bool zgaz3226;
+          zgaz3226 = zghz3148.zC;
+          bool zgaz3227;
+          zgaz3227 = zghz3148.zSL;
+          zgsz3661 = eq_bool(zgaz3226, zgaz3227);
+        } else {  zgsz3661 = false;  }
+        zgsz3662 = zgsz3661;
+      } else {  zgsz3662 = false;  }
+      zgaz3230 = zgsz3662;
+    }
+    if (zgaz3230) {  zghz3149 = zghz3148;  } else {
+      struct zArchPerms zghz3152;
+      zghz3152 = zghz3148;
+      zghz3152.zX = false;
+      zghz3149 = zghz3152;
+    }
+  }
+  struct zArchPerms zghz3150;
+  {
+    bool zgaz3221;
+    zgaz3221 = zghz3149.zX;
+    if (zgaz3221) {  zghz3150 = zghz3149;  } else {
+      struct zArchPerms zghz3151;
+      zghz3151 = zghz3149;
+      zghz3151.zASR = false;
+      zghz3150 = zghz3151;
+    }
+  }
+  enum zExecutionMode zmodeshadowz314;
+  {
+    bool zgaz3220;
+    zgaz3220 = zghz3150.zX;
+    if (zgaz3220) {  zmodeshadowz314 = zmode;  } else {
+      zmodeshadowz314 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    }
+  }
+  zcbz352.ztup0 = zghz3150;
+  zcbz352.ztup1 = zmodeshadowz314;
+end_function_491: ;
+  return zcbz352;
+end_block_exception_492: ;
+  struct zArchPerms zcbz3104 = { .zASR = false, .zC = false, .zEL = false, .zLM = false, .zR = false, .zSL = false, .zW = false, .zX = false };
+  struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zcbz3103 = { .ztup0 = zcbz3104, .ztup1 = zCapPtrMode };
+  return zcbz3103;
 }
 
 
 
 static void finish_sailgen_legalizzePermsAndMode(void)
 {
-
-
-
-
-
-
-
-
-
-
-
-
 }
 
 static uint64_t sailgen_getMetadataL8(struct zEncMetadata);
 
 static uint64_t sailgen_getMetadataL8(struct zEncMetadata zmeta)
 {
-  __label__ end_function_531, end_block_exception_532;
+  __label__ end_function_494, end_block_exception_495;
 
-  uint64_t zcbz352;
-  zcbz352 = sailgen__get_EncMetadata_L8(zmeta);
-end_function_531: ;
-  return zcbz352;
-end_block_exception_532: ;
+  uint64_t zcbz353;
+  zcbz353 = sailgen__get_EncMetadata_L8(zmeta);
+end_function_494: ;
+  return zcbz353;
+end_block_exception_495: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 static struct zEncMetadata sailgen_setMetadataL8(struct zEncMetadata, uint64_t);
 
-struct zEncMetadata zghz3131;
+struct zEncMetadata zghz3165;
 
 static void startup_sailgen_setMetadataL8(void)
 {
@@ -7732,15 +7502,15 @@ static void startup_sailgen_setMetadataL8(void)
 
 static struct zEncMetadata sailgen_setMetadataL8(struct zEncMetadata zmeta, uint64_t zL8)
 {
-  __label__ end_function_534, end_block_exception_535;
+  __label__ end_function_497, end_block_exception_498;
 
-  struct zEncMetadata zghz3131;
-  zghz3131 = sailgen__update_EncMetadata_L8(zmeta, zL8);
-end_function_534: ;
-  return zghz3131;
-end_block_exception_535: ;
-  struct zEncMetadata zcbz3103 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz3103;
+  struct zEncMetadata zghz3165;
+  zghz3165 = sailgen__update_EncMetadata_L8(zmeta, zL8);
+end_function_497: ;
+  return zghz3165;
+end_block_exception_498: ;
+  struct zEncMetadata zcbz3105 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz3105;
 }
 
 
@@ -7753,25 +7523,23 @@ static uint64_t sailgen_getMetadataInternalExponent(struct zEncMetadata);
 
 static uint64_t sailgen_getMetadataInternalExponent(struct zEncMetadata zmeta)
 {
-  __label__ end_function_537, end_block_exception_538;
+  __label__ end_function_500, end_block_exception_501;
 
-  uint64_t zcbz354;
-  uint64_t zgaz3274;
-  zgaz3274 = sailgen__get_EncMetadata_L8(zmeta);
-  uint64_t zgaz3275;
+  uint64_t zcbz355;
+  uint64_t zgaz3261;
+  zgaz3261 = sailgen__get_EncMetadata_L8(zmeta);
+  uint64_t zgaz3262;
   {
-    uint64_t zgaz3272;
-    zgaz3272 = sailgen__get_EncMetadata_TE(zmeta);
-    uint64_t zgaz3273;
-    zgaz3273 = sailgen__get_EncMetadata_BE(zmeta);
-    zgaz3275 = (zgaz3272 << 2) | zgaz3273;
+    uint64_t zgaz3259;
+    zgaz3259 = sailgen__get_EncMetadata_TE(zmeta);
+    uint64_t zgaz3260;
+    zgaz3260 = sailgen__get_EncMetadata_BE(zmeta);
+    zgaz3262 = (zgaz3259 << 2) | zgaz3260;
   }
-  zcbz354 = (zgaz3274 << 4) | zgaz3275;
-
-
-end_function_537: ;
-  return zcbz354;
-end_block_exception_538: ;
+  zcbz355 = (zgaz3261 << 4) | zgaz3262;
+end_function_500: ;
+  return zcbz355;
+end_block_exception_501: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -7780,11 +7548,10 @@ static int64_t zcap_sizze;
 static void create_letbind_16(void) {
 
 
-  int64_t zgsz3654;
-  zgsz3654 = INT64_C(8);
-  zcap_sizze = zgsz3654;
-
-let_end_539: ;
+  int64_t zgsz3666;
+  zgsz3666 = INT64_C(8);
+  zcap_sizze = zgsz3666;
+let_end_502: ;
 }
 static void kill_letbind_16(void) {
 }
@@ -7793,11 +7560,10 @@ static int64_t zcap_addr_width;
 static void create_letbind_17(void) {
 
 
-  int64_t zgsz3655;
-  zgsz3655 = INT64_C(32);
-  zcap_addr_width = zgsz3655;
-
-let_end_540: ;
+  int64_t zgsz3667;
+  zgsz3667 = INT64_C(32);
+  zcap_addr_width = zgsz3667;
+let_end_503: ;
 }
 static void kill_letbind_17(void) {
 }
@@ -7806,11 +7572,10 @@ static int64_t zcap_len_width;
 static void create_letbind_18(void) {
 
 
-  int64_t zgsz3656;
-  zgsz3656 = INT64_C(33);
-  zcap_len_width = zgsz3656;
-
-let_end_541: ;
+  int64_t zgsz3668;
+  zgsz3668 = INT64_C(33);
+  zcap_len_width = zgsz3668;
+let_end_504: ;
 }
 static void kill_letbind_18(void) {
 }
@@ -7819,21 +7584,20 @@ static int64_t zcap_max_addr;
 static void create_letbind_19(void) {
 
 
-  int64_t zgsz3657;
+  int64_t zgsz3669;
   {
-    sail_int zgsz3882;
-    CREATE(sail_int)(&zgsz3882);
-    CONVERT_OF(sail_int, mach_int)(&zgsz3882, zcap_addr_width);
-    sail_int zgsz3883;
-    CREATE(sail_int)(&zgsz3883);
-    sailgen_MAX(&zgsz3883, zgsz3882);
-    zgsz3657 = CONVERT_OF(mach_int, sail_int)(zgsz3883);
-    KILL(sail_int)(&zgsz3883);
-    KILL(sail_int)(&zgsz3882);
+    sail_int zgsz3904;
+    CREATE(sail_int)(&zgsz3904);
+    CONVERT_OF(sail_int, mach_int)(&zgsz3904, zcap_addr_width);
+    sail_int zgsz3905;
+    CREATE(sail_int)(&zgsz3905);
+    sailgen_MAX(&zgsz3905, zgsz3904);
+    zgsz3669 = CONVERT_OF(mach_int, sail_int)(zgsz3905);
+    KILL(sail_int)(&zgsz3905);
+    KILL(sail_int)(&zgsz3904);
   }
-  zcap_max_addr = zgsz3657;
-
-let_end_542: ;
+  zcap_max_addr = zgsz3669;
+let_end_505: ;
 }
 static void kill_letbind_19(void) {
 }
@@ -7842,11 +7606,10 @@ static int64_t zcap_xe_width;
 static void create_letbind_20(void) {
 
 
-  int64_t zgsz3658;
-  zgsz3658 = INT64_C(2);
-  zcap_xe_width = zgsz3658;
-
-let_end_543: ;
+  int64_t zgsz3670;
+  zgsz3670 = INT64_C(2);
+  zcap_xe_width = zgsz3670;
+let_end_506: ;
 }
 static void kill_letbind_20(void) {
 }
@@ -7855,11 +7618,10 @@ static int64_t zcap_max_E;
 static void create_letbind_21(void) {
 
 
-  int64_t zgsz3659;
-  zgsz3659 = INT64_C(24);
-  zcap_max_E = zgsz3659;
-
-let_end_544: ;
+  int64_t zgsz3671;
+  zgsz3671 = INT64_C(24);
+  zcap_max_E = zgsz3671;
+let_end_507: ;
 }
 static void kill_letbind_21(void) {
 }
@@ -7868,13 +7630,24 @@ static int64_t zcap_min_E;
 static void create_letbind_22(void) {
 
 
-  int64_t zgsz3660;
-  zgsz3660 = INT64_C(-7);
-  zcap_min_E = zgsz3660;
-
-let_end_545: ;
+  int64_t zgsz3672;
+  zgsz3672 = INT64_C(-7);
+  zcap_min_E = zgsz3672;
+let_end_508: ;
 }
 static void kill_letbind_22(void) {
+}
+
+static int64_t zlvlbits;
+static void create_letbind_23(void) {
+
+
+  int64_t zgsz3673;
+  zgsz3673 = INT64_C(1);
+  zlvlbits = zgsz3673;
+let_end_509: ;
+}
+static void kill_letbind_23(void) {
 }
 
 static uint64_t sailgen_internal_exponent_encdec_forwards(bool);
@@ -7883,39 +7656,33 @@ static bool sailgen_internal_exponent_encdec_backwards(uint64_t);
 
 static uint64_t sailgen_internal_exponent_encdec_forwards(bool zargz3)
 {
-  __label__ case_549, case_548, finish_match_547, end_function_550, end_block_exception_551;
+  __label__ case_513, case_512, finish_match_511, end_function_514, end_block_exception_515;
 
-  uint64_t zcbz355;
+  uint64_t zcbz356;
   {
     bool zp0z3;
     zp0z3 = zargz3;
-    bool zgsz3663;
-    zgsz3663 = eq_bool(zp0z3, false);
-    if (!(zgsz3663)) {
-
-      goto case_549;
-    }
-    zcbz355 = UINT64_C(0b1);
-    goto finish_match_547;
+    bool zgsz3676;
+    zgsz3676 = eq_bool(zp0z3, false);
+    if (!(zgsz3676)) {  goto case_513;  }
+    zcbz356 = UINT64_C(0b1);
+    goto finish_match_511;
   }
-case_549: ;
+case_513: ;
   {
-    bool zuz3227;
-    zuz3227 = zargz3;
-    bool zgsz3662;
-    zgsz3662 = eq_bool(zuz3227, true);
-    if (!(zgsz3662)) {
-
-      goto case_548;
-    }
-    zcbz355 = UINT64_C(0b0);
-    goto finish_match_547;
+    bool zuz3248;
+    zuz3248 = zargz3;
+    bool zgsz3675;
+    zgsz3675 = eq_bool(zuz3248, true);
+    if (!(zgsz3675)) {  goto case_512;  }
+    zcbz356 = UINT64_C(0b0);
+    goto finish_match_511;
   }
-case_548: ;
-finish_match_547: ;
-end_function_550: ;
-  return zcbz355;
-end_block_exception_551: ;
+case_512: ;
+finish_match_511: ;
+end_function_514: ;
+  return zcbz356;
+end_block_exception_515: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -7924,70 +7691,61 @@ static uint64_t sailgen_internal_exponent_encdec_forwards_infallible(bool);
 
 static uint64_t sailgen_internal_exponent_encdec_forwards_infallible(bool zargz3)
 {
-  __label__ case_554, case_553, finish_match_552, end_function_555, end_block_exception_556;
+  __label__ case_518, case_517, finish_match_516, end_function_519, end_block_exception_520;
 
-  uint64_t zcbz356;
+  uint64_t zcbz357;
   {
     bool zp0z3;
     zp0z3 = zargz3;
-    bool zgsz3666;
-    zgsz3666 = eq_bool(zp0z3, false);
-    if (!(zgsz3666)) {
-
-      goto case_554;
-    }
-    zcbz356 = UINT64_C(0b1);
-    goto finish_match_552;
+    bool zgsz3679;
+    zgsz3679 = eq_bool(zp0z3, false);
+    if (!(zgsz3679)) {  goto case_518;  }
+    zcbz357 = UINT64_C(0b1);
+    goto finish_match_516;
   }
-case_554: ;
+case_518: ;
   {
-    bool zuz3228;
-    zuz3228 = zargz3;
-    bool zgsz3665;
-    zgsz3665 = eq_bool(zuz3228, true);
-    if (!(zgsz3665)) {
-
-      goto case_553;
-    }
-    zcbz356 = UINT64_C(0b0);
-    goto finish_match_552;
+    bool zuz3249;
+    zuz3249 = zargz3;
+    bool zgsz3678;
+    zgsz3678 = eq_bool(zuz3249, true);
+    if (!(zgsz3678)) {  goto case_517;  }
+    zcbz357 = UINT64_C(0b0);
+    goto finish_match_516;
   }
-case_553: ;
-finish_match_552: ;
-end_function_555: ;
-  return zcbz356;
-end_block_exception_556: ;
+case_517: ;
+finish_match_516: ;
+end_function_519: ;
+  return zcbz357;
+end_block_exception_520: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 static bool sailgen_internal_exponent_encdec_backwards(uint64_t zargz3)
 {
-  __label__ case_560, case_559, finish_match_558, end_function_561, end_block_exception_562;
+  __label__ case_524, case_523, finish_match_522, end_function_525, end_block_exception_526;
 
-  bool zcbz357;
+  bool zcbz358;
   {
     uint64_t zb__0;
     zb__0 = zargz3;
-    bool zgsz3669;
-    zgsz3669 = (zb__0 == UINT64_C(0b1));
-    if (!(zgsz3669)) {
-
-      goto case_560;
-    }
-    zcbz357 = false;
-    goto finish_match_558;
+    bool zgsz3682;
+    zgsz3682 = (zb__0 == UINT64_C(0b1));
+    if (!(zgsz3682)) {  goto case_524;  }
+    zcbz358 = false;
+    goto finish_match_522;
   }
-case_560: ;
+case_524: ;
   {
-    zcbz357 = true;
-    goto finish_match_558;
+    zcbz358 = true;
+    goto finish_match_522;
   }
-case_559: ;
-finish_match_558: ;
-end_function_561: ;
-  return zcbz357;
-end_block_exception_562: ;
+case_523: ;
+finish_match_522: ;
+end_function_525: ;
+  return zcbz358;
+end_block_exception_526: ;
 
   return false;
 }
@@ -7996,503 +7754,112 @@ static bool sailgen_internal_exponent_encdec_backwards_infallible(uint64_t);
 
 static bool sailgen_internal_exponent_encdec_backwards_infallible(uint64_t zargz3)
 {
-  __label__ case_565, case_564, finish_match_563, end_function_566, end_block_exception_567;
+  __label__ case_529, case_528, finish_match_527, end_function_530, end_block_exception_531;
 
-  bool zcbz358;
+  bool zcbz359;
   {
     uint64_t zb__0;
     zb__0 = zargz3;
-    bool zgsz3672;
-    zgsz3672 = (zb__0 == UINT64_C(0b1));
-    if (!(zgsz3672)) {
-
-      goto case_565;
-    }
-    zcbz358 = false;
-    goto finish_match_563;
+    bool zgsz3685;
+    zgsz3685 = (zb__0 == UINT64_C(0b1));
+    if (!(zgsz3685)) {  goto case_529;  }
+    zcbz359 = false;
+    goto finish_match_527;
   }
-case_565: ;
+case_529: ;
   {
-    zcbz358 = true;
-    goto finish_match_563;
+    zcbz359 = true;
+    goto finish_match_527;
   }
-case_564: ;
-finish_match_563: ;
-end_function_566: ;
-  return zcbz358;
-end_block_exception_567: ;
+case_528: ;
+finish_match_527: ;
+end_function_530: ;
+  return zcbz359;
+end_block_exception_531: ;
 
   return false;
 }
 
 static struct zCapability sailgen_undefined_Capability(unit);
 
-struct zCapability zghz3132;
-sail_int zghz3133;
+struct zCapability zghz3166;
+sail_int zghz3167;
 
 static void startup_sailgen_undefined_Capability(void)
 {
 
-  CREATE(sail_int)(&zghz3133);
+  CREATE(sail_int)(&zghz3167);
 }
 
-static struct zCapability sailgen_undefined_Capability(unit zgsz3673)
+static struct zCapability sailgen_undefined_Capability(unit zgsz3686)
 {
-  __label__ end_function_569, end_block_exception_570;
+  __label__ end_function_533, end_block_exception_534;
 
-  struct zCapability zghz3132;
-  zghz3132.zB = UINT64_C(0b0000000000);
-  RECREATE(sail_int)(&zghz3133);
-  CONVERT_OF(sail_int, mach_int)(&zghz3133, INT64_C(-7));
-  zghz3132.zE = CONVERT_OF(mach_int, sail_int)(zghz3133);
-  zghz3132.zT = UINT64_C(0b0000000000);
-  zghz3132.zaddress = UINT64_C(0x00000000);
-  zghz3132.zap_m = UINT64_C(0b00000);
-  zghz3132.zinternal_exponent = false;
-  zghz3132.zreserved_0 = UINT64_C(0b000);
-  zghz3132.zreserved_1 = UINT64_C(0b0);
-  zghz3132.zsd_perms = UINT64_C(0b00);
-  zghz3132.zsealed = false;
-  zghz3132.ztag = false;
-end_function_569: ;
-  return zghz3132;
-end_block_exception_570: ;
-  struct zCapability zcbz3104 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
-  return zcbz3104;
+  struct zCapability zghz3166;
+  zghz3166.zB = UINT64_C(0b0000000000);
+  RECREATE(sail_int)(&zghz3167);
+  CONVERT_OF(sail_int, mach_int)(&zghz3167, INT64_C(-7));
+  zghz3166.zE = CONVERT_OF(mach_int, sail_int)(zghz3167);
+  zghz3166.zT = UINT64_C(0b0000000000);
+  zghz3166.zaddress = UINT64_C(0x00000000);
+  zghz3166.zap_m = UINT64_C(0b00000);
+  zghz3166.zcl = UINT64_C(0b0);
+  zghz3166.zinternal_exponent = false;
+  zghz3166.zreserved_0 = UINT64_C(0b00);
+  zghz3166.zreserved_1 = UINT64_C(0b0);
+  zghz3166.zsd_perms = UINT64_C(0b00);
+  zghz3166.zsealed = false;
+  zghz3166.ztag = false;
+end_function_533: ;
+  return zghz3166;
+end_block_exception_534: ;
+  struct zCapability zcbz3106 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zcl = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
+  return zcbz3106;
 }
 
 
 
 static void finish_sailgen_undefined_Capability(void)
-{
-  KILL(sail_int)(&zghz3133);
-
+{    KILL(sail_int)(&zghz3167);
 }
 
 static struct zCapability sailgen_bitsToCap(bool, uint64_t);
 
-struct zCapability zghz3134;
-struct zEncMetadata zghz3135;
-struct zCapability zghz3136;
-sail_int zghz3137;
-sail_int zghz3138;
-sail_int zghz3139;
-lbits zghz3140;
-lbits zghz3141;
-lbits zghz3142;
-lbits zghz3143;
-lbits zghz3144;
-lbits zghz3145;
-lbits zghz3146;
-sail_int zghz3147;
-sail_int zghz3148;
-lbits zghz3149;
-sail_int zghz3150;
-sail_int zghz3151;
-sail_int zghz3152;
-sail_int zghz3153;
-sail_int zghz3154;
-sail_int zghz3155;
-lbits zghz3156;
-lbits zghz3157;
-lbits zghz3158;
-sail_int zghz3159;
-sail_int zghz3160;
-lbits zghz3161;
-sail_int zghz3162;
-sail_int zghz3163;
-sail_int zghz3164;
-sail_int zghz3165;
-sail_int zghz3166;
-sail_int zghz3167;
-lbits zghz3168;
-sail_int zghz3169;
-sail_int zghz3170;
+struct zCapability zghz3168;
+struct zEncMetadata zghz3169;
+struct zCapability zghz3170;
 sail_int zghz3171;
 sail_int zghz3172;
 sail_int zghz3173;
-sail_int zghz3174;
-sail_int zghz3175;
-
-static void startup_sailgen_bitsToCap(void)
-{
-
-
-
-  CREATE(sail_int)(&zghz3137);
-  CREATE(sail_int)(&zghz3138);
-  CREATE(sail_int)(&zghz3139);
-  CREATE(lbits)(&zghz3140);
-  CREATE(lbits)(&zghz3141);
-  CREATE(lbits)(&zghz3142);
-  CREATE(lbits)(&zghz3143);
-  CREATE(lbits)(&zghz3144);
-  CREATE(lbits)(&zghz3145);
-  CREATE(lbits)(&zghz3146);
-  CREATE(sail_int)(&zghz3147);
-  CREATE(sail_int)(&zghz3148);
-  CREATE(lbits)(&zghz3149);
-  CREATE(sail_int)(&zghz3150);
-  CREATE(sail_int)(&zghz3151);
-  CREATE(sail_int)(&zghz3152);
-  CREATE(sail_int)(&zghz3153);
-  CREATE(sail_int)(&zghz3154);
-  CREATE(sail_int)(&zghz3155);
-  CREATE(lbits)(&zghz3156);
-  CREATE(lbits)(&zghz3157);
-  CREATE(lbits)(&zghz3158);
-  CREATE(sail_int)(&zghz3159);
-  CREATE(sail_int)(&zghz3160);
-  CREATE(lbits)(&zghz3161);
-  CREATE(sail_int)(&zghz3162);
-  CREATE(sail_int)(&zghz3163);
-  CREATE(sail_int)(&zghz3164);
-  CREATE(sail_int)(&zghz3165);
-  CREATE(sail_int)(&zghz3166);
-  CREATE(sail_int)(&zghz3167);
-  CREATE(lbits)(&zghz3168);
-  CREATE(sail_int)(&zghz3169);
-  CREATE(sail_int)(&zghz3170);
-  CREATE(sail_int)(&zghz3171);
-  CREATE(sail_int)(&zghz3172);
-  CREATE(sail_int)(&zghz3173);
-  CREATE(sail_int)(&zghz3174);
-  CREATE(sail_int)(&zghz3175);
-}
-
-static struct zCapability sailgen_bitsToCap(bool ztag, uint64_t zcap_bits)
-{
-  __label__ case_573, finish_match_572, end_function_574, end_block_exception_575;
-
-  struct zCapability zghz3134;
-  struct zEncMetadata zghz3135;
-  {
-    uint64_t zgaz3302;
-    {
-      int64_t zgaz3301;
-      {
-        int64_t zgaz3300;
-        {
-          RECREATE(sail_int)(&zghz3173);
-          CONVERT_OF(sail_int, mach_int)(&zghz3173, zxlen);
-          RECREATE(sail_int)(&zghz3174);
-          CONVERT_OF(sail_int, mach_int)(&zghz3174, INT64_C(2));
-          RECREATE(sail_int)(&zghz3175);
-          mult_int(&zghz3175, zghz3173, zghz3174);
-          zgaz3300 = CONVERT_OF(mach_int, sail_int)(zghz3175);
-        }
-        {
-          RECREATE(sail_int)(&zghz3170);
-          CONVERT_OF(sail_int, mach_int)(&zghz3170, zgaz3300);
-          RECREATE(sail_int)(&zghz3171);
-          CONVERT_OF(sail_int, mach_int)(&zghz3171, INT64_C(1));
-          RECREATE(sail_int)(&zghz3172);
-          sub_int(&zghz3172, zghz3170, zghz3171);
-          zgaz3301 = CONVERT_OF(mach_int, sail_int)(zghz3172);
-        }
-      }
-      zgaz3302 = (safe_rshift(UINT64_MAX, 64 - 32) & (zcap_bits >> zxlen));
-    }
-    zghz3135 = sailgen_Mk_EncMetadata(zgaz3302);
-  }
-  bool zinternal_exponent;
-  {
-    uint64_t zgaz3299;
-    zgaz3299 = sailgen__get_EncMetadata_EF(zghz3135);
-    zinternal_exponent = sailgen_internal_exponent_encdec_backwards(zgaz3299);
-  }
-  {
-    int64_t zMW;
-    zMW = zcap_mantissa_width;
-    int64_t zE;
-    if (zinternal_exponent) {
-      int64_t zgaz3298;
-      {
-        uint64_t zgaz3297;
-        zgaz3297 = sailgen_getMetadataInternalExponent(zghz3135);
-        {
-          RECREATE(lbits)(&zghz3168);
-          CONVERT_OF(lbits, fbits)(&zghz3168, zgaz3297, UINT64_C(5) , true);
-          RECREATE(sail_int)(&zghz3169);
-          sail_unsigned(&zghz3169, zghz3168);
-          zgaz3298 = CONVERT_OF(mach_int, sail_int)(zghz3169);
-        }
-      }
-      {
-        RECREATE(sail_int)(&zghz3165);
-        CONVERT_OF(sail_int, mach_int)(&zghz3165, zcap_max_E);
-        RECREATE(sail_int)(&zghz3166);
-        CONVERT_OF(sail_int, mach_int)(&zghz3166, zgaz3298);
-        RECREATE(sail_int)(&zghz3167);
-        sub_int(&zghz3167, zghz3165, zghz3166);
-        zE = CONVERT_OF(mach_int, sail_int)(zghz3167);
-      }
-    } else {  zE = INT64_C(0);  }
-    uint64_t zLMSB;
-    if (zinternal_exponent) {  zLMSB = UINT64_C(0b01);  } else {
-      uint64_t zgaz3296;
-      zgaz3296 = sailgen_getMetadataL8(zghz3135);
-      zLMSB = (UINT64_C(0b0) << 1) | zgaz3296;
-    }
-    uint64_t zT_low;
-    {
-      bool zgaz3295;
-      zgaz3295 = not(zinternal_exponent);
-      if (zgaz3295) {  zT_low = sailgen__get_EncMetadata_TE(zghz3135);  } else {  zT_low = UINT64_C(0b00);  }
-    }
-    uint64_t zB_low;
-    {
-      bool zgaz3294;
-      zgaz3294 = not(zinternal_exponent);
-      if (zgaz3294) {  zB_low = sailgen__get_EncMetadata_BE(zghz3135);  } else {  zB_low = UINT64_C(0b00);  }
-    }
-    sbits zT;
-    {
-      uint64_t zgaz3293;
-      zgaz3293 = sailgen__get_EncMetadata_Tm(zghz3135);
-      sbits zgsz3677;
-      zgsz3677 = CONVERT_OF(sbits, fbits)((zgaz3293 << 2) | zT_low, UINT64_C(8) , true);
-      zT = zgsz3677;
-    }
-    sbits zB;
-    {
-      uint64_t zgaz3292;
-      zgaz3292 = sailgen__get_EncMetadata_Bm(zghz3135);
-      sbits zgsz3678;
-      zgsz3678 = CONVERT_OF(sbits, fbits)((zgaz3292 << 2) | zB_low, UINT64_C(10) , true);
-      zB = zgsz3678;
-    }
-    uint64_t zLCout;
-    {
-      bool zgaz3291;
-      {
-        sbits zgaz3290;
-        {
-          int64_t zgaz3289;
-          {
-            RECREATE(sail_int)(&zghz3162);
-            CONVERT_OF(sail_int, mach_int)(&zghz3162, zMW);
-            RECREATE(sail_int)(&zghz3163);
-            CONVERT_OF(sail_int, mach_int)(&zghz3163, INT64_C(3));
-            RECREATE(sail_int)(&zghz3164);
-            sub_int(&zghz3164, zghz3162, zghz3163);
-            zgaz3289 = CONVERT_OF(mach_int, sail_int)(zghz3164);
-          }
-          {
-            RECREATE(lbits)(&zghz3158);
-            CONVERT_OF(lbits, sbits)(&zghz3158, zB, true);
-            RECREATE(sail_int)(&zghz3159);
-            CONVERT_OF(sail_int, mach_int)(&zghz3159, zgaz3289);
-            RECREATE(sail_int)(&zghz3160);
-            CONVERT_OF(sail_int, mach_int)(&zghz3160, INT64_C(0));
-            RECREATE(lbits)(&zghz3161);
-            vector_subrange_lbits(&zghz3161, zghz3158, zghz3159, zghz3160);
-            zgaz3290 = CONVERT_OF(sbits, lbits)(zghz3161, true);
-          }
-        }
-        {
-          RECREATE(lbits)(&zghz3156);
-          CONVERT_OF(lbits, sbits)(&zghz3156, zT, true);
-          RECREATE(lbits)(&zghz3157);
-          CONVERT_OF(lbits, sbits)(&zghz3157, zgaz3290, true);
-          zgaz3291 = sailgen_z8operatorz0zI_uz9(zghz3156, zghz3157);
-        }
-      }
-      if (zgaz3291) {  zLCout = UINT64_C(0b01);  } else {  zLCout = UINT64_C(0b00);  }
-    }
-    sbits zTshadowz38;
-    {
-      sbits zgaz3288;
-      {
-        sbits zgaz3287;
-        {
-          sbits zgaz3286;
-          {
-            int64_t zgaz3284;
-            {
-              RECREATE(sail_int)(&zghz3153);
-              CONVERT_OF(sail_int, mach_int)(&zghz3153, zMW);
-              RECREATE(sail_int)(&zghz3154);
-              CONVERT_OF(sail_int, mach_int)(&zghz3154, INT64_C(1));
-              RECREATE(sail_int)(&zghz3155);
-              sub_int(&zghz3155, zghz3153, zghz3154);
-              zgaz3284 = CONVERT_OF(mach_int, sail_int)(zghz3155);
-            }
-            int64_t zgaz3285;
-            {
-              RECREATE(sail_int)(&zghz3150);
-              CONVERT_OF(sail_int, mach_int)(&zghz3150, zMW);
-              RECREATE(sail_int)(&zghz3151);
-              CONVERT_OF(sail_int, mach_int)(&zghz3151, INT64_C(2));
-              RECREATE(sail_int)(&zghz3152);
-              sub_int(&zghz3152, zghz3150, zghz3151);
-              zgaz3285 = CONVERT_OF(mach_int, sail_int)(zghz3152);
-            }
-            {
-              RECREATE(lbits)(&zghz3146);
-              CONVERT_OF(lbits, sbits)(&zghz3146, zB, true);
-              RECREATE(sail_int)(&zghz3147);
-              CONVERT_OF(sail_int, mach_int)(&zghz3147, zgaz3284);
-              RECREATE(sail_int)(&zghz3148);
-              CONVERT_OF(sail_int, mach_int)(&zghz3148, zgaz3285);
-              RECREATE(lbits)(&zghz3149);
-              vector_subrange_lbits(&zghz3149, zghz3146, zghz3147, zghz3148);
-              zgaz3286 = CONVERT_OF(sbits, lbits)(zghz3149, true);
-            }
-          }
-          {
-            RECREATE(lbits)(&zghz3143);
-            CONVERT_OF(lbits, sbits)(&zghz3143, zgaz3286, true);
-            RECREATE(lbits)(&zghz3144);
-            CONVERT_OF(lbits, fbits)(&zghz3144, zLCout, UINT64_C(2) , true);
-            RECREATE(lbits)(&zghz3145);
-            add_bits(&zghz3145, zghz3143, zghz3144);
-            zgaz3287 = CONVERT_OF(sbits, lbits)(zghz3145, true);
-          }
-        }
-        {
-          RECREATE(lbits)(&zghz3140);
-          CONVERT_OF(lbits, sbits)(&zghz3140, zgaz3287, true);
-          RECREATE(lbits)(&zghz3141);
-          CONVERT_OF(lbits, fbits)(&zghz3141, zLMSB, UINT64_C(2) , true);
-          RECREATE(lbits)(&zghz3142);
-          add_bits(&zghz3142, zghz3140, zghz3141);
-          zgaz3288 = CONVERT_OF(sbits, lbits)(zghz3142, true);
-        }
-      }
-      zTshadowz38 = append_ss(zgaz3288, zT);
-    }
-    uint64_t zgaz3276;
-    zgaz3276 = sailgen__get_EncMetadata_SDP(zghz3135);
-    uint64_t zgaz3277;
-    zgaz3277 = sailgen__get_EncMetadata_AP_M(zghz3135);
-    bool zgaz3279;
-    {
-      uint64_t zgaz3278;
-      zgaz3278 = sailgen__get_EncMetadata_CT(zghz3135);
-      zgaz3279 = sailgen_bool_bits_backwards(zgaz3278);
-    }
-    uint64_t zgaz3280;
-    zgaz3280 = sailgen__get_EncMetadata_reserved_0(zghz3135);
-    uint64_t zgaz3281;
-    zgaz3281 = sailgen__get_EncMetadata_reserved_1(zghz3135);
-    uint64_t zgaz3283;
-    {
-      int64_t zgaz3282;
-      {
-        RECREATE(sail_int)(&zghz3137);
-        CONVERT_OF(sail_int, mach_int)(&zghz3137, zxlen);
-        RECREATE(sail_int)(&zghz3138);
-        CONVERT_OF(sail_int, mach_int)(&zghz3138, INT64_C(1));
-        RECREATE(sail_int)(&zghz3139);
-        sub_int(&zghz3139, zghz3137, zghz3138);
-        zgaz3282 = CONVERT_OF(mach_int, sail_int)(zghz3139);
-      }
-      zgaz3283 = (safe_rshift(UINT64_MAX, 64 - 32) & (zcap_bits >> INT64_C(0)));
-    }
-    struct zCapability zghz3136;
-    zghz3136.zB = CONVERT_OF(fbits, sbits)(zB, true);
-    zghz3136.zE = zE;
-    zghz3136.zT = CONVERT_OF(fbits, sbits)(zTshadowz38, true);
-    zghz3136.zaddress = zgaz3283;
-    zghz3136.zap_m = zgaz3277;
-    zghz3136.zinternal_exponent = zinternal_exponent;
-    zghz3136.zreserved_0 = zgaz3280;
-    zghz3136.zreserved_1 = zgaz3281;
-    zghz3136.zsd_perms = zgaz3276;
-    zghz3136.zsealed = zgaz3279;
-    zghz3136.ztag = ztag;
-    zghz3134 = zghz3136;
-    goto finish_match_572;
-  }
-case_573: ;
-  sail_match_failure("bitsToCap");
-finish_match_572: ;
-
-end_function_574: ;
-  return zghz3134;
-end_block_exception_575: ;
-  struct zCapability zcbz3105 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
-  return zcbz3105;
-}
-
-
-
-static void finish_sailgen_bitsToCap(void)
-{
-  KILL(sail_int)(&zghz3175);
-  KILL(sail_int)(&zghz3174);
-  KILL(sail_int)(&zghz3173);
-  KILL(sail_int)(&zghz3172);
-  KILL(sail_int)(&zghz3171);
-  KILL(sail_int)(&zghz3170);
-  KILL(sail_int)(&zghz3169);
-  KILL(lbits)(&zghz3168);
-  KILL(sail_int)(&zghz3167);
-  KILL(sail_int)(&zghz3166);
-  KILL(sail_int)(&zghz3165);
-  KILL(sail_int)(&zghz3164);
-  KILL(sail_int)(&zghz3163);
-  KILL(sail_int)(&zghz3162);
-  KILL(lbits)(&zghz3161);
-  KILL(sail_int)(&zghz3160);
-  KILL(sail_int)(&zghz3159);
-  KILL(lbits)(&zghz3158);
-  KILL(lbits)(&zghz3157);
-  KILL(lbits)(&zghz3156);
-  KILL(sail_int)(&zghz3155);
-  KILL(sail_int)(&zghz3154);
-  KILL(sail_int)(&zghz3153);
-  KILL(sail_int)(&zghz3152);
-  KILL(sail_int)(&zghz3151);
-  KILL(sail_int)(&zghz3150);
-  KILL(lbits)(&zghz3149);
-  KILL(sail_int)(&zghz3148);
-  KILL(sail_int)(&zghz3147);
-  KILL(lbits)(&zghz3146);
-  KILL(lbits)(&zghz3145);
-  KILL(lbits)(&zghz3144);
-  KILL(lbits)(&zghz3143);
-  KILL(lbits)(&zghz3142);
-  KILL(lbits)(&zghz3141);
-  KILL(lbits)(&zghz3140);
-  KILL(sail_int)(&zghz3139);
-  KILL(sail_int)(&zghz3138);
-  KILL(sail_int)(&zghz3137);
-
-
-
-}
-
-static struct zEncMetadata sailgen_capToMetadataBits(struct zCapability);
-
-struct zEncMetadata zghz3176;
-struct zEncMetadata zghz3177;
-struct zEncMetadata zghz3178;
-struct zEncMetadata zghz3179;
-struct zEncMetadata zghz3180;
-struct zEncMetadata zghz3181;
-struct zEncMetadata zghz3182;
-sail_int zghz3183;
+lbits zghz3174;
+lbits zghz3175;
+lbits zghz3176;
+lbits zghz3177;
+lbits zghz3178;
+lbits zghz3179;
+lbits zghz3180;
+sail_int zghz3181;
+sail_int zghz3182;
+lbits zghz3183;
 sail_int zghz3184;
 sail_int zghz3185;
-struct zEncMetadata zghz3186;
+sail_int zghz3186;
 sail_int zghz3187;
 sail_int zghz3188;
 sail_int zghz3189;
-struct zEncMetadata zghz3190;
-struct zEncMetadata zghz3191;
-struct zEncMetadata zghz3192;
-struct zEncMetadata zghz3193;
+lbits zghz3190;
+lbits zghz3191;
+lbits zghz3192;
+sail_int zghz3193;
 sail_int zghz3194;
-sail_int zghz3195;
+lbits zghz3195;
 sail_int zghz3196;
 sail_int zghz3197;
 sail_int zghz3198;
 sail_int zghz3199;
 sail_int zghz3200;
 sail_int zghz3201;
-sail_int zghz3202;
+lbits zghz3202;
 sail_int zghz3203;
 sail_int zghz3204;
 sail_int zghz3205;
@@ -8500,14 +7867,397 @@ sail_int zghz3206;
 sail_int zghz3207;
 sail_int zghz3208;
 sail_int zghz3209;
-sail_int zghz3210;
-sail_int zghz3211;
-sail_int zghz3212;
-sail_int zghz3213;
-lbits zghz3214;
-sail_int zghz3215;
-sail_int zghz3216;
+
+static void startup_sailgen_bitsToCap(void)
+{
+
+
+
+  CREATE(sail_int)(&zghz3171);
+  CREATE(sail_int)(&zghz3172);
+  CREATE(sail_int)(&zghz3173);
+  CREATE(lbits)(&zghz3174);
+  CREATE(lbits)(&zghz3175);
+  CREATE(lbits)(&zghz3176);
+  CREATE(lbits)(&zghz3177);
+  CREATE(lbits)(&zghz3178);
+  CREATE(lbits)(&zghz3179);
+  CREATE(lbits)(&zghz3180);
+  CREATE(sail_int)(&zghz3181);
+  CREATE(sail_int)(&zghz3182);
+  CREATE(lbits)(&zghz3183);
+  CREATE(sail_int)(&zghz3184);
+  CREATE(sail_int)(&zghz3185);
+  CREATE(sail_int)(&zghz3186);
+  CREATE(sail_int)(&zghz3187);
+  CREATE(sail_int)(&zghz3188);
+  CREATE(sail_int)(&zghz3189);
+  CREATE(lbits)(&zghz3190);
+  CREATE(lbits)(&zghz3191);
+  CREATE(lbits)(&zghz3192);
+  CREATE(sail_int)(&zghz3193);
+  CREATE(sail_int)(&zghz3194);
+  CREATE(lbits)(&zghz3195);
+  CREATE(sail_int)(&zghz3196);
+  CREATE(sail_int)(&zghz3197);
+  CREATE(sail_int)(&zghz3198);
+  CREATE(sail_int)(&zghz3199);
+  CREATE(sail_int)(&zghz3200);
+  CREATE(sail_int)(&zghz3201);
+  CREATE(lbits)(&zghz3202);
+  CREATE(sail_int)(&zghz3203);
+  CREATE(sail_int)(&zghz3204);
+  CREATE(sail_int)(&zghz3205);
+  CREATE(sail_int)(&zghz3206);
+  CREATE(sail_int)(&zghz3207);
+  CREATE(sail_int)(&zghz3208);
+  CREATE(sail_int)(&zghz3209);
+}
+
+static struct zCapability sailgen_bitsToCap(bool ztag, uint64_t zcap_bits)
+{
+  __label__ case_537, finish_match_536, end_function_538, end_block_exception_539;
+
+  struct zCapability zghz3168;
+  struct zEncMetadata zghz3169;
+  {
+    uint64_t zgaz3290;
+    {
+      int64_t zgaz3289;
+      {
+        int64_t zgaz3288;
+        {
+          RECREATE(sail_int)(&zghz3207);
+          CONVERT_OF(sail_int, mach_int)(&zghz3207, zxlen);
+          RECREATE(sail_int)(&zghz3208);
+          CONVERT_OF(sail_int, mach_int)(&zghz3208, INT64_C(2));
+          RECREATE(sail_int)(&zghz3209);
+          mult_int(&zghz3209, zghz3207, zghz3208);
+          zgaz3288 = CONVERT_OF(mach_int, sail_int)(zghz3209);
+        }
+        {
+          RECREATE(sail_int)(&zghz3204);
+          CONVERT_OF(sail_int, mach_int)(&zghz3204, zgaz3288);
+          RECREATE(sail_int)(&zghz3205);
+          CONVERT_OF(sail_int, mach_int)(&zghz3205, INT64_C(1));
+          RECREATE(sail_int)(&zghz3206);
+          sub_int(&zghz3206, zghz3204, zghz3205);
+          zgaz3289 = CONVERT_OF(mach_int, sail_int)(zghz3206);
+        }
+      }
+      zgaz3290 = (safe_rshift(UINT64_MAX, 64 - 32) & (zcap_bits >> zxlen));
+    }
+    zghz3169 = sailgen_Mk_EncMetadata(zgaz3290);
+  }
+  bool zinternal_exponent;
+  {
+    uint64_t zgaz3287;
+    zgaz3287 = sailgen__get_EncMetadata_EF(zghz3169);
+    zinternal_exponent = sailgen_internal_exponent_encdec_backwards(zgaz3287);
+  }
+  {
+    int64_t zMW;
+    zMW = zcap_mantissa_width;
+    int64_t zE;
+    if (zinternal_exponent) {
+      int64_t zgaz3286;
+      {
+        uint64_t zgaz3285;
+        zgaz3285 = sailgen_getMetadataInternalExponent(zghz3169);
+        {
+          RECREATE(lbits)(&zghz3202);
+          CONVERT_OF(lbits, fbits)(&zghz3202, zgaz3285, UINT64_C(5) , true);
+          RECREATE(sail_int)(&zghz3203);
+          sail_unsigned(&zghz3203, zghz3202);
+          zgaz3286 = CONVERT_OF(mach_int, sail_int)(zghz3203);
+        }
+      }
+      {
+        RECREATE(sail_int)(&zghz3199);
+        CONVERT_OF(sail_int, mach_int)(&zghz3199, zcap_max_E);
+        RECREATE(sail_int)(&zghz3200);
+        CONVERT_OF(sail_int, mach_int)(&zghz3200, zgaz3286);
+        RECREATE(sail_int)(&zghz3201);
+        sub_int(&zghz3201, zghz3199, zghz3200);
+        zE = CONVERT_OF(mach_int, sail_int)(zghz3201);
+      }
+    } else {  zE = INT64_C(0);  }
+    uint64_t zLMSB;
+    if (zinternal_exponent) {  zLMSB = UINT64_C(0b01);  } else {
+      uint64_t zgaz3284;
+      zgaz3284 = sailgen_getMetadataL8(zghz3169);
+      zLMSB = (UINT64_C(0b0) << 1) | zgaz3284;
+    }
+    uint64_t zT_low;
+    {
+      bool zgaz3283;
+      zgaz3283 = sailgen_not(zinternal_exponent);
+      if (zgaz3283) {  zT_low = sailgen__get_EncMetadata_TE(zghz3169);  } else {  zT_low = UINT64_C(0b00);  }
+    }
+    uint64_t zB_low;
+    {
+      bool zgaz3282;
+      zgaz3282 = sailgen_not(zinternal_exponent);
+      if (zgaz3282) {  zB_low = sailgen__get_EncMetadata_BE(zghz3169);  } else {  zB_low = UINT64_C(0b00);  }
+    }
+    sbits zT;
+    {
+      uint64_t zgaz3281;
+      zgaz3281 = sailgen__get_EncMetadata_Tm(zghz3169);
+      zT = CONVERT_OF(sbits, fbits)((zgaz3281 << 2) | zT_low, UINT64_C(8) , true);
+    }
+    sbits zB;
+    {
+      uint64_t zgaz3280;
+      zgaz3280 = sailgen__get_EncMetadata_Bm(zghz3169);
+      zB = CONVERT_OF(sbits, fbits)((zgaz3280 << 2) | zB_low, UINT64_C(10) , true);
+    }
+    uint64_t zLCout;
+    {
+      bool zgaz3279;
+      {
+        sbits zgaz3278;
+        {
+          int64_t zgaz3277;
+          {
+            RECREATE(sail_int)(&zghz3196);
+            CONVERT_OF(sail_int, mach_int)(&zghz3196, zMW);
+            RECREATE(sail_int)(&zghz3197);
+            CONVERT_OF(sail_int, mach_int)(&zghz3197, INT64_C(3));
+            RECREATE(sail_int)(&zghz3198);
+            sub_int(&zghz3198, zghz3196, zghz3197);
+            zgaz3277 = CONVERT_OF(mach_int, sail_int)(zghz3198);
+          }
+          {
+            RECREATE(lbits)(&zghz3192);
+            CONVERT_OF(lbits, sbits)(&zghz3192, zB, true);
+            RECREATE(sail_int)(&zghz3193);
+            CONVERT_OF(sail_int, mach_int)(&zghz3193, zgaz3277);
+            RECREATE(sail_int)(&zghz3194);
+            CONVERT_OF(sail_int, mach_int)(&zghz3194, INT64_C(0));
+            RECREATE(lbits)(&zghz3195);
+            vector_subrange_lbits(&zghz3195, zghz3192, zghz3193, zghz3194);
+            zgaz3278 = CONVERT_OF(sbits, lbits)(zghz3195, true);
+          }
+        }
+        {
+          RECREATE(lbits)(&zghz3190);
+          CONVERT_OF(lbits, sbits)(&zghz3190, zT, true);
+          RECREATE(lbits)(&zghz3191);
+          CONVERT_OF(lbits, sbits)(&zghz3191, zgaz3278, true);
+          zgaz3279 = sailgen_z8operatorz0zI_uz9(zghz3190, zghz3191);
+        }
+      }
+      if (zgaz3279) {  zLCout = UINT64_C(0b01);  } else {  zLCout = UINT64_C(0b00);  }
+    }
+    sbits zTshadowz315;
+    {
+      sbits zgaz3276;
+      {
+        sbits zgaz3275;
+        {
+          sbits zgaz3274;
+          {
+            int64_t zgaz3272;
+            {
+              RECREATE(sail_int)(&zghz3187);
+              CONVERT_OF(sail_int, mach_int)(&zghz3187, zMW);
+              RECREATE(sail_int)(&zghz3188);
+              CONVERT_OF(sail_int, mach_int)(&zghz3188, INT64_C(1));
+              RECREATE(sail_int)(&zghz3189);
+              sub_int(&zghz3189, zghz3187, zghz3188);
+              zgaz3272 = CONVERT_OF(mach_int, sail_int)(zghz3189);
+            }
+            int64_t zgaz3273;
+            {
+              RECREATE(sail_int)(&zghz3184);
+              CONVERT_OF(sail_int, mach_int)(&zghz3184, zMW);
+              RECREATE(sail_int)(&zghz3185);
+              CONVERT_OF(sail_int, mach_int)(&zghz3185, INT64_C(2));
+              RECREATE(sail_int)(&zghz3186);
+              sub_int(&zghz3186, zghz3184, zghz3185);
+              zgaz3273 = CONVERT_OF(mach_int, sail_int)(zghz3186);
+            }
+            {
+              RECREATE(lbits)(&zghz3180);
+              CONVERT_OF(lbits, sbits)(&zghz3180, zB, true);
+              RECREATE(sail_int)(&zghz3181);
+              CONVERT_OF(sail_int, mach_int)(&zghz3181, zgaz3272);
+              RECREATE(sail_int)(&zghz3182);
+              CONVERT_OF(sail_int, mach_int)(&zghz3182, zgaz3273);
+              RECREATE(lbits)(&zghz3183);
+              vector_subrange_lbits(&zghz3183, zghz3180, zghz3181, zghz3182);
+              zgaz3274 = CONVERT_OF(sbits, lbits)(zghz3183, true);
+            }
+          }
+          {
+            RECREATE(lbits)(&zghz3177);
+            CONVERT_OF(lbits, sbits)(&zghz3177, zgaz3274, true);
+            RECREATE(lbits)(&zghz3178);
+            CONVERT_OF(lbits, fbits)(&zghz3178, zLCout, UINT64_C(2) , true);
+            RECREATE(lbits)(&zghz3179);
+            add_bits(&zghz3179, zghz3177, zghz3178);
+            zgaz3275 = CONVERT_OF(sbits, lbits)(zghz3179, true);
+          }
+        }
+        {
+          RECREATE(lbits)(&zghz3174);
+          CONVERT_OF(lbits, sbits)(&zghz3174, zgaz3275, true);
+          RECREATE(lbits)(&zghz3175);
+          CONVERT_OF(lbits, fbits)(&zghz3175, zLMSB, UINT64_C(2) , true);
+          RECREATE(lbits)(&zghz3176);
+          add_bits(&zghz3176, zghz3174, zghz3175);
+          zgaz3276 = CONVERT_OF(sbits, lbits)(zghz3176, true);
+        }
+      }
+      zTshadowz315 = append_ss(zgaz3276, zT);
+    }
+    uint64_t zgaz3263;
+    zgaz3263 = sailgen__get_EncMetadata_SDP(zghz3169);
+    uint64_t zgaz3264;
+    zgaz3264 = sailgen__get_EncMetadata_AP_M(zghz3169);
+    uint64_t zgaz3265;
+    zgaz3265 = sailgen__get_EncMetadata_CL(zghz3169);
+    bool zgaz3267;
+    {
+      uint64_t zgaz3266;
+      zgaz3266 = sailgen__get_EncMetadata_CT(zghz3169);
+      zgaz3267 = sailgen_bool_bits_backwards(zgaz3266);
+    }
+    uint64_t zgaz3268;
+    zgaz3268 = sailgen__get_EncMetadata_reserved_0(zghz3169);
+    uint64_t zgaz3269;
+    zgaz3269 = sailgen__get_EncMetadata_reserved_1(zghz3169);
+    uint64_t zgaz3271;
+    {
+      int64_t zgaz3270;
+      {
+        RECREATE(sail_int)(&zghz3171);
+        CONVERT_OF(sail_int, mach_int)(&zghz3171, zxlen);
+        RECREATE(sail_int)(&zghz3172);
+        CONVERT_OF(sail_int, mach_int)(&zghz3172, INT64_C(1));
+        RECREATE(sail_int)(&zghz3173);
+        sub_int(&zghz3173, zghz3171, zghz3172);
+        zgaz3270 = CONVERT_OF(mach_int, sail_int)(zghz3173);
+      }
+      zgaz3271 = (safe_rshift(UINT64_MAX, 64 - 32) & (zcap_bits >> INT64_C(0)));
+    }
+    struct zCapability zghz3170;
+    zghz3170.zB = CONVERT_OF(fbits, sbits)(zB, true);
+    zghz3170.zE = zE;
+    zghz3170.zT = CONVERT_OF(fbits, sbits)(zTshadowz315, true);
+    zghz3170.zaddress = zgaz3271;
+    zghz3170.zap_m = zgaz3264;
+    zghz3170.zcl = zgaz3265;
+    zghz3170.zinternal_exponent = zinternal_exponent;
+    zghz3170.zreserved_0 = zgaz3268;
+    zghz3170.zreserved_1 = zgaz3269;
+    zghz3170.zsd_perms = zgaz3263;
+    zghz3170.zsealed = zgaz3267;
+    zghz3170.ztag = ztag;
+    zghz3168 = zghz3170;
+    goto finish_match_536;
+  }
+case_537: ;
+  sail_match_failure("bitsToCap");
+finish_match_536: ;
+end_function_538: ;
+  return zghz3168;
+end_block_exception_539: ;
+  struct zCapability zcbz3107 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zcl = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
+  return zcbz3107;
+}
+
+
+
+static void finish_sailgen_bitsToCap(void)
+{
+  KILL(sail_int)(&zghz3209);
+  KILL(sail_int)(&zghz3208);
+  KILL(sail_int)(&zghz3207);
+  KILL(sail_int)(&zghz3206);
+  KILL(sail_int)(&zghz3205);
+  KILL(sail_int)(&zghz3204);
+  KILL(sail_int)(&zghz3203);
+  KILL(lbits)(&zghz3202);
+  KILL(sail_int)(&zghz3201);
+  KILL(sail_int)(&zghz3200);
+  KILL(sail_int)(&zghz3199);
+  KILL(sail_int)(&zghz3198);
+  KILL(sail_int)(&zghz3197);
+  KILL(sail_int)(&zghz3196);
+  KILL(lbits)(&zghz3195);
+  KILL(sail_int)(&zghz3194);
+  KILL(sail_int)(&zghz3193);
+  KILL(lbits)(&zghz3192);
+  KILL(lbits)(&zghz3191);
+  KILL(lbits)(&zghz3190);
+  KILL(sail_int)(&zghz3189);
+  KILL(sail_int)(&zghz3188);
+  KILL(sail_int)(&zghz3187);
+  KILL(sail_int)(&zghz3186);
+  KILL(sail_int)(&zghz3185);
+  KILL(sail_int)(&zghz3184);
+  KILL(lbits)(&zghz3183);
+  KILL(sail_int)(&zghz3182);
+  KILL(sail_int)(&zghz3181);
+  KILL(lbits)(&zghz3180);
+  KILL(lbits)(&zghz3179);
+  KILL(lbits)(&zghz3178);
+  KILL(lbits)(&zghz3177);
+  KILL(lbits)(&zghz3176);
+  KILL(lbits)(&zghz3175);
+  KILL(lbits)(&zghz3174);
+  KILL(sail_int)(&zghz3173);
+  KILL(sail_int)(&zghz3172);
+  KILL(sail_int)(&zghz3171);
+}
+
+static struct zEncMetadata sailgen_capToMetadataBits(struct zCapability);
+
+struct zEncMetadata zghz3210;
+struct zEncMetadata zghz3211;
+struct zEncMetadata zghz3212;
+struct zEncMetadata zghz3213;
+struct zEncMetadata zghz3214;
+struct zEncMetadata zghz3215;
+struct zEncMetadata zghz3216;
 sail_int zghz3217;
+sail_int zghz3218;
+sail_int zghz3219;
+struct zEncMetadata zghz3220;
+sail_int zghz3221;
+sail_int zghz3222;
+sail_int zghz3223;
+struct zEncMetadata zghz3224;
+struct zEncMetadata zghz3225;
+struct zEncMetadata zghz3226;
+struct zEncMetadata zghz3227;
+struct zEncMetadata zghz3228;
+sail_int zghz3229;
+sail_int zghz3230;
+sail_int zghz3231;
+sail_int zghz3232;
+sail_int zghz3233;
+sail_int zghz3234;
+sail_int zghz3235;
+sail_int zghz3236;
+sail_int zghz3237;
+sail_int zghz3238;
+sail_int zghz3239;
+sail_int zghz3240;
+sail_int zghz3241;
+sail_int zghz3242;
+sail_int zghz3243;
+sail_int zghz3244;
+sail_int zghz3245;
+sail_int zghz3246;
+sail_int zghz3247;
+sail_int zghz3248;
+lbits zghz3249;
+sail_int zghz3250;
+sail_int zghz3251;
+sail_int zghz3252;
 
 static void startup_sailgen_capToMetadataBits(void)
 {
@@ -8518,41 +8268,42 @@ static void startup_sailgen_capToMetadataBits(void)
 
 
 
-  CREATE(sail_int)(&zghz3183);
-  CREATE(sail_int)(&zghz3184);
-  CREATE(sail_int)(&zghz3185);
-
-  CREATE(sail_int)(&zghz3187);
-  CREATE(sail_int)(&zghz3188);
-  CREATE(sail_int)(&zghz3189);
-
-
-
-
-  CREATE(sail_int)(&zghz3194);
-  CREATE(sail_int)(&zghz3195);
-  CREATE(sail_int)(&zghz3196);
-  CREATE(sail_int)(&zghz3197);
-  CREATE(sail_int)(&zghz3198);
-  CREATE(sail_int)(&zghz3199);
-  CREATE(sail_int)(&zghz3200);
-  CREATE(sail_int)(&zghz3201);
-  CREATE(sail_int)(&zghz3202);
-  CREATE(sail_int)(&zghz3203);
-  CREATE(sail_int)(&zghz3204);
-  CREATE(sail_int)(&zghz3205);
-  CREATE(sail_int)(&zghz3206);
-  CREATE(sail_int)(&zghz3207);
-  CREATE(sail_int)(&zghz3208);
-  CREATE(sail_int)(&zghz3209);
-  CREATE(sail_int)(&zghz3210);
-  CREATE(sail_int)(&zghz3211);
-  CREATE(sail_int)(&zghz3212);
-  CREATE(sail_int)(&zghz3213);
-  CREATE(lbits)(&zghz3214);
-  CREATE(sail_int)(&zghz3215);
-  CREATE(sail_int)(&zghz3216);
   CREATE(sail_int)(&zghz3217);
+  CREATE(sail_int)(&zghz3218);
+  CREATE(sail_int)(&zghz3219);
+
+  CREATE(sail_int)(&zghz3221);
+  CREATE(sail_int)(&zghz3222);
+  CREATE(sail_int)(&zghz3223);
+
+
+
+
+
+  CREATE(sail_int)(&zghz3229);
+  CREATE(sail_int)(&zghz3230);
+  CREATE(sail_int)(&zghz3231);
+  CREATE(sail_int)(&zghz3232);
+  CREATE(sail_int)(&zghz3233);
+  CREATE(sail_int)(&zghz3234);
+  CREATE(sail_int)(&zghz3235);
+  CREATE(sail_int)(&zghz3236);
+  CREATE(sail_int)(&zghz3237);
+  CREATE(sail_int)(&zghz3238);
+  CREATE(sail_int)(&zghz3239);
+  CREATE(sail_int)(&zghz3240);
+  CREATE(sail_int)(&zghz3241);
+  CREATE(sail_int)(&zghz3242);
+  CREATE(sail_int)(&zghz3243);
+  CREATE(sail_int)(&zghz3244);
+  CREATE(sail_int)(&zghz3245);
+  CREATE(sail_int)(&zghz3246);
+  CREATE(sail_int)(&zghz3247);
+  CREATE(sail_int)(&zghz3248);
+  CREATE(lbits)(&zghz3249);
+  CREATE(sail_int)(&zghz3250);
+  CREATE(sail_int)(&zghz3251);
+  CREATE(sail_int)(&zghz3252);
 }
 
 // struct tuple_(%bit, %bv2, %bv2)
@@ -8574,531 +8325,519 @@ static bool EQUAL(ztuple_z8z5bitzCz0z5bv2zCz0z5bv2z9)(struct ztuple_z8z5bitzCz0z
 
 static struct zEncMetadata sailgen_capToMetadataBits(struct zCapability zcap)
 {
-  __label__ case_578, finish_match_577, end_function_579, end_block_exception_580;
+  __label__ case_542, finish_match_541, end_function_543, end_block_exception_544;
 
-  struct zEncMetadata zghz3176;
+  struct zEncMetadata zghz3210;
   uint64_t zE;
   {
-    int64_t zgaz3346;
+    int64_t zgaz3336;
     {
-      int64_t zgaz3345;
-      zgaz3345 = zcap.zE;
+      int64_t zgaz3335;
+      zgaz3335 = zcap.zE;
       {
-        RECREATE(sail_int)(&zghz3215);
-        CONVERT_OF(sail_int, mach_int)(&zghz3215, zcap_max_E);
-        RECREATE(sail_int)(&zghz3216);
-        CONVERT_OF(sail_int, mach_int)(&zghz3216, zgaz3345);
-        RECREATE(sail_int)(&zghz3217);
-        sub_int(&zghz3217, zghz3215, zghz3216);
-        zgaz3346 = CONVERT_OF(mach_int, sail_int)(zghz3217);
+        RECREATE(sail_int)(&zghz3250);
+        CONVERT_OF(sail_int, mach_int)(&zghz3250, zcap_max_E);
+        RECREATE(sail_int)(&zghz3251);
+        CONVERT_OF(sail_int, mach_int)(&zghz3251, zgaz3335);
+        RECREATE(sail_int)(&zghz3252);
+        sub_int(&zghz3252, zghz3250, zghz3251);
+        zgaz3336 = CONVERT_OF(mach_int, sail_int)(zghz3252);
       }
     }
     {
-      RECREATE(sail_int)(&zghz3212);
-      CONVERT_OF(sail_int, mach_int)(&zghz3212, zcap_E_width);
-      RECREATE(sail_int)(&zghz3213);
-      CONVERT_OF(sail_int, mach_int)(&zghz3213, zgaz3346);
-      RECREATE(lbits)(&zghz3214);
-      sailgen_to_bits(&zghz3214, zghz3212, zghz3213);
-      zE = CONVERT_OF(fbits, lbits)(zghz3214, true);
+      RECREATE(sail_int)(&zghz3247);
+      CONVERT_OF(sail_int, mach_int)(&zghz3247, zcap_E_width);
+      RECREATE(sail_int)(&zghz3248);
+      CONVERT_OF(sail_int, mach_int)(&zghz3248, zgaz3336);
+      RECREATE(lbits)(&zghz3249);
+      sailgen_to_bits(&zghz3249, zghz3247, zghz3248);
+      zE = CONVERT_OF(fbits, lbits)(zghz3249, true);
     }
   }
-  struct ztuple_z8z5bitzCz0z5bv2zCz0z5bv2z9 zgaz3321;
+  struct ztuple_z8z5bitzCz0z5bv2zCz0z5bv2z9 zgaz3309;
   {
-    bool zgaz3303;
-    zgaz3303 = zcap.zinternal_exponent;
-    if (zgaz3303) {
-      fbits zgaz3308;
+    bool zgaz3291;
+    zgaz3291 = zcap.zinternal_exponent;
+    if (zgaz3291) {
+      fbits zgaz3296;
       {
-        int64_t zgaz3304;
+        int64_t zgaz3292;
         {
-          RECREATE(sail_int)(&zghz3209);
-          CONVERT_OF(sail_int, mach_int)(&zghz3209, zcap_E_width);
-          RECREATE(sail_int)(&zghz3210);
-          CONVERT_OF(sail_int, mach_int)(&zghz3210, INT64_C(1));
-          RECREATE(sail_int)(&zghz3211);
-          sub_int(&zghz3211, zghz3209, zghz3210);
-          zgaz3304 = CONVERT_OF(mach_int, sail_int)(zghz3211);
+          RECREATE(sail_int)(&zghz3244);
+          CONVERT_OF(sail_int, mach_int)(&zghz3244, zcap_E_width);
+          RECREATE(sail_int)(&zghz3245);
+          CONVERT_OF(sail_int, mach_int)(&zghz3245, INT64_C(1));
+          RECREATE(sail_int)(&zghz3246);
+          sub_int(&zghz3246, zghz3244, zghz3245);
+          zgaz3292 = CONVERT_OF(mach_int, sail_int)(zghz3246);
         }
-        zgaz3308 = (UINT64_C(1) & (zE >> zgaz3304));
+        zgaz3296 = (UINT64_C(1) & (zE >> zgaz3292));
       }
-      uint64_t zgaz3309;
+      uint64_t zgaz3297;
       {
-        int64_t zgaz3306;
+        int64_t zgaz3294;
         {
-          int64_t zgaz3305;
+          int64_t zgaz3293;
           {
-            RECREATE(sail_int)(&zghz3206);
-            CONVERT_OF(sail_int, mach_int)(&zghz3206, zcap_xe_width);
-            RECREATE(sail_int)(&zghz3207);
-            CONVERT_OF(sail_int, mach_int)(&zghz3207, INT64_C(2));
-            RECREATE(sail_int)(&zghz3208);
-            mult_int(&zghz3208, zghz3206, zghz3207);
-            zgaz3305 = CONVERT_OF(mach_int, sail_int)(zghz3208);
+            RECREATE(sail_int)(&zghz3241);
+            CONVERT_OF(sail_int, mach_int)(&zghz3241, zcap_xe_width);
+            RECREATE(sail_int)(&zghz3242);
+            CONVERT_OF(sail_int, mach_int)(&zghz3242, INT64_C(2));
+            RECREATE(sail_int)(&zghz3243);
+            mult_int(&zghz3243, zghz3241, zghz3242);
+            zgaz3293 = CONVERT_OF(mach_int, sail_int)(zghz3243);
           }
           {
-            RECREATE(sail_int)(&zghz3203);
-            CONVERT_OF(sail_int, mach_int)(&zghz3203, zgaz3305);
-            RECREATE(sail_int)(&zghz3204);
-            CONVERT_OF(sail_int, mach_int)(&zghz3204, INT64_C(1));
-            RECREATE(sail_int)(&zghz3205);
-            sub_int(&zghz3205, zghz3203, zghz3204);
-            zgaz3306 = CONVERT_OF(mach_int, sail_int)(zghz3205);
+            RECREATE(sail_int)(&zghz3238);
+            CONVERT_OF(sail_int, mach_int)(&zghz3238, zgaz3293);
+            RECREATE(sail_int)(&zghz3239);
+            CONVERT_OF(sail_int, mach_int)(&zghz3239, INT64_C(1));
+            RECREATE(sail_int)(&zghz3240);
+            sub_int(&zghz3240, zghz3238, zghz3239);
+            zgaz3294 = CONVERT_OF(mach_int, sail_int)(zghz3240);
           }
         }
-        zgaz3309 = (safe_rshift(UINT64_MAX, 64 - 2) & (zE >> zcap_xe_width));
+        zgaz3297 = (safe_rshift(UINT64_MAX, 64 - 2) & (zE >> zcap_xe_width));
       }
-      uint64_t zgaz3310;
+      uint64_t zgaz3298;
       {
-        int64_t zgaz3307;
+        int64_t zgaz3295;
         {
-          RECREATE(sail_int)(&zghz3200);
-          CONVERT_OF(sail_int, mach_int)(&zghz3200, zcap_xe_width);
-          RECREATE(sail_int)(&zghz3201);
-          CONVERT_OF(sail_int, mach_int)(&zghz3201, INT64_C(1));
-          RECREATE(sail_int)(&zghz3202);
-          sub_int(&zghz3202, zghz3200, zghz3201);
-          zgaz3307 = CONVERT_OF(mach_int, sail_int)(zghz3202);
+          RECREATE(sail_int)(&zghz3235);
+          CONVERT_OF(sail_int, mach_int)(&zghz3235, zcap_xe_width);
+          RECREATE(sail_int)(&zghz3236);
+          CONVERT_OF(sail_int, mach_int)(&zghz3236, INT64_C(1));
+          RECREATE(sail_int)(&zghz3237);
+          sub_int(&zghz3237, zghz3235, zghz3236);
+          zgaz3295 = CONVERT_OF(mach_int, sail_int)(zghz3237);
         }
-        zgaz3310 = (safe_rshift(UINT64_MAX, 64 - 2) & (zE >> INT64_C(0)));
+        zgaz3298 = (safe_rshift(UINT64_MAX, 64 - 2) & (zE >> INT64_C(0)));
       }
-      struct ztuple_z8z5bitzCz0z5bv2zCz0z5bv2z9 zgsz3682;
-      zgsz3682.ztup0 = zgaz3308;
-      zgsz3682.ztup1 = zgaz3309;
-      zgsz3682.ztup2 = zgaz3310;
-      zgaz3321 = zgsz3682;
+      struct ztuple_z8z5bitzCz0z5bv2zCz0z5bv2z9 zgsz3693;
+      zgsz3693.ztup0 = zgaz3296;
+      zgsz3693.ztup1 = zgaz3297;
+      zgsz3693.ztup2 = zgaz3298;
+      zgaz3309 = zgsz3693;
     } else {
-      fbits zgaz3318;
+      fbits zgaz3306;
       {
-        uint64_t zgaz3313;
+        uint64_t zgaz3301;
         {
-          uint64_t zgaz3311;
-          zgaz3311 = zcap.zT;
-          uint64_t zgaz3312;
-          zgaz3312 = zcap.zB;
-          zgaz3313 = ((zgaz3311 - zgaz3312) & UINT64_C(0b1111111111));
+          uint64_t zgaz3299;
+          zgaz3299 = zcap.zT;
+          uint64_t zgaz3300;
+          zgaz3300 = zcap.zB;
+          zgaz3301 = ((zgaz3299 - zgaz3300) & UINT64_C(0b1111111111));
         }
-        zgaz3318 = (UINT64_C(1) & (zgaz3313 >> INT64_C(8)));
+        zgaz3306 = (UINT64_C(1) & (zgaz3301 >> INT64_C(8)));
       }
-      uint64_t zgaz3319;
+      uint64_t zgaz3307;
       {
-        uint64_t zgaz3314;
-        zgaz3314 = zcap.zT;
-        int64_t zgaz3315;
+        uint64_t zgaz3302;
+        zgaz3302 = zcap.zT;
+        int64_t zgaz3303;
         {
-          RECREATE(sail_int)(&zghz3197);
-          CONVERT_OF(sail_int, mach_int)(&zghz3197, zcap_xe_width);
-          RECREATE(sail_int)(&zghz3198);
-          CONVERT_OF(sail_int, mach_int)(&zghz3198, INT64_C(1));
-          RECREATE(sail_int)(&zghz3199);
-          sub_int(&zghz3199, zghz3197, zghz3198);
-          zgaz3315 = CONVERT_OF(mach_int, sail_int)(zghz3199);
+          RECREATE(sail_int)(&zghz3232);
+          CONVERT_OF(sail_int, mach_int)(&zghz3232, zcap_xe_width);
+          RECREATE(sail_int)(&zghz3233);
+          CONVERT_OF(sail_int, mach_int)(&zghz3233, INT64_C(1));
+          RECREATE(sail_int)(&zghz3234);
+          sub_int(&zghz3234, zghz3232, zghz3233);
+          zgaz3303 = CONVERT_OF(mach_int, sail_int)(zghz3234);
         }
-        zgaz3319 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz3314 >> INT64_C(0)));
+        zgaz3307 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz3302 >> INT64_C(0)));
       }
-      uint64_t zgaz3320;
+      uint64_t zgaz3308;
       {
-        uint64_t zgaz3316;
-        zgaz3316 = zcap.zB;
-        int64_t zgaz3317;
+        uint64_t zgaz3304;
+        zgaz3304 = zcap.zB;
+        int64_t zgaz3305;
         {
-          RECREATE(sail_int)(&zghz3194);
-          CONVERT_OF(sail_int, mach_int)(&zghz3194, zcap_xe_width);
-          RECREATE(sail_int)(&zghz3195);
-          CONVERT_OF(sail_int, mach_int)(&zghz3195, INT64_C(1));
-          RECREATE(sail_int)(&zghz3196);
-          sub_int(&zghz3196, zghz3194, zghz3195);
-          zgaz3317 = CONVERT_OF(mach_int, sail_int)(zghz3196);
+          RECREATE(sail_int)(&zghz3229);
+          CONVERT_OF(sail_int, mach_int)(&zghz3229, zcap_xe_width);
+          RECREATE(sail_int)(&zghz3230);
+          CONVERT_OF(sail_int, mach_int)(&zghz3230, INT64_C(1));
+          RECREATE(sail_int)(&zghz3231);
+          sub_int(&zghz3231, zghz3229, zghz3230);
+          zgaz3305 = CONVERT_OF(mach_int, sail_int)(zghz3231);
         }
-        zgaz3320 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz3316 >> INT64_C(0)));
+        zgaz3308 = (safe_rshift(UINT64_MAX, 64 - 2) & (zgaz3304 >> INT64_C(0)));
       }
-      struct ztuple_z8z5bitzCz0z5bv2zCz0z5bv2z9 zgsz3681;
-      zgsz3681.ztup0 = zgaz3318;
-      zgsz3681.ztup1 = zgaz3319;
-      zgsz3681.ztup2 = zgaz3320;
-      zgaz3321 = zgsz3681;
+      struct ztuple_z8z5bitzCz0z5bv2zCz0z5bv2z9 zgsz3692;
+      zgsz3692.ztup0 = zgaz3306;
+      zgsz3692.ztup1 = zgaz3307;
+      zgsz3692.ztup2 = zgaz3308;
+      zgaz3309 = zgsz3692;
     }
   }
   {
     fbits zL8;
-    zL8 = zgaz3321.ztup0;
+    zL8 = zgaz3309.ztup0;
     uint64_t zTE;
-    zTE = zgaz3321.ztup1;
+    zTE = zgaz3309.ztup1;
     uint64_t zBE;
-    zBE = zgaz3321.ztup2;
+    zBE = zgaz3309.ztup2;
     int64_t zMW;
     zMW = zcap_mantissa_width;
-    struct zEncMetadata zghz3177;
+    struct zEncMetadata zghz3211;
     {
-      struct zEncMetadata zghz3178;
+      struct zEncMetadata zghz3212;
       {
-        struct zEncMetadata zghz3179;
+        struct zEncMetadata zghz3213;
         {
-          struct zEncMetadata zghz3180;
+          struct zEncMetadata zghz3214;
           {
-            struct zEncMetadata zghz3181;
+            struct zEncMetadata zghz3215;
             {
-              struct zEncMetadata zghz3182;
+              struct zEncMetadata zghz3216;
               {
-                struct zEncMetadata zghz3186;
+                struct zEncMetadata zghz3220;
                 {
-                  struct zEncMetadata zghz3190;
+                  struct zEncMetadata zghz3224;
                   {
-                    struct zEncMetadata zghz3191;
+                    struct zEncMetadata zghz3225;
                     {
-                      struct zEncMetadata zghz3192;
+                      struct zEncMetadata zghz3226;
                       {
-                        uint64_t zgaz3322;
-                        zgaz3322 = zcap.zreserved_0;
-                        struct zEncMetadata zghz3193;
-                        zghz3193.zbits = UINT64_C(0x00000000);
-                        zghz3192 = sailgen__update_EncMetadata_reserved_0(zghz3193, zgaz3322);
+                        struct zEncMetadata zghz3227;
+                        {
+                          uint64_t zgaz3310;
+                          zgaz3310 = zcap.zsd_perms;
+                          struct zEncMetadata zghz3228;
+                          zghz3228.zbits = UINT64_C(0x00000000);
+                          zghz3227 = sailgen__update_EncMetadata_SDP(zghz3228, zgaz3310);
+                        }
+                        uint64_t zgaz3312;
+                        zgaz3312 = zcap.zap_m;
+                        zghz3226 = sailgen__update_EncMetadata_AP_M(zghz3227, zgaz3312);
                       }
-                      uint64_t zgaz3324;
-                      zgaz3324 = zcap.zreserved_1;
-                      zghz3191 = sailgen__update_EncMetadata_reserved_1(zghz3192, zgaz3324);
+                      uint64_t zgaz3314;
+                      zgaz3314 = zcap.zcl;
+                      zghz3225 = sailgen__update_EncMetadata_CL(zghz3226, zgaz3314);
                     }
-                    zghz3190 = sailgen__update_EncMetadata_BE(zghz3191, zBE);
+                    uint64_t zgaz3317;
+                    {
+                      bool zgaz3315;
+                      zgaz3315 = zcap.zsealed;
+                      zgaz3317 = sailgen_bool_bits_forwards(zgaz3315);
+                    }
+                    zghz3224 = sailgen__update_EncMetadata_CT(zghz3225, zgaz3317);
                   }
-                  zghz3186 = sailgen__update_EncMetadata_TE(zghz3190, zTE);
-                }
-                uint64_t zgaz3330;
-                {
-                  uint64_t zgaz3327;
-                  zgaz3327 = zcap.zB;
-                  int64_t zgaz3328;
+                  uint64_t zgaz3320;
                   {
-                    RECREATE(sail_int)(&zghz3187);
-                    CONVERT_OF(sail_int, mach_int)(&zghz3187, zMW);
-                    RECREATE(sail_int)(&zghz3188);
-                    CONVERT_OF(sail_int, mach_int)(&zghz3188, INT64_C(1));
-                    RECREATE(sail_int)(&zghz3189);
-                    sub_int(&zghz3189, zghz3187, zghz3188);
-                    zgaz3328 = CONVERT_OF(mach_int, sail_int)(zghz3189);
+                    bool zgaz3318;
+                    zgaz3318 = zcap.zinternal_exponent;
+                    zgaz3320 = sailgen_internal_exponent_encdec_forwards(zgaz3318);
                   }
-                  zgaz3330 = (safe_rshift(UINT64_MAX, 64 - 8) & (zgaz3327 >> zcap_xe_width));
+                  zghz3220 = sailgen__update_EncMetadata_EF(zghz3224, zgaz3320);
                 }
-                zghz3182 = sailgen__update_EncMetadata_Bm(zghz3186, zgaz3330);
-              }
-              uint64_t zgaz3334;
-              {
-                uint64_t zgaz3331;
-                zgaz3331 = zcap.zT;
-                int64_t zgaz3332;
+                uint64_t zgaz3324;
                 {
-                  RECREATE(sail_int)(&zghz3183);
-                  CONVERT_OF(sail_int, mach_int)(&zghz3183, zMW);
-                  RECREATE(sail_int)(&zghz3184);
-                  CONVERT_OF(sail_int, mach_int)(&zghz3184, INT64_C(3));
-                  RECREATE(sail_int)(&zghz3185);
-                  sub_int(&zghz3185, zghz3183, zghz3184);
-                  zgaz3332 = CONVERT_OF(mach_int, sail_int)(zghz3185);
+                  uint64_t zgaz3321;
+                  zgaz3321 = zcap.zT;
+                  int64_t zgaz3322;
+                  {
+                    RECREATE(sail_int)(&zghz3221);
+                    CONVERT_OF(sail_int, mach_int)(&zghz3221, zMW);
+                    RECREATE(sail_int)(&zghz3222);
+                    CONVERT_OF(sail_int, mach_int)(&zghz3222, INT64_C(3));
+                    RECREATE(sail_int)(&zghz3223);
+                    sub_int(&zghz3223, zghz3221, zghz3222);
+                    zgaz3322 = CONVERT_OF(mach_int, sail_int)(zghz3223);
+                  }
+                  zgaz3324 = (safe_rshift(UINT64_MAX, 64 - 6) & (zgaz3321 >> zcap_xe_width));
                 }
-                zgaz3334 = (safe_rshift(UINT64_MAX, 64 - 6) & (zgaz3331 >> zcap_xe_width));
+                zghz3216 = sailgen__update_EncMetadata_Tm(zghz3220, zgaz3324);
               }
-              zghz3181 = sailgen__update_EncMetadata_Tm(zghz3182, zgaz3334);
+              uint64_t zgaz3328;
+              {
+                uint64_t zgaz3325;
+                zgaz3325 = zcap.zB;
+                int64_t zgaz3326;
+                {
+                  RECREATE(sail_int)(&zghz3217);
+                  CONVERT_OF(sail_int, mach_int)(&zghz3217, zMW);
+                  RECREATE(sail_int)(&zghz3218);
+                  CONVERT_OF(sail_int, mach_int)(&zghz3218, INT64_C(1));
+                  RECREATE(sail_int)(&zghz3219);
+                  sub_int(&zghz3219, zghz3217, zghz3218);
+                  zgaz3326 = CONVERT_OF(mach_int, sail_int)(zghz3219);
+                }
+                zgaz3328 = (safe_rshift(UINT64_MAX, 64 - 8) & (zgaz3325 >> zcap_xe_width));
+              }
+              zghz3215 = sailgen__update_EncMetadata_Bm(zghz3216, zgaz3328);
             }
-            uint64_t zgaz3337;
-            {
-              bool zgaz3335;
-              zgaz3335 = zcap.zinternal_exponent;
-              zgaz3337 = sailgen_internal_exponent_encdec_forwards(zgaz3335);
-            }
-            zghz3180 = sailgen__update_EncMetadata_EF(zghz3181, zgaz3337);
+            zghz3214 = sailgen__update_EncMetadata_TE(zghz3215, zTE);
           }
-          uint64_t zgaz3340;
-          {
-            bool zgaz3338;
-            zgaz3338 = zcap.zsealed;
-            zgaz3340 = sailgen_bool_bits_forwards(zgaz3338);
-          }
-          zghz3179 = sailgen__update_EncMetadata_CT(zghz3180, zgaz3340);
+          zghz3213 = sailgen__update_EncMetadata_BE(zghz3214, zBE);
         }
-        uint64_t zgaz3342;
-        zgaz3342 = zcap.zap_m;
-        zghz3178 = sailgen__update_EncMetadata_AP_M(zghz3179, zgaz3342);
+        uint64_t zgaz3332;
+        zgaz3332 = zcap.zreserved_1;
+        zghz3212 = sailgen__update_EncMetadata_reserved_1(zghz3213, zgaz3332);
       }
-      uint64_t zgaz3344;
-      zgaz3344 = zcap.zsd_perms;
-      zghz3177 = sailgen__update_EncMetadata_SDP(zghz3178, zgaz3344);
+      uint64_t zgaz3334;
+      zgaz3334 = zcap.zreserved_0;
+      zghz3211 = sailgen__update_EncMetadata_reserved_0(zghz3212, zgaz3334);
     }
-    uint64_t zgsz3685;
-    zgsz3685 = UINT64_C(0b0);
-    zgsz3685 = update_fbits(zgsz3685, INT64_C(0), zL8);
-    zghz3176 = sailgen_setMetadataL8(zghz3177, zgsz3685);
-    goto finish_match_577;
+    uint64_t zgsz3696;
+    zgsz3696 = UINT64_C(0b0);
+    zgsz3696 = update_fbits(zgsz3696, INT64_C(0), zL8);
+    zghz3210 = sailgen_setMetadataL8(zghz3211, zgsz3696);
+    goto finish_match_541;
   }
-case_578: ;
+case_542: ;
   sail_match_failure("capToMetadataBits");
-finish_match_577: ;
-
-
-end_function_579: ;
-  return zghz3176;
-end_block_exception_580: ;
-  struct zEncMetadata zcbz3106 = { .zbits = UINT64_C(0xdeadc0de) };
-  return zcbz3106;
+finish_match_541: ;
+end_function_543: ;
+  return zghz3210;
+end_block_exception_544: ;
+  struct zEncMetadata zcbz3108 = { .zbits = UINT64_C(0xdeadc0de) };
+  return zcbz3108;
 }
 
 
 
 static void finish_sailgen_capToMetadataBits(void)
 {
+  KILL(sail_int)(&zghz3252);
+  KILL(sail_int)(&zghz3251);
+  KILL(sail_int)(&zghz3250);
+  KILL(lbits)(&zghz3249);
+  KILL(sail_int)(&zghz3248);
+  KILL(sail_int)(&zghz3247);
+  KILL(sail_int)(&zghz3246);
+  KILL(sail_int)(&zghz3245);
+  KILL(sail_int)(&zghz3244);
+  KILL(sail_int)(&zghz3243);
+  KILL(sail_int)(&zghz3242);
+  KILL(sail_int)(&zghz3241);
+  KILL(sail_int)(&zghz3240);
+  KILL(sail_int)(&zghz3239);
+  KILL(sail_int)(&zghz3238);
+  KILL(sail_int)(&zghz3237);
+  KILL(sail_int)(&zghz3236);
+  KILL(sail_int)(&zghz3235);
+  KILL(sail_int)(&zghz3234);
+  KILL(sail_int)(&zghz3233);
+  KILL(sail_int)(&zghz3232);
+  KILL(sail_int)(&zghz3231);
+  KILL(sail_int)(&zghz3230);
+  KILL(sail_int)(&zghz3229);
+  KILL(sail_int)(&zghz3223);
+  KILL(sail_int)(&zghz3222);
+  KILL(sail_int)(&zghz3221);
+  KILL(sail_int)(&zghz3219);
+  KILL(sail_int)(&zghz3218);
   KILL(sail_int)(&zghz3217);
-  KILL(sail_int)(&zghz3216);
-  KILL(sail_int)(&zghz3215);
-  KILL(lbits)(&zghz3214);
-  KILL(sail_int)(&zghz3213);
-  KILL(sail_int)(&zghz3212);
-  KILL(sail_int)(&zghz3211);
-  KILL(sail_int)(&zghz3210);
-  KILL(sail_int)(&zghz3209);
-  KILL(sail_int)(&zghz3208);
-  KILL(sail_int)(&zghz3207);
-  KILL(sail_int)(&zghz3206);
-  KILL(sail_int)(&zghz3205);
-  KILL(sail_int)(&zghz3204);
-  KILL(sail_int)(&zghz3203);
-  KILL(sail_int)(&zghz3202);
-  KILL(sail_int)(&zghz3201);
-  KILL(sail_int)(&zghz3200);
-  KILL(sail_int)(&zghz3199);
-  KILL(sail_int)(&zghz3198);
-  KILL(sail_int)(&zghz3197);
-  KILL(sail_int)(&zghz3196);
-  KILL(sail_int)(&zghz3195);
-  KILL(sail_int)(&zghz3194);
-
-
-
-
-  KILL(sail_int)(&zghz3189);
-  KILL(sail_int)(&zghz3188);
-  KILL(sail_int)(&zghz3187);
-
-  KILL(sail_int)(&zghz3185);
-  KILL(sail_int)(&zghz3184);
-  KILL(sail_int)(&zghz3183);
-
-
-
-
-
-
-
 }
 
 static struct zCapability znull_cap;
-static void create_letbind_23(void) {
-
-
-  struct zCapability zgsz3688;
-  uint64_t zgaz3349;
-  {
-    uint64_t zgaz3348;
-    {
-      int64_t zgaz3347;
-      {
-        sail_int zgsz3955;
-        CREATE(sail_int)(&zgsz3955);
-        CONVERT_OF(sail_int, mach_int)(&zgsz3955, zcap_mantissa_width);
-        sail_int zgsz3956;
-        CREATE(sail_int)(&zgsz3956);
-        CONVERT_OF(sail_int, mach_int)(&zgsz3956, INT64_C(2));
-        sail_int zgsz3957;
-        CREATE(sail_int)(&zgsz3957);
-        sub_int(&zgsz3957, zgsz3955, zgsz3956);
-        zgaz3347 = CONVERT_OF(mach_int, sail_int)(zgsz3957);
-        KILL(sail_int)(&zgsz3957);
-        KILL(sail_int)(&zgsz3956);
-        KILL(sail_int)(&zgsz3955);
-      }
-      {
-        sail_int zgsz3953;
-        CREATE(sail_int)(&zgsz3953);
-        CONVERT_OF(sail_int, mach_int)(&zgsz3953, zgaz3347);
-        lbits zgsz3954;
-        CREATE(lbits)(&zgsz3954);
-        sailgen_zzeros_implicit(&zgsz3954, zgsz3953);
-        zgaz3348 = CONVERT_OF(fbits, lbits)(zgsz3954, true);
-        KILL(lbits)(&zgsz3954);
-        KILL(sail_int)(&zgsz3953);
-      }
-    }
-    zgaz3349 = (UINT64_C(0b01) << 8) | zgaz3348;
-  }
-  struct zCapability zgsz3687;
-  zgsz3687.zB = UINT64_C(0b0000000000);
-  zgsz3687.zE = zcap_max_E;
-  zgsz3687.zT = zgaz3349;
-  zgsz3687.zaddress = UINT64_C(0x00000000);
-  zgsz3687.zap_m = znull_ap_m;
-  zgsz3687.zinternal_exponent = true;
-  zgsz3687.zreserved_0 = UINT64_C(0b000);
-  zgsz3687.zreserved_1 = UINT64_C(0b0);
-  zgsz3687.zsd_perms = UINT64_C(0b00);
-  zgsz3687.zsealed = false;
-  zgsz3687.ztag = false;
-  zgsz3688 = zgsz3687;
-
-
-  znull_cap = zgsz3688;
-
-let_end_581: ;
-}
-static void kill_letbind_23(void) {
-}
-
-static struct zCapability zinfinite_cap;
 static void create_letbind_24(void) {
 
 
-  struct zCapability zgsz3690;
-  struct zCapability zgsz3689;
-  zgsz3689 = znull_cap;
-  zgsz3689.zap_m = zinfinite_ap_m;
-  zgsz3689.zsd_perms = UINT64_C(0b11);
-  zgsz3689.ztag = true;
-  zgsz3690 = zgsz3689;
-
-  zinfinite_cap = zgsz3690;
-
-let_end_582: ;
+  struct zCapability zgsz3699;
+  uint64_t zgaz3339;
+  {
+    uint64_t zgaz3338;
+    {
+      int64_t zgaz3337;
+      {
+        sail_int zgsz3977;
+        CREATE(sail_int)(&zgsz3977);
+        CONVERT_OF(sail_int, mach_int)(&zgsz3977, zcap_mantissa_width);
+        sail_int zgsz3978;
+        CREATE(sail_int)(&zgsz3978);
+        CONVERT_OF(sail_int, mach_int)(&zgsz3978, INT64_C(2));
+        sail_int zgsz3979;
+        CREATE(sail_int)(&zgsz3979);
+        sub_int(&zgsz3979, zgsz3977, zgsz3978);
+        zgaz3337 = CONVERT_OF(mach_int, sail_int)(zgsz3979);
+        KILL(sail_int)(&zgsz3979);
+        KILL(sail_int)(&zgsz3978);
+        KILL(sail_int)(&zgsz3977);
+      }
+      {
+        sail_int zgsz3975;
+        CREATE(sail_int)(&zgsz3975);
+        CONVERT_OF(sail_int, mach_int)(&zgsz3975, zgaz3337);
+        lbits zgsz3976;
+        CREATE(lbits)(&zgsz3976);
+        sailgen_zzeros_implicit(&zgsz3976, zgsz3975);
+        zgaz3338 = CONVERT_OF(fbits, lbits)(zgsz3976, true);
+        KILL(lbits)(&zgsz3976);
+        KILL(sail_int)(&zgsz3975);
+      }
+    }
+    zgaz3339 = (UINT64_C(0b01) << 8) | zgaz3338;
+  }
+  struct zCapability zgsz3698;
+  zgsz3698.zB = UINT64_C(0b0000000000);
+  zgsz3698.zE = zcap_max_E;
+  zgsz3698.zT = zgaz3339;
+  zgsz3698.zaddress = UINT64_C(0x00000000);
+  zgsz3698.zap_m = znull_ap_m;
+  zgsz3698.zcl = UINT64_C(0b0);
+  zgsz3698.zinternal_exponent = true;
+  zgsz3698.zreserved_0 = UINT64_C(0b00);
+  zgsz3698.zreserved_1 = UINT64_C(0b0);
+  zgsz3698.zsd_perms = UINT64_C(0b00);
+  zgsz3698.zsealed = false;
+  zgsz3698.ztag = false;
+  zgsz3699 = zgsz3698;
+  znull_cap = zgsz3699;
+let_end_545: ;
 }
 static void kill_letbind_24(void) {
 }
 
+static struct zCapability zinfinite_cap;
+static void create_letbind_25(void) {
+
+
+  struct zCapability zgsz3701;
+  struct zCapability zgsz3700;
+  zgsz3700 = znull_cap;
+  zgsz3700.zap_m = zinfinite_ap_m;
+  zgsz3700.zcl = UINT64_C(0b1);
+  zgsz3700.zsd_perms = UINT64_C(0b11);
+  zgsz3700.ztag = true;
+  zgsz3701 = zgsz3700;
+  zinfinite_cap = zgsz3701;
+let_end_546: ;
+}
+static void kill_letbind_25(void) {
+}
+
 static bool sailgen_boundsMalformed(struct zCapability);
 
-sail_int zghz3218;
-sail_int zghz3219;
-sail_int zghz3220;
-sail_int zghz3221;
-sail_int zghz3222;
-sail_int zghz3223;
-sail_int zghz3224;
-lbits zghz3225;
+sail_int zghz3253;
+sail_int zghz3254;
+sail_int zghz3255;
+sail_int zghz3256;
+sail_int zghz3257;
+sail_int zghz3258;
+sail_int zghz3259;
+lbits zghz3260;
 
 static void startup_sailgen_boundsMalformed(void)
 {
-  CREATE(sail_int)(&zghz3218);
-  CREATE(sail_int)(&zghz3219);
-  CREATE(sail_int)(&zghz3220);
-  CREATE(sail_int)(&zghz3221);
-  CREATE(sail_int)(&zghz3222);
-  CREATE(sail_int)(&zghz3223);
-  CREATE(sail_int)(&zghz3224);
-  CREATE(lbits)(&zghz3225);
+  CREATE(sail_int)(&zghz3253);
+  CREATE(sail_int)(&zghz3254);
+  CREATE(sail_int)(&zghz3255);
+  CREATE(sail_int)(&zghz3256);
+  CREATE(sail_int)(&zghz3257);
+  CREATE(sail_int)(&zghz3258);
+  CREATE(sail_int)(&zghz3259);
+  CREATE(lbits)(&zghz3260);
 }
 
 static bool sailgen_boundsMalformed(struct zCapability zcap)
 {
-  __label__ end_function_584, end_block_exception_585;
+  __label__ end_function_548, end_block_exception_549;
 
-  bool zcbz362;
-  bool zgaz3364;
-  zgaz3364 = zcap.zinternal_exponent;
-  bool zgsz3697;
-  if (zgaz3364) {
+  bool zcbz363;
+  bool zgaz3354;
+  zgaz3354 = zcap.zinternal_exponent;
+  bool zgsz3708;
+  if (zgaz3354) {
     int64_t zMW;
     zMW = zcap_mantissa_width;
     bool zmalformedMSB;
     {
-      bool zgaz3363;
+      bool zgaz3353;
       {
-        bool zgaz3356;
+        bool zgaz3346;
         {
-          int64_t zgaz3353;
-          zgaz3353 = zcap.zE;
-          zgaz3356 = (zgaz3353 == zcap_max_E);
+          int64_t zgaz3343;
+          zgaz3343 = zcap.zE;
+          zgaz3346 = (zgaz3343 == zcap_max_E);
         }
-        bool zgsz3691;
-        if (zgaz3356) {
-          uint64_t zgaz3354;
-          zgaz3354 = zcap.zB;
-          uint64_t zgaz3355;
+        bool zgsz3702;
+        if (zgaz3346) {
+          uint64_t zgaz3344;
+          zgaz3344 = zcap.zB;
+          uint64_t zgaz3345;
           {
-            RECREATE(sail_int)(&zghz3224);
-            CONVERT_OF(sail_int, mach_int)(&zghz3224, zMW);
-            RECREATE(lbits)(&zghz3225);
-            sailgen_zzeros_implicit(&zghz3225, zghz3224);
-            zgaz3355 = CONVERT_OF(fbits, lbits)(zghz3225, true);
+            RECREATE(sail_int)(&zghz3259);
+            CONVERT_OF(sail_int, mach_int)(&zghz3259, zMW);
+            RECREATE(lbits)(&zghz3260);
+            sailgen_zzeros_implicit(&zghz3260, zghz3259);
+            zgaz3345 = CONVERT_OF(fbits, lbits)(zghz3260, true);
           }
-          zgsz3691 = (zgaz3354 != zgaz3355);
-        } else {  zgsz3691 = false;  }
-        zgaz3363 = zgsz3691;
+          zgsz3702 = (zgaz3344 != zgaz3345);
+        } else {  zgsz3702 = false;  }
+        zgaz3353 = zgsz3702;
       }
-      bool zgsz3693;
-      if (zgaz3363) {  zgsz3693 = true;  } else {
-        bool zgaz3362;
+      bool zgsz3704;
+      if (zgaz3353) {  zgsz3704 = true;  } else {
+        bool zgaz3352;
         {
-          int64_t zgaz3357;
-          zgaz3357 = zcap.zE;
-          int64_t zgaz3358;
+          int64_t zgaz3347;
+          zgaz3347 = zcap.zE;
+          int64_t zgaz3348;
           {
-            RECREATE(sail_int)(&zghz3221);
-            CONVERT_OF(sail_int, mach_int)(&zghz3221, zcap_max_E);
-            RECREATE(sail_int)(&zghz3222);
-            CONVERT_OF(sail_int, mach_int)(&zghz3222, INT64_C(1));
-            RECREATE(sail_int)(&zghz3223);
-            sub_int(&zghz3223, zghz3221, zghz3222);
-            zgaz3358 = CONVERT_OF(mach_int, sail_int)(zghz3223);
+            RECREATE(sail_int)(&zghz3256);
+            CONVERT_OF(sail_int, mach_int)(&zghz3256, zcap_max_E);
+            RECREATE(sail_int)(&zghz3257);
+            CONVERT_OF(sail_int, mach_int)(&zghz3257, INT64_C(1));
+            RECREATE(sail_int)(&zghz3258);
+            sub_int(&zghz3258, zghz3256, zghz3257);
+            zgaz3348 = CONVERT_OF(mach_int, sail_int)(zghz3258);
           }
-          zgaz3362 = (zgaz3357 == zgaz3358);
+          zgaz3352 = (zgaz3347 == zgaz3348);
         }
-        bool zgsz3692;
-        if (zgaz3362) {
-          fbits zgaz3361;
+        bool zgsz3703;
+        if (zgaz3352) {
+          fbits zgaz3351;
           {
-            uint64_t zgaz3359;
-            zgaz3359 = zcap.zB;
-            int64_t zgaz3360;
+            uint64_t zgaz3349;
+            zgaz3349 = zcap.zB;
+            int64_t zgaz3350;
             {
-              RECREATE(sail_int)(&zghz3218);
-              CONVERT_OF(sail_int, mach_int)(&zghz3218, zMW);
-              RECREATE(sail_int)(&zghz3219);
-              CONVERT_OF(sail_int, mach_int)(&zghz3219, INT64_C(1));
-              RECREATE(sail_int)(&zghz3220);
-              sub_int(&zghz3220, zghz3218, zghz3219);
-              zgaz3360 = CONVERT_OF(mach_int, sail_int)(zghz3220);
+              RECREATE(sail_int)(&zghz3253);
+              CONVERT_OF(sail_int, mach_int)(&zghz3253, zMW);
+              RECREATE(sail_int)(&zghz3254);
+              CONVERT_OF(sail_int, mach_int)(&zghz3254, INT64_C(1));
+              RECREATE(sail_int)(&zghz3255);
+              sub_int(&zghz3255, zghz3253, zghz3254);
+              zgaz3350 = CONVERT_OF(mach_int, sail_int)(zghz3255);
             }
-            zgaz3361 = (UINT64_C(1) & (zgaz3359 >> zgaz3360));
+            zgaz3351 = (UINT64_C(1) & (zgaz3349 >> zgaz3350));
           }
-          zgsz3692 = sailgen_neq_anythingzItzK(zgaz3361, UINT64_C(0));
-        } else {  zgsz3692 = false;  }
-        zgsz3693 = zgsz3692;
+          zgsz3703 = sailgen_neq_anythingzItzK(zgaz3351, UINT64_C(0));
+        } else {  zgsz3703 = false;  }
+        zgsz3704 = zgsz3703;
       }
-      zmalformedMSB = zgsz3693;
+      zmalformedMSB = zgsz3704;
     }
     bool zmalformedLSB;
     {
-      bool zgaz3352;
+      bool zgaz3342;
       {
-        int64_t zgaz3350;
-        zgaz3350 = zcap.zE;
-        zgaz3352 = (zgaz3350 < INT64_C(0));
+        int64_t zgaz3340;
+        zgaz3340 = zcap.zE;
+        zgaz3342 = (zgaz3340 < INT64_C(0));
       }
-      bool zgsz3695;
-      if (zgaz3352) {  zgsz3695 = true;  } else {
-        bool zgsz3694;
+      bool zgsz3706;
+      if (zgaz3342) {  zgsz3706 = true;  } else {
+        bool zgsz3705;
         if (zcap_use_L8) {
-          int64_t zgaz3351;
-          zgaz3351 = zcap.zE;
-          zgsz3694 = (zgaz3351 == INT64_C(0));
-        } else {  zgsz3694 = false;  }
-        zgsz3695 = zgsz3694;
+          int64_t zgaz3341;
+          zgaz3341 = zcap.zE;
+          zgsz3705 = (zgaz3341 == INT64_C(0));
+        } else {  zgsz3705 = false;  }
+        zgsz3706 = zgsz3705;
       }
-      zmalformedLSB = zgsz3695;
+      zmalformedLSB = zgsz3706;
     }
-    bool zgsz3696;
-    if (zmalformedMSB) {  zgsz3696 = true;  } else {  zgsz3696 = zmalformedLSB;  }
-    zgsz3697 = zgsz3696;
-  } else {  zgsz3697 = false;  }
-  zcbz362 = zgsz3697;
-
-end_function_584: ;
-  return zcbz362;
-end_block_exception_585: ;
+    bool zgsz3707;
+    if (zmalformedMSB) {  zgsz3707 = true;  } else {  zgsz3707 = zmalformedLSB;  }
+    zgsz3708 = zgsz3707;
+  } else {  zgsz3708 = false;  }
+  zcbz363 = zgsz3708;
+end_function_548: ;
+  return zcbz363;
+end_block_exception_549: ;
 
   return false;
 }
@@ -9107,150 +8846,148 @@ end_block_exception_585: ;
 
 static void finish_sailgen_boundsMalformed(void)
 {
-  KILL(lbits)(&zghz3225);
-  KILL(sail_int)(&zghz3224);
-  KILL(sail_int)(&zghz3223);
-  KILL(sail_int)(&zghz3222);
-  KILL(sail_int)(&zghz3221);
-  KILL(sail_int)(&zghz3220);
-  KILL(sail_int)(&zghz3219);
-  KILL(sail_int)(&zghz3218);
+  KILL(lbits)(&zghz3260);
+  KILL(sail_int)(&zghz3259);
+  KILL(sail_int)(&zghz3258);
+  KILL(sail_int)(&zghz3257);
+  KILL(sail_int)(&zghz3256);
+  KILL(sail_int)(&zghz3255);
+  KILL(sail_int)(&zghz3254);
+  KILL(sail_int)(&zghz3253);
 }
 
 static void sailgen_getCapBoundsBits(struct zoptionzIz8bzCbz9zK *rop, struct zCapability);
 
-sail_int zghz3226;
-sail_int zghz3227;
-sail_int zghz3228;
-lbits zghz3229;
-sail_int zghz3230;
-lbits zghz3231;
-lbits zghz3232;
-lbits zghz3233;
-sail_int zghz3234;
-sail_int zghz3235;
-sail_int zghz3236;
-sail_int zghz3237;
-sail_int zghz3238;
-sail_int zghz3239;
-sail_int zghz3240;
-sail_int zghz3241;
-sail_int zghz3242;
-lbits zghz3243;
-sail_int zghz3244;
-lbits zghz3245;
-lbits zghz3246;
-lbits zghz3247;
-sail_int zghz3248;
-lbits zghz3249;
-lbits zghz3250;
-sail_int zghz3251;
-lbits zghz3252;
-lbits zghz3253;
-sail_int zghz3254;
-lbits zghz3255;
-lbits zghz3256;
-lbits zghz3257;
-sail_int zghz3258;
-lbits zghz3259;
-lbits zghz3260;
 sail_int zghz3261;
-lbits zghz3262;
-lbits zghz3263;
-sail_int zghz3264;
-lbits zghz3265;
-sail_int zghz3266;
-sail_int zghz3267;
-sail_int zghz3268;
+sail_int zghz3262;
+sail_int zghz3263;
+lbits zghz3264;
+sail_int zghz3265;
+lbits zghz3266;
+lbits zghz3267;
+lbits zghz3268;
 sail_int zghz3269;
 sail_int zghz3270;
 sail_int zghz3271;
-lbits zghz3272;
-lbits zghz3273;
-lbits zghz3274;
-lbits zghz3275;
-lbits zghz3276;
-lbits zghz3277;
-sail_int zghz3278;
-lbits zghz3279;
-sail_int zghz3280;
-sail_int zghz3281;
-sail_int zghz3282;
-lbits zghz3283;
-sail_int zghz3284;
+sail_int zghz3272;
+sail_int zghz3273;
+sail_int zghz3274;
+sail_int zghz3275;
+sail_int zghz3276;
+sail_int zghz3277;
+lbits zghz3278;
+sail_int zghz3279;
+lbits zghz3280;
+lbits zghz3281;
+lbits zghz3282;
+sail_int zghz3283;
+lbits zghz3284;
 lbits zghz3285;
-lbits zghz3286;
-sail_int zghz3287;
+sail_int zghz3286;
+lbits zghz3287;
 lbits zghz3288;
+sail_int zghz3289;
+lbits zghz3290;
+lbits zghz3291;
+lbits zghz3292;
+sail_int zghz3293;
+lbits zghz3294;
+lbits zghz3295;
+sail_int zghz3296;
+lbits zghz3297;
+lbits zghz3298;
+sail_int zghz3299;
+lbits zghz3300;
+sail_int zghz3301;
+sail_int zghz3302;
+sail_int zghz3303;
+sail_int zghz3304;
+sail_int zghz3305;
+sail_int zghz3306;
+lbits zghz3307;
+lbits zghz3308;
+lbits zghz3309;
+lbits zghz3310;
+lbits zghz3311;
+lbits zghz3312;
+sail_int zghz3313;
+lbits zghz3314;
+sail_int zghz3315;
+sail_int zghz3316;
+sail_int zghz3317;
+lbits zghz3318;
+sail_int zghz3319;
+lbits zghz3320;
+lbits zghz3321;
+sail_int zghz3322;
+lbits zghz3323;
 
 static void startup_sailgen_getCapBoundsBits(void)
 {
-  CREATE(sail_int)(&zghz3226);
-  CREATE(sail_int)(&zghz3227);
-  CREATE(sail_int)(&zghz3228);
-  CREATE(lbits)(&zghz3229);
-  CREATE(sail_int)(&zghz3230);
-  CREATE(lbits)(&zghz3231);
-  CREATE(lbits)(&zghz3232);
-  CREATE(lbits)(&zghz3233);
-  CREATE(sail_int)(&zghz3234);
-  CREATE(sail_int)(&zghz3235);
-  CREATE(sail_int)(&zghz3236);
-  CREATE(sail_int)(&zghz3237);
-  CREATE(sail_int)(&zghz3238);
-  CREATE(sail_int)(&zghz3239);
-  CREATE(sail_int)(&zghz3240);
-  CREATE(sail_int)(&zghz3241);
-  CREATE(sail_int)(&zghz3242);
-  CREATE(lbits)(&zghz3243);
-  CREATE(sail_int)(&zghz3244);
-  CREATE(lbits)(&zghz3245);
-  CREATE(lbits)(&zghz3246);
-  CREATE(lbits)(&zghz3247);
-  CREATE(sail_int)(&zghz3248);
-  CREATE(lbits)(&zghz3249);
-  CREATE(lbits)(&zghz3250);
-  CREATE(sail_int)(&zghz3251);
-  CREATE(lbits)(&zghz3252);
-  CREATE(lbits)(&zghz3253);
-  CREATE(sail_int)(&zghz3254);
-  CREATE(lbits)(&zghz3255);
-  CREATE(lbits)(&zghz3256);
-  CREATE(lbits)(&zghz3257);
-  CREATE(sail_int)(&zghz3258);
-  CREATE(lbits)(&zghz3259);
-  CREATE(lbits)(&zghz3260);
   CREATE(sail_int)(&zghz3261);
-  CREATE(lbits)(&zghz3262);
-  CREATE(lbits)(&zghz3263);
-  CREATE(sail_int)(&zghz3264);
-  CREATE(lbits)(&zghz3265);
-  CREATE(sail_int)(&zghz3266);
-  CREATE(sail_int)(&zghz3267);
-  CREATE(sail_int)(&zghz3268);
+  CREATE(sail_int)(&zghz3262);
+  CREATE(sail_int)(&zghz3263);
+  CREATE(lbits)(&zghz3264);
+  CREATE(sail_int)(&zghz3265);
+  CREATE(lbits)(&zghz3266);
+  CREATE(lbits)(&zghz3267);
+  CREATE(lbits)(&zghz3268);
   CREATE(sail_int)(&zghz3269);
   CREATE(sail_int)(&zghz3270);
   CREATE(sail_int)(&zghz3271);
-  CREATE(lbits)(&zghz3272);
-  CREATE(lbits)(&zghz3273);
-  CREATE(lbits)(&zghz3274);
-  CREATE(lbits)(&zghz3275);
-  CREATE(lbits)(&zghz3276);
-  CREATE(lbits)(&zghz3277);
-  CREATE(sail_int)(&zghz3278);
-  CREATE(lbits)(&zghz3279);
-  CREATE(sail_int)(&zghz3280);
-  CREATE(sail_int)(&zghz3281);
-  CREATE(sail_int)(&zghz3282);
-  CREATE(lbits)(&zghz3283);
-  CREATE(sail_int)(&zghz3284);
+  CREATE(sail_int)(&zghz3272);
+  CREATE(sail_int)(&zghz3273);
+  CREATE(sail_int)(&zghz3274);
+  CREATE(sail_int)(&zghz3275);
+  CREATE(sail_int)(&zghz3276);
+  CREATE(sail_int)(&zghz3277);
+  CREATE(lbits)(&zghz3278);
+  CREATE(sail_int)(&zghz3279);
+  CREATE(lbits)(&zghz3280);
+  CREATE(lbits)(&zghz3281);
+  CREATE(lbits)(&zghz3282);
+  CREATE(sail_int)(&zghz3283);
+  CREATE(lbits)(&zghz3284);
   CREATE(lbits)(&zghz3285);
-  CREATE(lbits)(&zghz3286);
-  CREATE(sail_int)(&zghz3287);
+  CREATE(sail_int)(&zghz3286);
+  CREATE(lbits)(&zghz3287);
   CREATE(lbits)(&zghz3288);
+  CREATE(sail_int)(&zghz3289);
+  CREATE(lbits)(&zghz3290);
+  CREATE(lbits)(&zghz3291);
+  CREATE(lbits)(&zghz3292);
+  CREATE(sail_int)(&zghz3293);
+  CREATE(lbits)(&zghz3294);
+  CREATE(lbits)(&zghz3295);
+  CREATE(sail_int)(&zghz3296);
+  CREATE(lbits)(&zghz3297);
+  CREATE(lbits)(&zghz3298);
+  CREATE(sail_int)(&zghz3299);
+  CREATE(lbits)(&zghz3300);
+  CREATE(sail_int)(&zghz3301);
+  CREATE(sail_int)(&zghz3302);
+  CREATE(sail_int)(&zghz3303);
+  CREATE(sail_int)(&zghz3304);
+  CREATE(sail_int)(&zghz3305);
+  CREATE(sail_int)(&zghz3306);
+  CREATE(lbits)(&zghz3307);
+  CREATE(lbits)(&zghz3308);
+  CREATE(lbits)(&zghz3309);
+  CREATE(lbits)(&zghz3310);
+  CREATE(lbits)(&zghz3311);
+  CREATE(lbits)(&zghz3312);
+  CREATE(sail_int)(&zghz3313);
+  CREATE(lbits)(&zghz3314);
+  CREATE(sail_int)(&zghz3315);
+  CREATE(sail_int)(&zghz3316);
+  CREATE(sail_int)(&zghz3317);
+  CREATE(lbits)(&zghz3318);
+  CREATE(sail_int)(&zghz3319);
+  CREATE(lbits)(&zghz3320);
+  CREATE(lbits)(&zghz3321);
+  CREATE(sail_int)(&zghz3322);
+  CREATE(lbits)(&zghz3323);
 }
-
-
 
 // struct tuple_(%bv32, %bv33)
 struct ztuple_z8z5bv32zCz0z5bv33z9 {
@@ -9267,482 +9004,464 @@ static bool EQUAL(ztuple_z8z5bv32zCz0z5bv33z9)(struct ztuple_z8z5bv32zCz0z5bv33z
   return EQUAL(fbits)(op1.ztup0, op2.ztup0) && EQUAL(fbits)(op1.ztup1, op2.ztup1);
 }
 
-static void sailgen_getCapBoundsBits(struct zoptionzIz8bzCbz9zK *zcbz363, struct zCapability zc)
+static void sailgen_getCapBoundsBits(struct zoptionzIz8bzCbz9zK *zcbz364, struct zCapability zc)
 {
-  __label__ end_function_587, end_block_exception_590, end_function_707;
+  __label__ end_function_551, end_block_exception_554, end_function_671;
 
   {
-    bool zgaz3365;
-    zgaz3365 = sailgen_boundsMalformed(zc);
-    unit zgsz3698;
-    if (zgaz3365) {
-      __label__ cleanup_588, end_cleanup_589;
+    bool zgaz3355;
+    zgaz3355 = sailgen_boundsMalformed(zc);
+    unit zgsz3709;
+    if (zgaz3355) {
+      __label__ cleanup_552, end_cleanup_553;
 
-      struct zoptionzIz8bzCbz9zK zgaz3366;
-      CREATE(zoptionzIz8bzCbz9zK)(&zgaz3366);
-      sailgen_NonezIz8bzCbz9zK(&zgaz3366, UNIT);
-      COPY(zoptionzIz8bzCbz9zK)((*(&zcbz363)), zgaz3366);
-      goto cleanup_588;
+      struct zoptionzIz8bzCbz9zK zgaz3356;
+      CREATE(zoptionzIz8bzCbz9zK)(&zgaz3356);
+      sailgen_NonezIz8bzCbz9zK(&zgaz3356, UNIT);
+      COPY(zoptionzIz8bzCbz9zK)((*(&zcbz364)), zgaz3356);
+      goto cleanup_552;
       /* unreachable after return */
-      KILL(zoptionzIz8bzCbz9zK)(&zgaz3366);
-      goto end_cleanup_589;
-    cleanup_588: ;
-      KILL(zoptionzIz8bzCbz9zK)(&zgaz3366);
-      goto end_function_587;
-    end_cleanup_589: ;
-    } else {  zgsz3698 = UNIT;  }
+      KILL(zoptionzIz8bzCbz9zK)(&zgaz3356);
+      goto end_cleanup_553;
+    cleanup_552: ;
+      KILL(zoptionzIz8bzCbz9zK)(&zgaz3356);
+      goto end_function_551;
+    end_cleanup_553: ;
+    } else {  zgsz3709 = UNIT;  }
   }
   int64_t zE;
   zE = zc.zE;
   {
-    bool zgaz3367;
-    zgaz3367 = (zE >= INT64_C(0));
-    unit zgsz3699;
-    zgsz3699 = sail_assert(zgaz3367, "Cap is malformed if E<0");
+    bool zgaz3357;
+    zgaz3357 = (zE >= INT64_C(0));
+    unit zgsz3710;
+    zgsz3710 = sail_assert(zgaz3357, "Cap is malformed if E<0");
   }
   uint64_t za;
   za = zc.zaddress;
   uint64_t za_mid;
   {
-    uint64_t zgaz3399;
+    uint64_t zgaz3389;
     {
-      RECREATE(lbits)(&zghz3286);
-      CONVERT_OF(lbits, fbits)(&zghz3286, za, UINT64_C(32) , true);
-      RECREATE(sail_int)(&zghz3287);
-      CONVERT_OF(sail_int, mach_int)(&zghz3287, zE);
-      RECREATE(lbits)(&zghz3288);
-      shiftr(&zghz3288, zghz3286, zghz3287);
-      zgaz3399 = CONVERT_OF(fbits, lbits)(zghz3288, true);
+      RECREATE(lbits)(&zghz3321);
+      CONVERT_OF(lbits, fbits)(&zghz3321, za, UINT64_C(32) , true);
+      RECREATE(sail_int)(&zghz3322);
+      CONVERT_OF(sail_int, mach_int)(&zghz3322, zE);
+      RECREATE(lbits)(&zghz3323);
+      shiftr(&zghz3323, zghz3321, zghz3322);
+      zgaz3389 = CONVERT_OF(fbits, lbits)(zghz3323, true);
     }
     {
-      RECREATE(lbits)(&zghz3283);
-      CONVERT_OF(lbits, fbits)(&zghz3283, zgaz3399, UINT64_C(32) , true);
-      RECREATE(sail_int)(&zghz3284);
-      CONVERT_OF(sail_int, mach_int)(&zghz3284, zcap_mantissa_width);
-      RECREATE(lbits)(&zghz3285);
-      sail_truncate(&zghz3285, zghz3283, zghz3284);
-      za_mid = CONVERT_OF(fbits, lbits)(zghz3285, true);
+      RECREATE(lbits)(&zghz3318);
+      CONVERT_OF(lbits, fbits)(&zghz3318, zgaz3389, UINT64_C(32) , true);
+      RECREATE(sail_int)(&zghz3319);
+      CONVERT_OF(sail_int, mach_int)(&zghz3319, zcap_mantissa_width);
+      RECREATE(lbits)(&zghz3320);
+      sail_truncate(&zghz3320, zghz3318, zghz3319);
+      za_mid = CONVERT_OF(fbits, lbits)(zghz3320, true);
     }
   }
   uint64_t zR;
   {
-    uint64_t zgaz3397;
-    zgaz3397 = zc.zB;
-    uint64_t zgaz3398;
+    uint64_t zgaz3387;
+    zgaz3387 = zc.zB;
+    uint64_t zgaz3388;
     {
-      uint64_t zgaz3396;
+      uint64_t zgaz3386;
       {
-        int64_t zgaz3395;
+        int64_t zgaz3385;
         {
-          RECREATE(sail_int)(&zghz3280);
-          CONVERT_OF(sail_int, mach_int)(&zghz3280, zcap_mantissa_width);
-          RECREATE(sail_int)(&zghz3281);
-          CONVERT_OF(sail_int, mach_int)(&zghz3281, INT64_C(2));
-          RECREATE(sail_int)(&zghz3282);
-          sub_int(&zghz3282, zghz3280, zghz3281);
-          zgaz3395 = CONVERT_OF(mach_int, sail_int)(zghz3282);
+          RECREATE(sail_int)(&zghz3315);
+          CONVERT_OF(sail_int, mach_int)(&zghz3315, zcap_mantissa_width);
+          RECREATE(sail_int)(&zghz3316);
+          CONVERT_OF(sail_int, mach_int)(&zghz3316, INT64_C(2));
+          RECREATE(sail_int)(&zghz3317);
+          sub_int(&zghz3317, zghz3315, zghz3316);
+          zgaz3385 = CONVERT_OF(mach_int, sail_int)(zghz3317);
         }
         {
-          RECREATE(sail_int)(&zghz3278);
-          CONVERT_OF(sail_int, mach_int)(&zghz3278, zgaz3395);
-          RECREATE(lbits)(&zghz3279);
-          sailgen_zzeros_implicit(&zghz3279, zghz3278);
-          zgaz3396 = CONVERT_OF(fbits, lbits)(zghz3279, true);
+          RECREATE(sail_int)(&zghz3313);
+          CONVERT_OF(sail_int, mach_int)(&zghz3313, zgaz3385);
+          RECREATE(lbits)(&zghz3314);
+          sailgen_zzeros_implicit(&zghz3314, zghz3313);
+          zgaz3386 = CONVERT_OF(fbits, lbits)(zghz3314, true);
         }
       }
-      zgaz3398 = (UINT64_C(0b01) << 8) | zgaz3396;
+      zgaz3388 = (UINT64_C(0b01) << 8) | zgaz3386;
     }
-    zR = ((zgaz3397 - zgaz3398) & UINT64_C(0b1111111111));
+    zR = ((zgaz3387 - zgaz3388) & UINT64_C(0b1111111111));
   }
   int64_t zaHi;
   {
-    bool zgaz3394;
+    bool zgaz3384;
     {
-      RECREATE(lbits)(&zghz3276);
-      CONVERT_OF(lbits, fbits)(&zghz3276, za_mid, UINT64_C(10) , true);
-      RECREATE(lbits)(&zghz3277);
-      CONVERT_OF(lbits, fbits)(&zghz3277, zR, UINT64_C(10) , true);
-      zgaz3394 = sailgen_z8operatorz0zI_uz9(zghz3276, zghz3277);
+      RECREATE(lbits)(&zghz3311);
+      CONVERT_OF(lbits, fbits)(&zghz3311, za_mid, UINT64_C(10) , true);
+      RECREATE(lbits)(&zghz3312);
+      CONVERT_OF(lbits, fbits)(&zghz3312, zR, UINT64_C(10) , true);
+      zgaz3384 = sailgen_z8operatorz0zI_uz9(zghz3311, zghz3312);
     }
-    if (zgaz3394) {  zaHi = INT64_C(1);  } else {  zaHi = INT64_C(0);  }
+    if (zgaz3384) {  zaHi = INT64_C(1);  } else {  zaHi = INT64_C(0);  }
   }
   int64_t zbHi;
   {
-    bool zgaz3393;
+    bool zgaz3383;
     {
-      uint64_t zgaz3392;
-      zgaz3392 = zc.zB;
+      uint64_t zgaz3382;
+      zgaz3382 = zc.zB;
       {
-        RECREATE(lbits)(&zghz3274);
-        CONVERT_OF(lbits, fbits)(&zghz3274, zgaz3392, UINT64_C(10) , true);
-        RECREATE(lbits)(&zghz3275);
-        CONVERT_OF(lbits, fbits)(&zghz3275, zR, UINT64_C(10) , true);
-        zgaz3393 = sailgen_z8operatorz0zI_uz9(zghz3274, zghz3275);
+        RECREATE(lbits)(&zghz3309);
+        CONVERT_OF(lbits, fbits)(&zghz3309, zgaz3382, UINT64_C(10) , true);
+        RECREATE(lbits)(&zghz3310);
+        CONVERT_OF(lbits, fbits)(&zghz3310, zR, UINT64_C(10) , true);
+        zgaz3383 = sailgen_z8operatorz0zI_uz9(zghz3309, zghz3310);
       }
     }
-    if (zgaz3393) {  zbHi = INT64_C(1);  } else {  zbHi = INT64_C(0);  }
+    if (zgaz3383) {  zbHi = INT64_C(1);  } else {  zbHi = INT64_C(0);  }
   }
   int64_t ztHi;
   {
-    bool zgaz3391;
+    bool zgaz3381;
     {
-      uint64_t zgaz3390;
-      zgaz3390 = zc.zT;
+      uint64_t zgaz3380;
+      zgaz3380 = zc.zT;
       {
-        RECREATE(lbits)(&zghz3272);
-        CONVERT_OF(lbits, fbits)(&zghz3272, zgaz3390, UINT64_C(10) , true);
-        RECREATE(lbits)(&zghz3273);
-        CONVERT_OF(lbits, fbits)(&zghz3273, zR, UINT64_C(10) , true);
-        zgaz3391 = sailgen_z8operatorz0zI_uz9(zghz3272, zghz3273);
+        RECREATE(lbits)(&zghz3307);
+        CONVERT_OF(lbits, fbits)(&zghz3307, zgaz3380, UINT64_C(10) , true);
+        RECREATE(lbits)(&zghz3308);
+        CONVERT_OF(lbits, fbits)(&zghz3308, zR, UINT64_C(10) , true);
+        zgaz3381 = sailgen_z8operatorz0zI_uz9(zghz3307, zghz3308);
       }
     }
-    if (zgaz3391) {  ztHi = INT64_C(1);  } else {  ztHi = INT64_C(0);  }
+    if (zgaz3381) {  ztHi = INT64_C(1);  } else {  ztHi = INT64_C(0);  }
   }
   int64_t zcorrection_base;
   {
-    RECREATE(sail_int)(&zghz3269);
-    CONVERT_OF(sail_int, mach_int)(&zghz3269, zbHi);
-    RECREATE(sail_int)(&zghz3270);
-    CONVERT_OF(sail_int, mach_int)(&zghz3270, zaHi);
-    RECREATE(sail_int)(&zghz3271);
-    sub_int(&zghz3271, zghz3269, zghz3270);
-    zcorrection_base = CONVERT_OF(mach_int, sail_int)(zghz3271);
+    RECREATE(sail_int)(&zghz3304);
+    CONVERT_OF(sail_int, mach_int)(&zghz3304, zbHi);
+    RECREATE(sail_int)(&zghz3305);
+    CONVERT_OF(sail_int, mach_int)(&zghz3305, zaHi);
+    RECREATE(sail_int)(&zghz3306);
+    sub_int(&zghz3306, zghz3304, zghz3305);
+    zcorrection_base = CONVERT_OF(mach_int, sail_int)(zghz3306);
   }
   int64_t zcorrection_top;
   {
-    RECREATE(sail_int)(&zghz3266);
-    CONVERT_OF(sail_int, mach_int)(&zghz3266, ztHi);
-    RECREATE(sail_int)(&zghz3267);
-    CONVERT_OF(sail_int, mach_int)(&zghz3267, zaHi);
-    RECREATE(sail_int)(&zghz3268);
-    sub_int(&zghz3268, zghz3266, zghz3267);
-    zcorrection_top = CONVERT_OF(mach_int, sail_int)(zghz3268);
+    RECREATE(sail_int)(&zghz3301);
+    CONVERT_OF(sail_int, mach_int)(&zghz3301, ztHi);
+    RECREATE(sail_int)(&zghz3302);
+    CONVERT_OF(sail_int, mach_int)(&zghz3302, zaHi);
+    RECREATE(sail_int)(&zghz3303);
+    sub_int(&zghz3303, zghz3301, zghz3302);
+    zcorrection_top = CONVERT_OF(mach_int, sail_int)(zghz3303);
   }
   uint64_t za_top;
   {
-    int64_t zgaz3389;
-    zgaz3389 = (zE + zcap_mantissa_width);
+    int64_t zgaz3379;
+    zgaz3379 = (zE + zcap_mantissa_width);
     {
-      RECREATE(lbits)(&zghz3263);
-      CONVERT_OF(lbits, fbits)(&zghz3263, za, UINT64_C(32) , true);
-      RECREATE(sail_int)(&zghz3264);
-      CONVERT_OF(sail_int, mach_int)(&zghz3264, zgaz3389);
-      RECREATE(lbits)(&zghz3265);
-      shiftr(&zghz3265, zghz3263, zghz3264);
-      za_top = CONVERT_OF(fbits, lbits)(zghz3265, true);
+      RECREATE(lbits)(&zghz3298);
+      CONVERT_OF(lbits, fbits)(&zghz3298, za, UINT64_C(32) , true);
+      RECREATE(sail_int)(&zghz3299);
+      CONVERT_OF(sail_int, mach_int)(&zghz3299, zgaz3379);
+      RECREATE(lbits)(&zghz3300);
+      shiftr(&zghz3300, zghz3298, zghz3299);
+      za_top = CONVERT_OF(fbits, lbits)(zghz3300, true);
     }
   }
   uint64_t zbase;
   {
-    RECREATE(lbits)(&zghz3253);
+    RECREATE(lbits)(&zghz3288);
     {
-      uint64_t zgaz3386;
+      uint64_t zgaz3376;
       {
-        RECREATE(lbits)(&zghz3260);
-        CONVERT_OF(lbits, fbits)(&zghz3260, za_top, UINT64_C(32) , true);
-        RECREATE(sail_int)(&zghz3261);
-        CONVERT_OF(sail_int, mach_int)(&zghz3261, zcorrection_base);
-        RECREATE(lbits)(&zghz3262);
-        add_bits_int(&zghz3262, zghz3260, zghz3261);
-        zgaz3386 = CONVERT_OF(fbits, lbits)(zghz3262, true);
+        RECREATE(lbits)(&zghz3295);
+        CONVERT_OF(lbits, fbits)(&zghz3295, za_top, UINT64_C(32) , true);
+        RECREATE(sail_int)(&zghz3296);
+        CONVERT_OF(sail_int, mach_int)(&zghz3296, zcorrection_base);
+        RECREATE(lbits)(&zghz3297);
+        add_bits_int(&zghz3297, zghz3295, zghz3296);
+        zgaz3376 = CONVERT_OF(fbits, lbits)(zghz3297, true);
       }
-      sbits zgaz3387;
+      sbits zgaz3377;
       {
-        uint64_t zgaz3384;
-        zgaz3384 = zc.zB;
-        sbits zgaz3385;
+        uint64_t zgaz3374;
+        zgaz3374 = zc.zB;
+        sbits zgaz3375;
         {
-          RECREATE(sail_int)(&zghz3258);
-          CONVERT_OF(sail_int, mach_int)(&zghz3258, zE);
-          RECREATE(lbits)(&zghz3259);
-          sailgen_zzeros_implicit(&zghz3259, zghz3258);
-          zgaz3385 = CONVERT_OF(sbits, lbits)(zghz3259, true);
+          RECREATE(sail_int)(&zghz3293);
+          CONVERT_OF(sail_int, mach_int)(&zghz3293, zE);
+          RECREATE(lbits)(&zghz3294);
+          sailgen_zzeros_implicit(&zghz3294, zghz3293);
+          zgaz3375 = CONVERT_OF(sbits, lbits)(zghz3294, true);
         }
-        zgaz3387 = append_fs(zgaz3384, 10, zgaz3385);
+        zgaz3377 = append_fs(zgaz3374, 10, zgaz3375);
       }
       {
-        RECREATE(lbits)(&zghz3256);
-        CONVERT_OF(lbits, fbits)(&zghz3256, zgaz3386, UINT64_C(32) , true);
-        RECREATE(lbits)(&zghz3257);
-        CONVERT_OF(lbits, sbits)(&zghz3257, zgaz3387, true);
-        append(&zghz3253, zghz3256, zghz3257);
+        RECREATE(lbits)(&zghz3291);
+        CONVERT_OF(lbits, fbits)(&zghz3291, zgaz3376, UINT64_C(32) , true);
+        RECREATE(lbits)(&zghz3292);
+        CONVERT_OF(lbits, sbits)(&zghz3292, zgaz3377, true);
+        append(&zghz3288, zghz3291, zghz3292);
       }
     }
     {
-      RECREATE(sail_int)(&zghz3254);
-      CONVERT_OF(sail_int, mach_int)(&zghz3254, zcap_len_width);
-      RECREATE(lbits)(&zghz3255);
-      sail_truncate(&zghz3255, zghz3253, zghz3254);
-      zbase = CONVERT_OF(fbits, lbits)(zghz3255, true);
+      RECREATE(sail_int)(&zghz3289);
+      CONVERT_OF(sail_int, mach_int)(&zghz3289, zcap_len_width);
+      RECREATE(lbits)(&zghz3290);
+      sail_truncate(&zghz3290, zghz3288, zghz3289);
+      zbase = CONVERT_OF(fbits, lbits)(zghz3290, true);
     }
   }
   uint64_t ztop;
   {
-    RECREATE(lbits)(&zghz3243);
+    RECREATE(lbits)(&zghz3278);
     {
-      uint64_t zgaz3381;
+      uint64_t zgaz3371;
       {
-        RECREATE(lbits)(&zghz3250);
-        CONVERT_OF(lbits, fbits)(&zghz3250, za_top, UINT64_C(32) , true);
-        RECREATE(sail_int)(&zghz3251);
-        CONVERT_OF(sail_int, mach_int)(&zghz3251, zcorrection_top);
-        RECREATE(lbits)(&zghz3252);
-        add_bits_int(&zghz3252, zghz3250, zghz3251);
-        zgaz3381 = CONVERT_OF(fbits, lbits)(zghz3252, true);
+        RECREATE(lbits)(&zghz3285);
+        CONVERT_OF(lbits, fbits)(&zghz3285, za_top, UINT64_C(32) , true);
+        RECREATE(sail_int)(&zghz3286);
+        CONVERT_OF(sail_int, mach_int)(&zghz3286, zcorrection_top);
+        RECREATE(lbits)(&zghz3287);
+        add_bits_int(&zghz3287, zghz3285, zghz3286);
+        zgaz3371 = CONVERT_OF(fbits, lbits)(zghz3287, true);
       }
-      sbits zgaz3382;
+      sbits zgaz3372;
       {
-        uint64_t zgaz3379;
-        zgaz3379 = zc.zT;
-        sbits zgaz3380;
+        uint64_t zgaz3369;
+        zgaz3369 = zc.zT;
+        sbits zgaz3370;
         {
-          RECREATE(sail_int)(&zghz3248);
-          CONVERT_OF(sail_int, mach_int)(&zghz3248, zE);
-          RECREATE(lbits)(&zghz3249);
-          sailgen_zzeros_implicit(&zghz3249, zghz3248);
-          zgaz3380 = CONVERT_OF(sbits, lbits)(zghz3249, true);
+          RECREATE(sail_int)(&zghz3283);
+          CONVERT_OF(sail_int, mach_int)(&zghz3283, zE);
+          RECREATE(lbits)(&zghz3284);
+          sailgen_zzeros_implicit(&zghz3284, zghz3283);
+          zgaz3370 = CONVERT_OF(sbits, lbits)(zghz3284, true);
         }
-        zgaz3382 = append_fs(zgaz3379, 10, zgaz3380);
+        zgaz3372 = append_fs(zgaz3369, 10, zgaz3370);
       }
       {
-        RECREATE(lbits)(&zghz3246);
-        CONVERT_OF(lbits, fbits)(&zghz3246, zgaz3381, UINT64_C(32) , true);
-        RECREATE(lbits)(&zghz3247);
-        CONVERT_OF(lbits, sbits)(&zghz3247, zgaz3382, true);
-        append(&zghz3243, zghz3246, zghz3247);
+        RECREATE(lbits)(&zghz3281);
+        CONVERT_OF(lbits, fbits)(&zghz3281, zgaz3371, UINT64_C(32) , true);
+        RECREATE(lbits)(&zghz3282);
+        CONVERT_OF(lbits, sbits)(&zghz3282, zgaz3372, true);
+        append(&zghz3278, zghz3281, zghz3282);
       }
     }
     {
-      RECREATE(sail_int)(&zghz3244);
-      CONVERT_OF(sail_int, mach_int)(&zghz3244, zcap_len_width);
-      RECREATE(lbits)(&zghz3245);
-      sail_truncate(&zghz3245, zghz3243, zghz3244);
-      ztop = CONVERT_OF(fbits, lbits)(zghz3245, true);
+      RECREATE(sail_int)(&zghz3279);
+      CONVERT_OF(sail_int, mach_int)(&zghz3279, zcap_len_width);
+      RECREATE(lbits)(&zghz3280);
+      sail_truncate(&zghz3280, zghz3278, zghz3279);
+      ztop = CONVERT_OF(fbits, lbits)(zghz3280, true);
     }
   }
   uint64_t zbase2;
   {
-    uint64_t zgaz3378;
+    uint64_t zgaz3368;
     {
-      fbits zgaz3377;
+      fbits zgaz3367;
       {
-        int64_t zgaz3376;
+        int64_t zgaz3366;
         {
-          RECREATE(sail_int)(&zghz3240);
-          CONVERT_OF(sail_int, mach_int)(&zghz3240, zcap_addr_width);
-          RECREATE(sail_int)(&zghz3241);
-          CONVERT_OF(sail_int, mach_int)(&zghz3241, INT64_C(1));
-          RECREATE(sail_int)(&zghz3242);
-          sub_int(&zghz3242, zghz3240, zghz3241);
-          zgaz3376 = CONVERT_OF(mach_int, sail_int)(zghz3242);
+          RECREATE(sail_int)(&zghz3275);
+          CONVERT_OF(sail_int, mach_int)(&zghz3275, zcap_addr_width);
+          RECREATE(sail_int)(&zghz3276);
+          CONVERT_OF(sail_int, mach_int)(&zghz3276, INT64_C(1));
+          RECREATE(sail_int)(&zghz3277);
+          sub_int(&zghz3277, zghz3275, zghz3276);
+          zgaz3366 = CONVERT_OF(mach_int, sail_int)(zghz3277);
         }
-        zgaz3377 = (UINT64_C(1) & (zbase >> zgaz3376));
+        zgaz3367 = (UINT64_C(1) & (zbase >> zgaz3366));
       }
-      zgaz3378 = UINT64_C(0b0);
-      zgaz3378 = update_fbits(zgaz3378, INT64_C(0), zgaz3377);
+      zgaz3368 = UINT64_C(0b0);
+      zgaz3368 = update_fbits(zgaz3368, INT64_C(0), zgaz3367);
     }
-    zbase2 = (UINT64_C(0b0) << 1) | zgaz3378;
+    zbase2 = (UINT64_C(0b0) << 1) | zgaz3368;
   }
   uint64_t ztop2;
   {
-    int64_t zgaz3375;
+    int64_t zgaz3365;
     {
-      RECREATE(sail_int)(&zghz3237);
-      CONVERT_OF(sail_int, mach_int)(&zghz3237, zcap_addr_width);
-      RECREATE(sail_int)(&zghz3238);
-      CONVERT_OF(sail_int, mach_int)(&zghz3238, INT64_C(1));
-      RECREATE(sail_int)(&zghz3239);
-      sub_int(&zghz3239, zghz3237, zghz3238);
-      zgaz3375 = CONVERT_OF(mach_int, sail_int)(zghz3239);
+      RECREATE(sail_int)(&zghz3272);
+      CONVERT_OF(sail_int, mach_int)(&zghz3272, zcap_addr_width);
+      RECREATE(sail_int)(&zghz3273);
+      CONVERT_OF(sail_int, mach_int)(&zghz3273, INT64_C(1));
+      RECREATE(sail_int)(&zghz3274);
+      sub_int(&zghz3274, zghz3272, zghz3273);
+      zgaz3365 = CONVERT_OF(mach_int, sail_int)(zghz3274);
     }
-    ztop2 = (safe_rshift(UINT64_MAX, 64 - 2) & (ztop >> zgaz3375));
+    ztop2 = (safe_rshift(UINT64_MAX, 64 - 2) & (ztop >> zgaz3365));
   }
   {
-    bool zgaz3371;
+    bool zgaz3361;
     {
-      bool zgaz3370;
+      bool zgaz3360;
       {
-        int64_t zgaz3368;
+        int64_t zgaz3358;
         {
-          RECREATE(sail_int)(&zghz3234);
-          CONVERT_OF(sail_int, mach_int)(&zghz3234, zcap_max_E);
-          RECREATE(sail_int)(&zghz3235);
-          CONVERT_OF(sail_int, mach_int)(&zghz3235, INT64_C(1));
-          RECREATE(sail_int)(&zghz3236);
-          sub_int(&zghz3236, zghz3234, zghz3235);
-          zgaz3368 = CONVERT_OF(mach_int, sail_int)(zghz3236);
+          RECREATE(sail_int)(&zghz3269);
+          CONVERT_OF(sail_int, mach_int)(&zghz3269, zcap_max_E);
+          RECREATE(sail_int)(&zghz3270);
+          CONVERT_OF(sail_int, mach_int)(&zghz3270, INT64_C(1));
+          RECREATE(sail_int)(&zghz3271);
+          sub_int(&zghz3271, zghz3269, zghz3270);
+          zgaz3358 = CONVERT_OF(mach_int, sail_int)(zghz3271);
         }
-        zgaz3370 = (zE < zgaz3368);
+        zgaz3360 = (zE < zgaz3358);
       }
-      bool zgsz3701;
-      if (zgaz3370) {
-        uint64_t zgaz3369;
-        zgaz3369 = ((ztop2 - zbase2) & UINT64_C(0b11));
+      bool zgsz3712;
+      if (zgaz3360) {
+        uint64_t zgaz3359;
+        zgaz3359 = ((ztop2 - zbase2) & UINT64_C(0b11));
         {
-          RECREATE(lbits)(&zghz3232);
-          CONVERT_OF(lbits, fbits)(&zghz3232, zgaz3369, UINT64_C(2) , true);
-          RECREATE(lbits)(&zghz3233);
-          CONVERT_OF(lbits, fbits)(&zghz3233, UINT64_C(0b01), UINT64_C(2) , true);
-          zgsz3701 = sailgen_z8operatorz0zK_uz9(zghz3232, zghz3233);
+          RECREATE(lbits)(&zghz3267);
+          CONVERT_OF(lbits, fbits)(&zghz3267, zgaz3359, UINT64_C(2) , true);
+          RECREATE(lbits)(&zghz3268);
+          CONVERT_OF(lbits, fbits)(&zghz3268, UINT64_C(0b01), UINT64_C(2) , true);
+          zgsz3712 = sailgen_z8operatorz0zK_uz9(zghz3267, zghz3268);
         }
-      } else {  zgsz3701 = false;  }
-      zgaz3371 = zgsz3701;
+      } else {  zgsz3712 = false;  }
+      zgaz3361 = zgsz3712;
     }
-    unit zgsz3702;
-    if (zgaz3371) {
-      fbits zgaz3373;
+    unit zgsz3713;
+    if (zgaz3361) {
+      fbits zgaz3363;
       {
-        fbits zgaz3372;
-        zgaz3372 = (UINT64_C(1) & (ztop >> zcap_addr_width));
-        zgaz3373 = sailgen_not_bit(zgaz3372);
+        fbits zgaz3362;
+        zgaz3362 = (UINT64_C(1) & (ztop >> zcap_addr_width));
+        zgaz3363 = sailgen_not_bit(zgaz3362);
       }
       {
-        RECREATE(lbits)(&zghz3229);
-        CONVERT_OF(lbits, fbits)(&zghz3229, ztop, UINT64_C(33) , true);
-        RECREATE(sail_int)(&zghz3230);
-        CONVERT_OF(sail_int, mach_int)(&zghz3230, zcap_addr_width);
-        RECREATE(lbits)(&zghz3231);
-        update_lbits(&zghz3231, zghz3229, zghz3230, zgaz3373);
-        ztop = CONVERT_OF(fbits, lbits)(zghz3231, true);
+        RECREATE(lbits)(&zghz3264);
+        CONVERT_OF(lbits, fbits)(&zghz3264, ztop, UINT64_C(33) , true);
+        RECREATE(sail_int)(&zghz3265);
+        CONVERT_OF(sail_int, mach_int)(&zghz3265, zcap_addr_width);
+        RECREATE(lbits)(&zghz3266);
+        update_lbits(&zghz3266, zghz3264, zghz3265, zgaz3363);
+        ztop = CONVERT_OF(fbits, lbits)(zghz3266, true);
       }
-      zgsz3702 = UNIT;
-    } else {  zgsz3702 = UNIT;  }
+      zgsz3713 = UNIT;
+    } else {  zgsz3713 = UNIT;  }
   }
-  uint64_t zbaseshadowz39;
+  uint64_t zbaseshadowz316;
   {
-    int64_t zgaz3374;
+    int64_t zgaz3364;
     {
-      RECREATE(sail_int)(&zghz3226);
-      CONVERT_OF(sail_int, mach_int)(&zghz3226, zcap_addr_width);
-      RECREATE(sail_int)(&zghz3227);
-      CONVERT_OF(sail_int, mach_int)(&zghz3227, INT64_C(1));
-      RECREATE(sail_int)(&zghz3228);
-      sub_int(&zghz3228, zghz3226, zghz3227);
-      zgaz3374 = CONVERT_OF(mach_int, sail_int)(zghz3228);
+      RECREATE(sail_int)(&zghz3261);
+      CONVERT_OF(sail_int, mach_int)(&zghz3261, zcap_addr_width);
+      RECREATE(sail_int)(&zghz3262);
+      CONVERT_OF(sail_int, mach_int)(&zghz3262, INT64_C(1));
+      RECREATE(sail_int)(&zghz3263);
+      sub_int(&zghz3263, zghz3261, zghz3262);
+      zgaz3364 = CONVERT_OF(mach_int, sail_int)(zghz3263);
     }
-    zbaseshadowz39 = (safe_rshift(UINT64_MAX, 64 - 32) & (zbase >> INT64_C(0)));
+    zbaseshadowz316 = (safe_rshift(UINT64_MAX, 64 - 32) & (zbase >> INT64_C(0)));
   }
-  struct ztuple_z8z5bv32zCz0z5bv33z9 zgsz3703;
-  zgsz3703.ztup0 = zbaseshadowz39;
-  zgsz3703.ztup1 = ztop;
+  struct ztuple_z8z5bv32zCz0z5bv33z9 zgsz3714;
+  zgsz3714.ztup0 = zbaseshadowz316;
+  zgsz3714.ztup1 = ztop;
   {
-    struct ztuple_z8z5bvzCz0z5bvz9 zgsz31021;
-    CREATE(ztuple_z8z5bvzCz0z5bvz9)(&zgsz31021);
+    struct ztuple_z8z5bvzCz0z5bvz9 zgsz31043;
+    CREATE(ztuple_z8z5bvzCz0z5bvz9)(&zgsz31043);
     /* conversions */
-    CONVERT_OF(lbits, fbits)(&((&zgsz31021)->ztup0), zgsz3703.ztup0, UINT64_C(32) , true);
-    CONVERT_OF(lbits, fbits)(&((&zgsz31021)->ztup1), zgsz3703.ztup1, UINT64_C(33) , true);
+    CONVERT_OF(lbits, fbits)(&((&zgsz31043)->ztup0), zgsz3714.ztup0, UINT64_C(32) , true);
+    CONVERT_OF(lbits, fbits)(&((&zgsz31043)->ztup1), zgsz3714.ztup1, UINT64_C(33) , true);
     /* end conversions */
-    sailgen_SomezIz8bzCbz9zK((*(&zcbz363)), zgsz31021);
-    KILL(ztuple_z8z5bvzCz0z5bvz9)(&zgsz31021);
+    sailgen_SomezIz8bzCbz9zK((*(&zcbz364)), zgsz31043);
+    KILL(ztuple_z8z5bvzCz0z5bvz9)(&zgsz31043);
   }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-end_function_587: ;
-  goto end_function_707;
-end_block_exception_590: ;
-  goto end_function_707;
-end_function_707: ;
+end_function_551: ;
+  goto end_function_671;
+end_block_exception_554: ;
+  goto end_function_671;
+end_function_671: ;
 }
 
 
 
 static void finish_sailgen_getCapBoundsBits(void)
 {
+  KILL(lbits)(&zghz3323);
+  KILL(sail_int)(&zghz3322);
+  KILL(lbits)(&zghz3321);
+  KILL(lbits)(&zghz3320);
+  KILL(sail_int)(&zghz3319);
+  KILL(lbits)(&zghz3318);
+  KILL(sail_int)(&zghz3317);
+  KILL(sail_int)(&zghz3316);
+  KILL(sail_int)(&zghz3315);
+  KILL(lbits)(&zghz3314);
+  KILL(sail_int)(&zghz3313);
+  KILL(lbits)(&zghz3312);
+  KILL(lbits)(&zghz3311);
+  KILL(lbits)(&zghz3310);
+  KILL(lbits)(&zghz3309);
+  KILL(lbits)(&zghz3308);
+  KILL(lbits)(&zghz3307);
+  KILL(sail_int)(&zghz3306);
+  KILL(sail_int)(&zghz3305);
+  KILL(sail_int)(&zghz3304);
+  KILL(sail_int)(&zghz3303);
+  KILL(sail_int)(&zghz3302);
+  KILL(sail_int)(&zghz3301);
+  KILL(lbits)(&zghz3300);
+  KILL(sail_int)(&zghz3299);
+  KILL(lbits)(&zghz3298);
+  KILL(lbits)(&zghz3297);
+  KILL(sail_int)(&zghz3296);
+  KILL(lbits)(&zghz3295);
+  KILL(lbits)(&zghz3294);
+  KILL(sail_int)(&zghz3293);
+  KILL(lbits)(&zghz3292);
+  KILL(lbits)(&zghz3291);
+  KILL(lbits)(&zghz3290);
+  KILL(sail_int)(&zghz3289);
   KILL(lbits)(&zghz3288);
-  KILL(sail_int)(&zghz3287);
-  KILL(lbits)(&zghz3286);
+  KILL(lbits)(&zghz3287);
+  KILL(sail_int)(&zghz3286);
   KILL(lbits)(&zghz3285);
-  KILL(sail_int)(&zghz3284);
-  KILL(lbits)(&zghz3283);
-  KILL(sail_int)(&zghz3282);
-  KILL(sail_int)(&zghz3281);
-  KILL(sail_int)(&zghz3280);
-  KILL(lbits)(&zghz3279);
-  KILL(sail_int)(&zghz3278);
-  KILL(lbits)(&zghz3277);
-  KILL(lbits)(&zghz3276);
-  KILL(lbits)(&zghz3275);
-  KILL(lbits)(&zghz3274);
-  KILL(lbits)(&zghz3273);
-  KILL(lbits)(&zghz3272);
+  KILL(lbits)(&zghz3284);
+  KILL(sail_int)(&zghz3283);
+  KILL(lbits)(&zghz3282);
+  KILL(lbits)(&zghz3281);
+  KILL(lbits)(&zghz3280);
+  KILL(sail_int)(&zghz3279);
+  KILL(lbits)(&zghz3278);
+  KILL(sail_int)(&zghz3277);
+  KILL(sail_int)(&zghz3276);
+  KILL(sail_int)(&zghz3275);
+  KILL(sail_int)(&zghz3274);
+  KILL(sail_int)(&zghz3273);
+  KILL(sail_int)(&zghz3272);
   KILL(sail_int)(&zghz3271);
   KILL(sail_int)(&zghz3270);
   KILL(sail_int)(&zghz3269);
-  KILL(sail_int)(&zghz3268);
-  KILL(sail_int)(&zghz3267);
-  KILL(sail_int)(&zghz3266);
-  KILL(lbits)(&zghz3265);
-  KILL(sail_int)(&zghz3264);
-  KILL(lbits)(&zghz3263);
-  KILL(lbits)(&zghz3262);
+  KILL(lbits)(&zghz3268);
+  KILL(lbits)(&zghz3267);
+  KILL(lbits)(&zghz3266);
+  KILL(sail_int)(&zghz3265);
+  KILL(lbits)(&zghz3264);
+  KILL(sail_int)(&zghz3263);
+  KILL(sail_int)(&zghz3262);
   KILL(sail_int)(&zghz3261);
-  KILL(lbits)(&zghz3260);
-  KILL(lbits)(&zghz3259);
-  KILL(sail_int)(&zghz3258);
-  KILL(lbits)(&zghz3257);
-  KILL(lbits)(&zghz3256);
-  KILL(lbits)(&zghz3255);
-  KILL(sail_int)(&zghz3254);
-  KILL(lbits)(&zghz3253);
-  KILL(lbits)(&zghz3252);
-  KILL(sail_int)(&zghz3251);
-  KILL(lbits)(&zghz3250);
-  KILL(lbits)(&zghz3249);
-  KILL(sail_int)(&zghz3248);
-  KILL(lbits)(&zghz3247);
-  KILL(lbits)(&zghz3246);
-  KILL(lbits)(&zghz3245);
-  KILL(sail_int)(&zghz3244);
-  KILL(lbits)(&zghz3243);
-  KILL(sail_int)(&zghz3242);
-  KILL(sail_int)(&zghz3241);
-  KILL(sail_int)(&zghz3240);
-  KILL(sail_int)(&zghz3239);
-  KILL(sail_int)(&zghz3238);
-  KILL(sail_int)(&zghz3237);
-  KILL(sail_int)(&zghz3236);
-  KILL(sail_int)(&zghz3235);
-  KILL(sail_int)(&zghz3234);
-  KILL(lbits)(&zghz3233);
-  KILL(lbits)(&zghz3232);
-  KILL(lbits)(&zghz3231);
-  KILL(sail_int)(&zghz3230);
-  KILL(lbits)(&zghz3229);
-  KILL(sail_int)(&zghz3228);
-  KILL(sail_int)(&zghz3227);
-  KILL(sail_int)(&zghz3226);
 }
 
 static void sailgen_getCapBounds(struct zoptionzIz8izCiz9zK *rop, struct zCapability);
 
-lbits zghz3289;
-sail_int zghz3290;
-lbits zghz3291;
-sail_int zghz3292;
+lbits zghz3324;
+sail_int zghz3325;
+lbits zghz3326;
+sail_int zghz3327;
 
 static void startup_sailgen_getCapBounds(void)
 {
-  CREATE(lbits)(&zghz3289);
-  CREATE(sail_int)(&zghz3290);
-  CREATE(lbits)(&zghz3291);
-  CREATE(sail_int)(&zghz3292);
+  CREATE(lbits)(&zghz3324);
+  CREATE(sail_int)(&zghz3325);
+  CREATE(lbits)(&zghz3326);
+  CREATE(sail_int)(&zghz3327);
 }
-
-
 
 // struct tuple_(%i64, %i64)
 struct ztuple_z8z5i64zCz0z5i64z9 {
@@ -9759,81 +9478,80 @@ static bool EQUAL(ztuple_z8z5i64zCz0z5i64z9)(struct ztuple_z8z5i64zCz0z5i64z9 op
   return EQUAL(mach_int)(op1.ztup0, op2.ztup0) && EQUAL(mach_int)(op1.ztup1, op2.ztup1);
 }
 
-
-static void sailgen_getCapBounds(struct zoptionzIz8izCiz9zK *zcbz364, struct zCapability zcap)
+static void sailgen_getCapBounds(struct zoptionzIz8izCiz9zK *zcbz365, struct zCapability zcap)
 {
-  __label__ case_594, case_593, finish_match_592, end_function_595, end_block_exception_596, end_function_706;
+  __label__ case_558, case_557, finish_match_556, end_function_559, end_block_exception_560, end_function_670;
 
-  struct zoptionzIz8bzCbz9zK zgaz3400;
-  CREATE(zoptionzIz8bzCbz9zK)(&zgaz3400);
-  sailgen_getCapBoundsBits(&zgaz3400, zcap);
-  struct zoptionzIz8izCiz9zK zgsz3704;
-  CREATE(zoptionzIz8izCiz9zK)(&zgsz3704);
+  struct zoptionzIz8bzCbz9zK zgaz3390;
+  CREATE(zoptionzIz8bzCbz9zK)(&zgaz3390);
+  sailgen_getCapBoundsBits(&zgaz3390, zcap);
+  struct zoptionzIz8izCiz9zK zgsz3715;
+  CREATE(zoptionzIz8izCiz9zK)(&zgsz3715);
   {
-    if (zgaz3400.kind != Kind_zNonezIz8bzCbz9zK) goto case_594;
-    sailgen_NonezIz8izCiz9zK(&zgsz3704, UNIT);
-    goto finish_match_592;
+    if (zgaz3390.kind != Kind_zNonezIz8bzCbz9zK) goto case_558;
+    sailgen_NonezIz8izCiz9zK(&zgsz3715, UNIT);
+    goto finish_match_556;
   }
-case_594: ;
+case_558: ;
   {
     /* complete */
     uint64_t zbase;
-    zbase = CONVERT_OF(fbits, lbits)(zgaz3400.zSomezIz8bzCbz9zK.ztup0, true);
+    zbase = CONVERT_OF(fbits, lbits)(zgaz3390.variants.zSomezIz8bzCbz9zK.ztup0, true);
     uint64_t ztop;
-    ztop = CONVERT_OF(fbits, lbits)(zgaz3400.zSomezIz8bzCbz9zK.ztup1, true);
-    struct ztuple_z8z5i64zCz0z5i64z9 zgaz3403;
+    ztop = CONVERT_OF(fbits, lbits)(zgaz3390.variants.zSomezIz8bzCbz9zK.ztup1, true);
+    struct ztuple_z8z5i64zCz0z5i64z9 zgaz3393;
     {
-      int64_t zgaz3401;
+      int64_t zgaz3391;
       {
-        RECREATE(lbits)(&zghz3291);
-        CONVERT_OF(lbits, fbits)(&zghz3291, zbase, UINT64_C(32) , true);
-        RECREATE(sail_int)(&zghz3292);
-        sail_unsigned(&zghz3292, zghz3291);
-        zgaz3401 = CONVERT_OF(mach_int, sail_int)(zghz3292);
+        RECREATE(lbits)(&zghz3326);
+        CONVERT_OF(lbits, fbits)(&zghz3326, zbase, UINT64_C(32) , true);
+        RECREATE(sail_int)(&zghz3327);
+        sail_unsigned(&zghz3327, zghz3326);
+        zgaz3391 = CONVERT_OF(mach_int, sail_int)(zghz3327);
       }
-      int64_t zgaz3402;
+      int64_t zgaz3392;
       {
-        RECREATE(lbits)(&zghz3289);
-        CONVERT_OF(lbits, fbits)(&zghz3289, ztop, UINT64_C(33) , true);
-        RECREATE(sail_int)(&zghz3290);
-        sail_unsigned(&zghz3290, zghz3289);
-        zgaz3402 = CONVERT_OF(mach_int, sail_int)(zghz3290);
+        RECREATE(lbits)(&zghz3324);
+        CONVERT_OF(lbits, fbits)(&zghz3324, ztop, UINT64_C(33) , true);
+        RECREATE(sail_int)(&zghz3325);
+        sail_unsigned(&zghz3325, zghz3324);
+        zgaz3392 = CONVERT_OF(mach_int, sail_int)(zghz3325);
       }
-      zgaz3403.ztup0 = zgaz3401;
-      zgaz3403.ztup1 = zgaz3402;
+      zgaz3393.ztup0 = zgaz3391;
+      zgaz3393.ztup1 = zgaz3392;
     }
     {
-      struct ztuple_z8z5izCz0z5iz9 zgsz31032;
-      CREATE(ztuple_z8z5izCz0z5iz9)(&zgsz31032);
+      struct ztuple_z8z5izCz0z5iz9 zgsz31054;
+      CREATE(ztuple_z8z5izCz0z5iz9)(&zgsz31054);
       /* conversions */
-      CONVERT_OF(sail_int, mach_int)(&((&zgsz31032)->ztup0), zgaz3403.ztup0);
-      CONVERT_OF(sail_int, mach_int)(&((&zgsz31032)->ztup1), zgaz3403.ztup1);
+      CONVERT_OF(sail_int, mach_int)(&((&zgsz31054)->ztup0), zgaz3393.ztup0);
+      CONVERT_OF(sail_int, mach_int)(&((&zgsz31054)->ztup1), zgaz3393.ztup1);
       /* end conversions */
-      sailgen_SomezIz8izCiz9zK(&zgsz3704, zgsz31032);
-      KILL(ztuple_z8z5izCz0z5iz9)(&zgsz31032);
+      sailgen_SomezIz8izCiz9zK(&zgsz3715, zgsz31054);
+      KILL(ztuple_z8z5izCz0z5iz9)(&zgsz31054);
     }
-    goto finish_match_592;
+    goto finish_match_556;
   }
-case_593: ;
-finish_match_592: ;
-  COPY(zoptionzIz8izCiz9zK)((*(&zcbz364)), zgsz3704);
-  KILL(zoptionzIz8izCiz9zK)(&zgsz3704);
-  KILL(zoptionzIz8bzCbz9zK)(&zgaz3400);
-end_function_595: ;
-  goto end_function_706;
-end_block_exception_596: ;
-  goto end_function_706;
-end_function_706: ;
+case_557: ;
+finish_match_556: ;
+  COPY(zoptionzIz8izCiz9zK)((*(&zcbz365)), zgsz3715);
+  KILL(zoptionzIz8izCiz9zK)(&zgsz3715);
+  KILL(zoptionzIz8bzCbz9zK)(&zgaz3390);
+end_function_559: ;
+  goto end_function_670;
+end_block_exception_560: ;
+  goto end_function_670;
+end_function_670: ;
 }
 
 
 
 static void finish_sailgen_getCapBounds(void)
 {
-  KILL(sail_int)(&zghz3292);
-  KILL(lbits)(&zghz3291);
-  KILL(sail_int)(&zghz3290);
-  KILL(lbits)(&zghz3289);
+  KILL(sail_int)(&zghz3327);
+  KILL(lbits)(&zghz3326);
+  KILL(sail_int)(&zghz3325);
+  KILL(lbits)(&zghz3324);
 }
 
 // struct tuple_(%bool, %struct zCapability)
@@ -9853,259 +9571,259 @@ static bool EQUAL(ztuple_z8z5boolzCz0z5structz0zzCapabilityz9)(struct ztuple_z8z
 
 static struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 sailgen_setCapBounds(struct zCapability, uint64_t, uint64_t);
 
-struct zCapability zghz3293;
-sail_int zghz3294;
-lbits zghz3295;
-sail_int zghz3296;
-lbits zghz3297;
-lbits zghz3298;
-sail_int zghz3299;
-lbits zghz3300;
-lbits zghz3301;
-sail_int zghz3302;
-lbits zghz3303;
-sail_int zghz3304;
-sail_int zghz3305;
-sail_int zghz3306;
-lbits zghz3307;
-sail_int zghz3308;
-lbits zghz3309;
-lbits zghz3310;
-sail_int zghz3311;
-lbits zghz3312;
-sail_int zghz3313;
-sail_int zghz3314;
-sail_int zghz3315;
-lbits zghz3316;
-sail_int zghz3317;
-lbits zghz3318;
-sail_int zghz3319;
-sail_int zghz3320;
-sail_int zghz3321;
-lbits zghz3322;
-sail_int zghz3323;
-lbits zghz3324;
-sail_int zghz3325;
-lbits zghz3326;
-lbits zghz3327;
-sail_int zghz3328;
-lbits zghz3329;
+struct zCapability zghz3328;
+sail_int zghz3329;
 lbits zghz3330;
 sail_int zghz3331;
 lbits zghz3332;
-sail_int zghz3333;
+lbits zghz3333;
 sail_int zghz3334;
-sail_int zghz3335;
+lbits zghz3335;
 lbits zghz3336;
 sail_int zghz3337;
 lbits zghz3338;
-lbits zghz3339;
+sail_int zghz3339;
 sail_int zghz3340;
-lbits zghz3341;
-sail_int zghz3342;
+sail_int zghz3341;
+lbits zghz3342;
 sail_int zghz3343;
-sail_int zghz3344;
+lbits zghz3344;
 lbits zghz3345;
 sail_int zghz3346;
 lbits zghz3347;
-lbits zghz3348;
+sail_int zghz3348;
 sail_int zghz3349;
-lbits zghz3350;
+sail_int zghz3350;
 lbits zghz3351;
 sail_int zghz3352;
 lbits zghz3353;
 sail_int zghz3354;
 sail_int zghz3355;
 sail_int zghz3356;
-sail_int zghz3357;
+lbits zghz3357;
 sail_int zghz3358;
-sail_int zghz3359;
+lbits zghz3359;
 sail_int zghz3360;
-sail_int zghz3361;
+lbits zghz3361;
 lbits zghz3362;
 sail_int zghz3363;
-sail_int zghz3364;
-sail_int zghz3365;
+lbits zghz3364;
+lbits zghz3365;
 sail_int zghz3366;
+lbits zghz3367;
+sail_int zghz3368;
+sail_int zghz3369;
+sail_int zghz3370;
+lbits zghz3371;
+sail_int zghz3372;
+lbits zghz3373;
+lbits zghz3374;
+sail_int zghz3375;
+lbits zghz3376;
+sail_int zghz3377;
+sail_int zghz3378;
+sail_int zghz3379;
+lbits zghz3380;
+sail_int zghz3381;
+lbits zghz3382;
+lbits zghz3383;
+sail_int zghz3384;
+lbits zghz3385;
+lbits zghz3386;
+sail_int zghz3387;
+lbits zghz3388;
+sail_int zghz3389;
+sail_int zghz3390;
+sail_int zghz3391;
+sail_int zghz3392;
+sail_int zghz3393;
+sail_int zghz3394;
+sail_int zghz3395;
+sail_int zghz3396;
+lbits zghz3397;
+sail_int zghz3398;
+sail_int zghz3399;
+sail_int zghz3400;
+sail_int zghz3401;
 
 static void startup_sailgen_setCapBounds(void)
 {
 
-  CREATE(sail_int)(&zghz3294);
-  CREATE(lbits)(&zghz3295);
-  CREATE(sail_int)(&zghz3296);
-  CREATE(lbits)(&zghz3297);
-  CREATE(lbits)(&zghz3298);
-  CREATE(sail_int)(&zghz3299);
-  CREATE(lbits)(&zghz3300);
-  CREATE(lbits)(&zghz3301);
-  CREATE(sail_int)(&zghz3302);
-  CREATE(lbits)(&zghz3303);
-  CREATE(sail_int)(&zghz3304);
-  CREATE(sail_int)(&zghz3305);
-  CREATE(sail_int)(&zghz3306);
-  CREATE(lbits)(&zghz3307);
-  CREATE(sail_int)(&zghz3308);
-  CREATE(lbits)(&zghz3309);
-  CREATE(lbits)(&zghz3310);
-  CREATE(sail_int)(&zghz3311);
-  CREATE(lbits)(&zghz3312);
-  CREATE(sail_int)(&zghz3313);
-  CREATE(sail_int)(&zghz3314);
-  CREATE(sail_int)(&zghz3315);
-  CREATE(lbits)(&zghz3316);
-  CREATE(sail_int)(&zghz3317);
-  CREATE(lbits)(&zghz3318);
-  CREATE(sail_int)(&zghz3319);
-  CREATE(sail_int)(&zghz3320);
-  CREATE(sail_int)(&zghz3321);
-  CREATE(lbits)(&zghz3322);
-  CREATE(sail_int)(&zghz3323);
-  CREATE(lbits)(&zghz3324);
-  CREATE(sail_int)(&zghz3325);
-  CREATE(lbits)(&zghz3326);
-  CREATE(lbits)(&zghz3327);
-  CREATE(sail_int)(&zghz3328);
-  CREATE(lbits)(&zghz3329);
+  CREATE(sail_int)(&zghz3329);
   CREATE(lbits)(&zghz3330);
   CREATE(sail_int)(&zghz3331);
   CREATE(lbits)(&zghz3332);
-  CREATE(sail_int)(&zghz3333);
+  CREATE(lbits)(&zghz3333);
   CREATE(sail_int)(&zghz3334);
-  CREATE(sail_int)(&zghz3335);
+  CREATE(lbits)(&zghz3335);
   CREATE(lbits)(&zghz3336);
   CREATE(sail_int)(&zghz3337);
   CREATE(lbits)(&zghz3338);
-  CREATE(lbits)(&zghz3339);
+  CREATE(sail_int)(&zghz3339);
   CREATE(sail_int)(&zghz3340);
-  CREATE(lbits)(&zghz3341);
-  CREATE(sail_int)(&zghz3342);
+  CREATE(sail_int)(&zghz3341);
+  CREATE(lbits)(&zghz3342);
   CREATE(sail_int)(&zghz3343);
-  CREATE(sail_int)(&zghz3344);
+  CREATE(lbits)(&zghz3344);
   CREATE(lbits)(&zghz3345);
   CREATE(sail_int)(&zghz3346);
   CREATE(lbits)(&zghz3347);
-  CREATE(lbits)(&zghz3348);
+  CREATE(sail_int)(&zghz3348);
   CREATE(sail_int)(&zghz3349);
-  CREATE(lbits)(&zghz3350);
+  CREATE(sail_int)(&zghz3350);
   CREATE(lbits)(&zghz3351);
   CREATE(sail_int)(&zghz3352);
   CREATE(lbits)(&zghz3353);
   CREATE(sail_int)(&zghz3354);
   CREATE(sail_int)(&zghz3355);
   CREATE(sail_int)(&zghz3356);
-  CREATE(sail_int)(&zghz3357);
+  CREATE(lbits)(&zghz3357);
   CREATE(sail_int)(&zghz3358);
-  CREATE(sail_int)(&zghz3359);
+  CREATE(lbits)(&zghz3359);
   CREATE(sail_int)(&zghz3360);
-  CREATE(sail_int)(&zghz3361);
+  CREATE(lbits)(&zghz3361);
   CREATE(lbits)(&zghz3362);
   CREATE(sail_int)(&zghz3363);
-  CREATE(sail_int)(&zghz3364);
-  CREATE(sail_int)(&zghz3365);
+  CREATE(lbits)(&zghz3364);
+  CREATE(lbits)(&zghz3365);
   CREATE(sail_int)(&zghz3366);
+  CREATE(lbits)(&zghz3367);
+  CREATE(sail_int)(&zghz3368);
+  CREATE(sail_int)(&zghz3369);
+  CREATE(sail_int)(&zghz3370);
+  CREATE(lbits)(&zghz3371);
+  CREATE(sail_int)(&zghz3372);
+  CREATE(lbits)(&zghz3373);
+  CREATE(lbits)(&zghz3374);
+  CREATE(sail_int)(&zghz3375);
+  CREATE(lbits)(&zghz3376);
+  CREATE(sail_int)(&zghz3377);
+  CREATE(sail_int)(&zghz3378);
+  CREATE(sail_int)(&zghz3379);
+  CREATE(lbits)(&zghz3380);
+  CREATE(sail_int)(&zghz3381);
+  CREATE(lbits)(&zghz3382);
+  CREATE(lbits)(&zghz3383);
+  CREATE(sail_int)(&zghz3384);
+  CREATE(lbits)(&zghz3385);
+  CREATE(lbits)(&zghz3386);
+  CREATE(sail_int)(&zghz3387);
+  CREATE(lbits)(&zghz3388);
+  CREATE(sail_int)(&zghz3389);
+  CREATE(sail_int)(&zghz3390);
+  CREATE(sail_int)(&zghz3391);
+  CREATE(sail_int)(&zghz3392);
+  CREATE(sail_int)(&zghz3393);
+  CREATE(sail_int)(&zghz3394);
+  CREATE(sail_int)(&zghz3395);
+  CREATE(sail_int)(&zghz3396);
+  CREATE(lbits)(&zghz3397);
+  CREATE(sail_int)(&zghz3398);
+  CREATE(sail_int)(&zghz3399);
+  CREATE(sail_int)(&zghz3400);
+  CREATE(sail_int)(&zghz3401);
 }
 
 static struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 sailgen_setCapBounds(struct zCapability zcap, uint64_t zbase, uint64_t ztop)
 {
-  __label__ end_function_598, end_block_exception_599;
+  __label__ end_function_562, end_block_exception_563;
 
-  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz365;
+  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz366;
   uint64_t zext_base;
   zext_base = (UINT64_C(0b0) << 32) | zbase;
   uint64_t zlength;
   zlength = ((ztop - zext_base) & UINT64_C(0b111111111111111111111111111111111));
   int64_t ze;
   {
-    int64_t zgaz3441;
+    int64_t zgaz3431;
     {
-      uint64_t zgaz3440;
+      uint64_t zgaz3430;
       {
-        int64_t zgaz3439;
+        int64_t zgaz3429;
         {
-          RECREATE(sail_int)(&zghz3364);
-          CONVERT_OF(sail_int, mach_int)(&zghz3364, zcap_mantissa_width);
-          RECREATE(sail_int)(&zghz3365);
-          CONVERT_OF(sail_int, mach_int)(&zghz3365, INT64_C(1));
-          RECREATE(sail_int)(&zghz3366);
-          sub_int(&zghz3366, zghz3364, zghz3365);
-          zgaz3439 = CONVERT_OF(mach_int, sail_int)(zghz3366);
+          RECREATE(sail_int)(&zghz3399);
+          CONVERT_OF(sail_int, mach_int)(&zghz3399, zcap_mantissa_width);
+          RECREATE(sail_int)(&zghz3400);
+          CONVERT_OF(sail_int, mach_int)(&zghz3400, INT64_C(1));
+          RECREATE(sail_int)(&zghz3401);
+          sub_int(&zghz3401, zghz3399, zghz3400);
+          zgaz3429 = CONVERT_OF(mach_int, sail_int)(zghz3401);
         }
-        zgaz3440 = (safe_rshift(UINT64_MAX, 64 - 24) & (zlength >> zgaz3439));
+        zgaz3430 = (safe_rshift(UINT64_MAX, 64 - 24) & (zlength >> zgaz3429));
       }
       {
-        RECREATE(lbits)(&zghz3362);
-        CONVERT_OF(lbits, fbits)(&zghz3362, zgaz3440, UINT64_C(24) , true);
-        RECREATE(sail_int)(&zghz3363);
-        count_leading_zeros(&zghz3363, zghz3362);
-        zgaz3441 = CONVERT_OF(mach_int, sail_int)(zghz3363);
+        RECREATE(lbits)(&zghz3397);
+        CONVERT_OF(lbits, fbits)(&zghz3397, zgaz3430, UINT64_C(24) , true);
+        RECREATE(sail_int)(&zghz3398);
+        count_leading_zeros(&zghz3398, zghz3397);
+        zgaz3431 = CONVERT_OF(mach_int, sail_int)(zghz3398);
       }
     }
     {
-      RECREATE(sail_int)(&zghz3359);
-      CONVERT_OF(sail_int, mach_int)(&zghz3359, zcap_max_E);
-      RECREATE(sail_int)(&zghz3360);
-      CONVERT_OF(sail_int, mach_int)(&zghz3360, zgaz3441);
-      RECREATE(sail_int)(&zghz3361);
-      sub_int(&zghz3361, zghz3359, zghz3360);
-      ze = CONVERT_OF(mach_int, sail_int)(zghz3361);
+      RECREATE(sail_int)(&zghz3394);
+      CONVERT_OF(sail_int, mach_int)(&zghz3394, zcap_max_E);
+      RECREATE(sail_int)(&zghz3395);
+      CONVERT_OF(sail_int, mach_int)(&zghz3395, zgaz3431);
+      RECREATE(sail_int)(&zghz3396);
+      sub_int(&zghz3396, zghz3394, zghz3395);
+      ze = CONVERT_OF(mach_int, sail_int)(zghz3396);
     }
   }
   bool zie;
   {
-    bool zgaz3438;
+    bool zgaz3428;
     {
-      RECREATE(sail_int)(&zghz3357);
-      CONVERT_OF(sail_int, mach_int)(&zghz3357, ze);
-      RECREATE(sail_int)(&zghz3358);
-      CONVERT_OF(sail_int, mach_int)(&zghz3358, INT64_C(0));
-      zgaz3438 = sailgen_neq_int(zghz3357, zghz3358);
+      RECREATE(sail_int)(&zghz3392);
+      CONVERT_OF(sail_int, mach_int)(&zghz3392, ze);
+      RECREATE(sail_int)(&zghz3393);
+      CONVERT_OF(sail_int, mach_int)(&zghz3393, INT64_C(0));
+      zgaz3428 = sailgen_neq_int(zghz3392, zghz3393);
     }
-    bool zgsz3709;
-    if (zgaz3438) {  zgsz3709 = true;  } else {
-      bool zgaz3437;
-      zgaz3437 = not(zcap_use_L8);
-      bool zgsz3708;
-      if (zgaz3437) {
-        fbits zgaz3436;
+    bool zgsz3720;
+    if (zgaz3428) {  zgsz3720 = true;  } else {
+      bool zgaz3427;
+      zgaz3427 = sailgen_not(zcap_use_L8);
+      bool zgsz3719;
+      if (zgaz3427) {
+        fbits zgaz3426;
         {
-          int64_t zgaz3435;
+          int64_t zgaz3425;
           {
-            RECREATE(sail_int)(&zghz3354);
-            CONVERT_OF(sail_int, mach_int)(&zghz3354, zcap_mantissa_width);
-            RECREATE(sail_int)(&zghz3355);
-            CONVERT_OF(sail_int, mach_int)(&zghz3355, INT64_C(2));
-            RECREATE(sail_int)(&zghz3356);
-            sub_int(&zghz3356, zghz3354, zghz3355);
-            zgaz3435 = CONVERT_OF(mach_int, sail_int)(zghz3356);
+            RECREATE(sail_int)(&zghz3389);
+            CONVERT_OF(sail_int, mach_int)(&zghz3389, zcap_mantissa_width);
+            RECREATE(sail_int)(&zghz3390);
+            CONVERT_OF(sail_int, mach_int)(&zghz3390, INT64_C(2));
+            RECREATE(sail_int)(&zghz3391);
+            sub_int(&zghz3391, zghz3389, zghz3390);
+            zgaz3425 = CONVERT_OF(mach_int, sail_int)(zghz3391);
           }
-          zgaz3436 = (UINT64_C(1) & (zlength >> zgaz3435));
+          zgaz3426 = (UINT64_C(1) & (zlength >> zgaz3425));
         }
-        zgsz3708 = eq_bit(zgaz3436, UINT64_C(1));
-      } else {  zgsz3708 = false;  }
-      zgsz3709 = zgsz3708;
+        zgsz3719 = eq_bit(zgaz3426, UINT64_C(1));
+      } else {  zgsz3719 = false;  }
+      zgsz3720 = zgsz3719;
     }
-    zie = zgsz3709;
+    zie = zgsz3720;
   }
   uint64_t zBbits;
   {
-    RECREATE(lbits)(&zghz3351);
-    CONVERT_OF(lbits, fbits)(&zghz3351, zbase, UINT64_C(32) , true);
-    RECREATE(sail_int)(&zghz3352);
-    CONVERT_OF(sail_int, mach_int)(&zghz3352, zcap_mantissa_width);
-    RECREATE(lbits)(&zghz3353);
-    sail_truncate(&zghz3353, zghz3351, zghz3352);
-    zBbits = CONVERT_OF(fbits, lbits)(zghz3353, true);
+    RECREATE(lbits)(&zghz3386);
+    CONVERT_OF(lbits, fbits)(&zghz3386, zbase, UINT64_C(32) , true);
+    RECREATE(sail_int)(&zghz3387);
+    CONVERT_OF(sail_int, mach_int)(&zghz3387, zcap_mantissa_width);
+    RECREATE(lbits)(&zghz3388);
+    sail_truncate(&zghz3388, zghz3386, zghz3387);
+    zBbits = CONVERT_OF(fbits, lbits)(zghz3388, true);
   }
   uint64_t zTbits;
   {
-    RECREATE(lbits)(&zghz3348);
-    CONVERT_OF(lbits, fbits)(&zghz3348, ztop, UINT64_C(33) , true);
-    RECREATE(sail_int)(&zghz3349);
-    CONVERT_OF(sail_int, mach_int)(&zghz3349, zcap_mantissa_width);
-    RECREATE(lbits)(&zghz3350);
-    sail_truncate(&zghz3350, zghz3348, zghz3349);
-    zTbits = CONVERT_OF(fbits, lbits)(zghz3350, true);
+    RECREATE(lbits)(&zghz3383);
+    CONVERT_OF(lbits, fbits)(&zghz3383, ztop, UINT64_C(33) , true);
+    RECREATE(sail_int)(&zghz3384);
+    CONVERT_OF(sail_int, mach_int)(&zghz3384, zcap_mantissa_width);
+    RECREATE(lbits)(&zghz3385);
+    sail_truncate(&zghz3385, zghz3383, zghz3384);
+    zTbits = CONVERT_OF(fbits, lbits)(zghz3385, true);
   }
   bool zlostSignificantTop;
   zlostSignificantTop = false;
@@ -10114,444 +9832,433 @@ static struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 sailgen_setCapBounds(s
   bool zincE;
   zincE = false;
   {
-    unit zgsz3710;
+    unit zgsz3721;
     if (zie) {
       uint64_t zB_ie;
       {
-        uint64_t zgaz3429;
+        uint64_t zgaz3419;
         {
-          int64_t zgaz3428;
-          zgaz3428 = (ze + zcap_xe_width);
+          int64_t zgaz3418;
+          zgaz3418 = (ze + zcap_xe_width);
           {
-            RECREATE(lbits)(&zghz3345);
-            CONVERT_OF(lbits, fbits)(&zghz3345, zbase, UINT64_C(32) , true);
-            RECREATE(sail_int)(&zghz3346);
-            CONVERT_OF(sail_int, mach_int)(&zghz3346, zgaz3428);
-            RECREATE(lbits)(&zghz3347);
-            shiftr(&zghz3347, zghz3345, zghz3346);
-            zgaz3429 = CONVERT_OF(fbits, lbits)(zghz3347, true);
+            RECREATE(lbits)(&zghz3380);
+            CONVERT_OF(lbits, fbits)(&zghz3380, zbase, UINT64_C(32) , true);
+            RECREATE(sail_int)(&zghz3381);
+            CONVERT_OF(sail_int, mach_int)(&zghz3381, zgaz3418);
+            RECREATE(lbits)(&zghz3382);
+            shiftr(&zghz3382, zghz3380, zghz3381);
+            zgaz3419 = CONVERT_OF(fbits, lbits)(zghz3382, true);
           }
         }
-        int64_t zgaz3430;
+        int64_t zgaz3420;
         {
-          RECREATE(sail_int)(&zghz3342);
-          CONVERT_OF(sail_int, mach_int)(&zghz3342, zcap_mantissa_width);
-          RECREATE(sail_int)(&zghz3343);
-          CONVERT_OF(sail_int, mach_int)(&zghz3343, zcap_xe_width);
-          RECREATE(sail_int)(&zghz3344);
-          sub_int(&zghz3344, zghz3342, zghz3343);
-          zgaz3430 = CONVERT_OF(mach_int, sail_int)(zghz3344);
+          RECREATE(sail_int)(&zghz3377);
+          CONVERT_OF(sail_int, mach_int)(&zghz3377, zcap_mantissa_width);
+          RECREATE(sail_int)(&zghz3378);
+          CONVERT_OF(sail_int, mach_int)(&zghz3378, zcap_xe_width);
+          RECREATE(sail_int)(&zghz3379);
+          sub_int(&zghz3379, zghz3377, zghz3378);
+          zgaz3420 = CONVERT_OF(mach_int, sail_int)(zghz3379);
         }
         {
-          RECREATE(lbits)(&zghz3339);
-          CONVERT_OF(lbits, fbits)(&zghz3339, zgaz3429, UINT64_C(32) , true);
-          RECREATE(sail_int)(&zghz3340);
-          CONVERT_OF(sail_int, mach_int)(&zghz3340, zgaz3430);
-          RECREATE(lbits)(&zghz3341);
-          sail_truncate(&zghz3341, zghz3339, zghz3340);
-          zB_ie = CONVERT_OF(fbits, lbits)(zghz3341, true);
+          RECREATE(lbits)(&zghz3374);
+          CONVERT_OF(lbits, fbits)(&zghz3374, zgaz3419, UINT64_C(32) , true);
+          RECREATE(sail_int)(&zghz3375);
+          CONVERT_OF(sail_int, mach_int)(&zghz3375, zgaz3420);
+          RECREATE(lbits)(&zghz3376);
+          sail_truncate(&zghz3376, zghz3374, zghz3375);
+          zB_ie = CONVERT_OF(fbits, lbits)(zghz3376, true);
         }
       }
       uint64_t zT_ie;
       {
-        uint64_t zgaz3426;
+        uint64_t zgaz3416;
         {
-          int64_t zgaz3425;
-          zgaz3425 = (ze + zcap_xe_width);
+          int64_t zgaz3415;
+          zgaz3415 = (ze + zcap_xe_width);
           {
-            RECREATE(lbits)(&zghz3336);
-            CONVERT_OF(lbits, fbits)(&zghz3336, ztop, UINT64_C(33) , true);
-            RECREATE(sail_int)(&zghz3337);
-            CONVERT_OF(sail_int, mach_int)(&zghz3337, zgaz3425);
-            RECREATE(lbits)(&zghz3338);
-            shiftr(&zghz3338, zghz3336, zghz3337);
-            zgaz3426 = CONVERT_OF(fbits, lbits)(zghz3338, true);
+            RECREATE(lbits)(&zghz3371);
+            CONVERT_OF(lbits, fbits)(&zghz3371, ztop, UINT64_C(33) , true);
+            RECREATE(sail_int)(&zghz3372);
+            CONVERT_OF(sail_int, mach_int)(&zghz3372, zgaz3415);
+            RECREATE(lbits)(&zghz3373);
+            shiftr(&zghz3373, zghz3371, zghz3372);
+            zgaz3416 = CONVERT_OF(fbits, lbits)(zghz3373, true);
           }
         }
-        int64_t zgaz3427;
+        int64_t zgaz3417;
         {
-          RECREATE(sail_int)(&zghz3333);
-          CONVERT_OF(sail_int, mach_int)(&zghz3333, zcap_mantissa_width);
-          RECREATE(sail_int)(&zghz3334);
-          CONVERT_OF(sail_int, mach_int)(&zghz3334, zcap_xe_width);
-          RECREATE(sail_int)(&zghz3335);
-          sub_int(&zghz3335, zghz3333, zghz3334);
-          zgaz3427 = CONVERT_OF(mach_int, sail_int)(zghz3335);
+          RECREATE(sail_int)(&zghz3368);
+          CONVERT_OF(sail_int, mach_int)(&zghz3368, zcap_mantissa_width);
+          RECREATE(sail_int)(&zghz3369);
+          CONVERT_OF(sail_int, mach_int)(&zghz3369, zcap_xe_width);
+          RECREATE(sail_int)(&zghz3370);
+          sub_int(&zghz3370, zghz3368, zghz3369);
+          zgaz3417 = CONVERT_OF(mach_int, sail_int)(zghz3370);
         }
         {
-          RECREATE(lbits)(&zghz3330);
-          CONVERT_OF(lbits, fbits)(&zghz3330, zgaz3426, UINT64_C(33) , true);
-          RECREATE(sail_int)(&zghz3331);
-          CONVERT_OF(sail_int, mach_int)(&zghz3331, zgaz3427);
-          RECREATE(lbits)(&zghz3332);
-          sail_truncate(&zghz3332, zghz3330, zghz3331);
-          zT_ie = CONVERT_OF(fbits, lbits)(zghz3332, true);
+          RECREATE(lbits)(&zghz3365);
+          CONVERT_OF(lbits, fbits)(&zghz3365, zgaz3416, UINT64_C(33) , true);
+          RECREATE(sail_int)(&zghz3366);
+          CONVERT_OF(sail_int, mach_int)(&zghz3366, zgaz3417);
+          RECREATE(lbits)(&zghz3367);
+          sail_truncate(&zghz3367, zghz3365, zghz3366);
+          zT_ie = CONVERT_OF(fbits, lbits)(zghz3367, true);
         }
       }
       uint64_t zmaskLo;
       {
-        sbits zgaz3424;
+        sbits zgaz3414;
         {
-          int64_t zgaz3423;
-          zgaz3423 = (ze + zcap_xe_width);
+          int64_t zgaz3413;
+          zgaz3413 = (ze + zcap_xe_width);
           {
-            RECREATE(sail_int)(&zghz3328);
-            CONVERT_OF(sail_int, mach_int)(&zghz3328, zgaz3423);
-            RECREATE(lbits)(&zghz3329);
-            sailgen_ones(&zghz3329, zghz3328);
-            zgaz3424 = CONVERT_OF(sbits, lbits)(zghz3329, true);
+            RECREATE(sail_int)(&zghz3363);
+            CONVERT_OF(sail_int, mach_int)(&zghz3363, zgaz3413);
+            RECREATE(lbits)(&zghz3364);
+            sailgen_ones(&zghz3364, zghz3363);
+            zgaz3414 = CONVERT_OF(sbits, lbits)(zghz3364, true);
           }
         }
         {
-          RECREATE(sail_int)(&zghz3325);
-          CONVERT_OF(sail_int, mach_int)(&zghz3325, INT64_C(33));
-          RECREATE(lbits)(&zghz3326);
-          CONVERT_OF(lbits, sbits)(&zghz3326, zgaz3424, true);
-          RECREATE(lbits)(&zghz3327);
-          sailgen_zzero_extend(&zghz3327, zghz3325, zghz3326);
-          zmaskLo = CONVERT_OF(fbits, lbits)(zghz3327, true);
+          RECREATE(sail_int)(&zghz3360);
+          CONVERT_OF(sail_int, mach_int)(&zghz3360, INT64_C(33));
+          RECREATE(lbits)(&zghz3361);
+          CONVERT_OF(lbits, sbits)(&zghz3361, zgaz3414, true);
+          RECREATE(lbits)(&zghz3362);
+          sailgen_zzero_extend(&zghz3362, zghz3360, zghz3361);
+          zmaskLo = CONVERT_OF(fbits, lbits)(zghz3362, true);
         }
       }
       {
-        uint64_t zgaz3404;
-        zgaz3404 = (zext_base & zmaskLo);
-        zlostSignificantBase = (zgaz3404 != UINT64_C(0b000000000000000000000000000000000));
-        unit zgsz3713;
-        zgsz3713 = UNIT;
+        uint64_t zgaz3394;
+        zgaz3394 = (zext_base & zmaskLo);
+        zlostSignificantBase = (zgaz3394 != UINT64_C(0b000000000000000000000000000000000));
+        unit zgsz3724;
+        zgsz3724 = UNIT;
       }
       {
-        uint64_t zgaz3405;
-        zgaz3405 = (ztop & zmaskLo);
-        zlostSignificantTop = (zgaz3405 != UINT64_C(0b000000000000000000000000000000000));
-        unit zgsz3712;
-        zgsz3712 = UNIT;
+        uint64_t zgaz3395;
+        zgaz3395 = (ztop & zmaskLo);
+        zlostSignificantTop = (zgaz3395 != UINT64_C(0b000000000000000000000000000000000));
+        unit zgsz3723;
+        zgsz3723 = UNIT;
       }
       {
-        unit zgsz3711;
+        unit zgsz3722;
         if (zlostSignificantTop) {
           {
-            RECREATE(lbits)(&zghz3322);
-            CONVERT_OF(lbits, fbits)(&zghz3322, zT_ie, UINT64_C(8) , true);
-            RECREATE(sail_int)(&zghz3323);
-            CONVERT_OF(sail_int, mach_int)(&zghz3323, INT64_C(1));
-            RECREATE(lbits)(&zghz3324);
-            add_bits_int(&zghz3324, zghz3322, zghz3323);
-            zT_ie = CONVERT_OF(fbits, lbits)(zghz3324, true);
+            RECREATE(lbits)(&zghz3357);
+            CONVERT_OF(lbits, fbits)(&zghz3357, zT_ie, UINT64_C(8) , true);
+            RECREATE(sail_int)(&zghz3358);
+            CONVERT_OF(sail_int, mach_int)(&zghz3358, INT64_C(1));
+            RECREATE(lbits)(&zghz3359);
+            add_bits_int(&zghz3359, zghz3357, zghz3358);
+            zT_ie = CONVERT_OF(fbits, lbits)(zghz3359, true);
           }
-          zgsz3711 = UNIT;
-        } else {  zgsz3711 = UNIT;  }
+          zgsz3722 = UNIT;
+        } else {  zgsz3722 = UNIT;  }
       }
       uint64_t zlen_ie;
       zlen_ie = ((zT_ie - zB_ie) & UINT64_C(0xFF));
       {
-        bool zgaz3409;
+        bool zgaz3399;
         {
-          fbits zgaz3408;
+          fbits zgaz3398;
           {
-            int64_t zgaz3407;
+            int64_t zgaz3397;
             {
-              int64_t zgaz3406;
-              zgaz3406 = (zcap_xe_width + INT64_C(1));
+              int64_t zgaz3396;
+              zgaz3396 = (zcap_xe_width + INT64_C(1));
               {
-                RECREATE(sail_int)(&zghz3319);
-                CONVERT_OF(sail_int, mach_int)(&zghz3319, zcap_mantissa_width);
-                RECREATE(sail_int)(&zghz3320);
-                CONVERT_OF(sail_int, mach_int)(&zghz3320, zgaz3406);
-                RECREATE(sail_int)(&zghz3321);
-                sub_int(&zghz3321, zghz3319, zghz3320);
-                zgaz3407 = CONVERT_OF(mach_int, sail_int)(zghz3321);
+                RECREATE(sail_int)(&zghz3354);
+                CONVERT_OF(sail_int, mach_int)(&zghz3354, zcap_mantissa_width);
+                RECREATE(sail_int)(&zghz3355);
+                CONVERT_OF(sail_int, mach_int)(&zghz3355, zgaz3396);
+                RECREATE(sail_int)(&zghz3356);
+                sub_int(&zghz3356, zghz3354, zghz3355);
+                zgaz3397 = CONVERT_OF(mach_int, sail_int)(zghz3356);
               }
             }
-            zgaz3408 = (UINT64_C(1) & (zlen_ie >> zgaz3407));
+            zgaz3398 = (UINT64_C(1) & (zlen_ie >> zgaz3397));
           }
-          zgaz3409 = eq_bit(zgaz3408, UINT64_C(1));
+          zgaz3399 = eq_bit(zgaz3398, UINT64_C(1));
         }
-        unit zgsz3715;
-        if (zgaz3409) {
+        unit zgsz3726;
+        if (zgaz3399) {
           {
             zincE = true;
-            unit zgsz3721;
-            zgsz3721 = UNIT;
+            unit zgsz3732;
+            zgsz3732 = UNIT;
           }
           {
-            bool zgsz3716;
-            if (zlostSignificantBase) {  zgsz3716 = true;  } else {
-              fbits zgaz3410;
-              zgaz3410 = (UINT64_C(1) & (zB_ie >> INT64_C(0)));
-              zgsz3716 = eq_bit(zgaz3410, UINT64_C(1));
+            bool zgsz3727;
+            if (zlostSignificantBase) {  zgsz3727 = true;  } else {
+              fbits zgaz3400;
+              zgaz3400 = (UINT64_C(1) & (zB_ie >> INT64_C(0)));
+              zgsz3727 = eq_bit(zgaz3400, UINT64_C(1));
             }
-            zlostSignificantBase = zgsz3716;
-            unit zgsz3720;
-            zgsz3720 = UNIT;
+            zlostSignificantBase = zgsz3727;
+            unit zgsz3731;
+            zgsz3731 = UNIT;
           }
           {
-            bool zgsz3717;
-            if (zlostSignificantTop) {  zgsz3717 = true;  } else {
-              fbits zgaz3411;
-              zgaz3411 = (UINT64_C(1) & (zT_ie >> INT64_C(0)));
-              zgsz3717 = eq_bit(zgaz3411, UINT64_C(1));
+            bool zgsz3728;
+            if (zlostSignificantTop) {  zgsz3728 = true;  } else {
+              fbits zgaz3401;
+              zgaz3401 = (UINT64_C(1) & (zT_ie >> INT64_C(0)));
+              zgsz3728 = eq_bit(zgaz3401, UINT64_C(1));
             }
-            zlostSignificantTop = zgsz3717;
-            unit zgsz3719;
-            zgsz3719 = UNIT;
+            zlostSignificantTop = zgsz3728;
+            unit zgsz3730;
+            zgsz3730 = UNIT;
           }
           {
-            uint64_t zgaz3414;
+            uint64_t zgaz3404;
             {
-              int64_t zgaz3413;
+              int64_t zgaz3403;
               {
-                int64_t zgaz3412;
-                zgaz3412 = (ze + zcap_xe_width);
-                zgaz3413 = (zgaz3412 + INT64_C(1));
+                int64_t zgaz3402;
+                zgaz3402 = (ze + zcap_xe_width);
+                zgaz3403 = (zgaz3402 + INT64_C(1));
               }
               {
-                RECREATE(lbits)(&zghz3316);
-                CONVERT_OF(lbits, fbits)(&zghz3316, zbase, UINT64_C(32) , true);
-                RECREATE(sail_int)(&zghz3317);
-                CONVERT_OF(sail_int, mach_int)(&zghz3317, zgaz3413);
-                RECREATE(lbits)(&zghz3318);
-                shiftr(&zghz3318, zghz3316, zghz3317);
-                zgaz3414 = CONVERT_OF(fbits, lbits)(zghz3318, true);
+                RECREATE(lbits)(&zghz3351);
+                CONVERT_OF(lbits, fbits)(&zghz3351, zbase, UINT64_C(32) , true);
+                RECREATE(sail_int)(&zghz3352);
+                CONVERT_OF(sail_int, mach_int)(&zghz3352, zgaz3403);
+                RECREATE(lbits)(&zghz3353);
+                shiftr(&zghz3353, zghz3351, zghz3352);
+                zgaz3404 = CONVERT_OF(fbits, lbits)(zghz3353, true);
               }
             }
-            int64_t zgaz3415;
+            int64_t zgaz3405;
             {
-              RECREATE(sail_int)(&zghz3313);
-              CONVERT_OF(sail_int, mach_int)(&zghz3313, zcap_mantissa_width);
-              RECREATE(sail_int)(&zghz3314);
-              CONVERT_OF(sail_int, mach_int)(&zghz3314, zcap_xe_width);
-              RECREATE(sail_int)(&zghz3315);
-              sub_int(&zghz3315, zghz3313, zghz3314);
-              zgaz3415 = CONVERT_OF(mach_int, sail_int)(zghz3315);
+              RECREATE(sail_int)(&zghz3348);
+              CONVERT_OF(sail_int, mach_int)(&zghz3348, zcap_mantissa_width);
+              RECREATE(sail_int)(&zghz3349);
+              CONVERT_OF(sail_int, mach_int)(&zghz3349, zcap_xe_width);
+              RECREATE(sail_int)(&zghz3350);
+              sub_int(&zghz3350, zghz3348, zghz3349);
+              zgaz3405 = CONVERT_OF(mach_int, sail_int)(zghz3350);
             }
             {
-              RECREATE(lbits)(&zghz3310);
-              CONVERT_OF(lbits, fbits)(&zghz3310, zgaz3414, UINT64_C(32) , true);
-              RECREATE(sail_int)(&zghz3311);
-              CONVERT_OF(sail_int, mach_int)(&zghz3311, zgaz3415);
-              RECREATE(lbits)(&zghz3312);
-              sail_truncate(&zghz3312, zghz3310, zghz3311);
-              zB_ie = CONVERT_OF(fbits, lbits)(zghz3312, true);
+              RECREATE(lbits)(&zghz3345);
+              CONVERT_OF(lbits, fbits)(&zghz3345, zgaz3404, UINT64_C(32) , true);
+              RECREATE(sail_int)(&zghz3346);
+              CONVERT_OF(sail_int, mach_int)(&zghz3346, zgaz3405);
+              RECREATE(lbits)(&zghz3347);
+              sail_truncate(&zghz3347, zghz3345, zghz3346);
+              zB_ie = CONVERT_OF(fbits, lbits)(zghz3347, true);
             }
-            unit zgsz3718;
-            zgsz3718 = UNIT;
+            unit zgsz3729;
+            zgsz3729 = UNIT;
           }
           int64_t zincT;
           if (zlostSignificantTop) {  zincT = INT64_C(1);  } else {  zincT = INT64_C(0);  }
-          uint64_t zgaz3420;
+          uint64_t zgaz3410;
           {
-            uint64_t zgaz3418;
+            uint64_t zgaz3408;
             {
-              int64_t zgaz3417;
+              int64_t zgaz3407;
               {
-                int64_t zgaz3416;
-                zgaz3416 = (ze + zcap_xe_width);
-                zgaz3417 = (zgaz3416 + INT64_C(1));
+                int64_t zgaz3406;
+                zgaz3406 = (ze + zcap_xe_width);
+                zgaz3407 = (zgaz3406 + INT64_C(1));
               }
               {
-                RECREATE(lbits)(&zghz3307);
-                CONVERT_OF(lbits, fbits)(&zghz3307, ztop, UINT64_C(33) , true);
-                RECREATE(sail_int)(&zghz3308);
-                CONVERT_OF(sail_int, mach_int)(&zghz3308, zgaz3417);
-                RECREATE(lbits)(&zghz3309);
-                shiftr(&zghz3309, zghz3307, zghz3308);
-                zgaz3418 = CONVERT_OF(fbits, lbits)(zghz3309, true);
+                RECREATE(lbits)(&zghz3342);
+                CONVERT_OF(lbits, fbits)(&zghz3342, ztop, UINT64_C(33) , true);
+                RECREATE(sail_int)(&zghz3343);
+                CONVERT_OF(sail_int, mach_int)(&zghz3343, zgaz3407);
+                RECREATE(lbits)(&zghz3344);
+                shiftr(&zghz3344, zghz3342, zghz3343);
+                zgaz3408 = CONVERT_OF(fbits, lbits)(zghz3344, true);
               }
             }
-            int64_t zgaz3419;
+            int64_t zgaz3409;
             {
-              RECREATE(sail_int)(&zghz3304);
-              CONVERT_OF(sail_int, mach_int)(&zghz3304, zcap_mantissa_width);
-              RECREATE(sail_int)(&zghz3305);
-              CONVERT_OF(sail_int, mach_int)(&zghz3305, zcap_xe_width);
-              RECREATE(sail_int)(&zghz3306);
-              sub_int(&zghz3306, zghz3304, zghz3305);
-              zgaz3419 = CONVERT_OF(mach_int, sail_int)(zghz3306);
+              RECREATE(sail_int)(&zghz3339);
+              CONVERT_OF(sail_int, mach_int)(&zghz3339, zcap_mantissa_width);
+              RECREATE(sail_int)(&zghz3340);
+              CONVERT_OF(sail_int, mach_int)(&zghz3340, zcap_xe_width);
+              RECREATE(sail_int)(&zghz3341);
+              sub_int(&zghz3341, zghz3339, zghz3340);
+              zgaz3409 = CONVERT_OF(mach_int, sail_int)(zghz3341);
             }
             {
-              RECREATE(lbits)(&zghz3301);
-              CONVERT_OF(lbits, fbits)(&zghz3301, zgaz3418, UINT64_C(33) , true);
-              RECREATE(sail_int)(&zghz3302);
-              CONVERT_OF(sail_int, mach_int)(&zghz3302, zgaz3419);
-              RECREATE(lbits)(&zghz3303);
-              sail_truncate(&zghz3303, zghz3301, zghz3302);
-              zgaz3420 = CONVERT_OF(fbits, lbits)(zghz3303, true);
+              RECREATE(lbits)(&zghz3336);
+              CONVERT_OF(lbits, fbits)(&zghz3336, zgaz3408, UINT64_C(33) , true);
+              RECREATE(sail_int)(&zghz3337);
+              CONVERT_OF(sail_int, mach_int)(&zghz3337, zgaz3409);
+              RECREATE(lbits)(&zghz3338);
+              sail_truncate(&zghz3338, zghz3336, zghz3337);
+              zgaz3410 = CONVERT_OF(fbits, lbits)(zghz3338, true);
             }
           }
           {
-            RECREATE(lbits)(&zghz3298);
-            CONVERT_OF(lbits, fbits)(&zghz3298, zgaz3420, UINT64_C(8) , true);
-            RECREATE(sail_int)(&zghz3299);
-            CONVERT_OF(sail_int, mach_int)(&zghz3299, zincT);
-            RECREATE(lbits)(&zghz3300);
-            add_bits_int(&zghz3300, zghz3298, zghz3299);
-            zT_ie = CONVERT_OF(fbits, lbits)(zghz3300, true);
+            RECREATE(lbits)(&zghz3333);
+            CONVERT_OF(lbits, fbits)(&zghz3333, zgaz3410, UINT64_C(8) , true);
+            RECREATE(sail_int)(&zghz3334);
+            CONVERT_OF(sail_int, mach_int)(&zghz3334, zincT);
+            RECREATE(lbits)(&zghz3335);
+            add_bits_int(&zghz3335, zghz3333, zghz3334);
+            zT_ie = CONVERT_OF(fbits, lbits)(zghz3335, true);
           }
-          zgsz3715 = UNIT;
-        } else {  zgsz3715 = UNIT;  }
+          zgsz3726 = UNIT;
+        } else {  zgsz3726 = UNIT;  }
       }
       {
-        uint64_t zgaz3421;
+        uint64_t zgaz3411;
         {
-          RECREATE(sail_int)(&zghz3296);
-          CONVERT_OF(sail_int, mach_int)(&zghz3296, zcap_xe_width);
-          RECREATE(lbits)(&zghz3297);
-          sailgen_zzeros_implicit(&zghz3297, zghz3296);
-          zgaz3421 = CONVERT_OF(fbits, lbits)(zghz3297, true);
+          RECREATE(sail_int)(&zghz3331);
+          CONVERT_OF(sail_int, mach_int)(&zghz3331, zcap_xe_width);
+          RECREATE(lbits)(&zghz3332);
+          sailgen_zzeros_implicit(&zghz3332, zghz3331);
+          zgaz3411 = CONVERT_OF(fbits, lbits)(zghz3332, true);
         }
-        zBbits = (zB_ie << 2) | zgaz3421;
-        unit zgsz3714;
-        zgsz3714 = UNIT;
+        zBbits = (zB_ie << 2) | zgaz3411;
+        unit zgsz3725;
+        zgsz3725 = UNIT;
       }
-      uint64_t zgaz3422;
+      uint64_t zgaz3412;
       {
-        RECREATE(sail_int)(&zghz3294);
-        CONVERT_OF(sail_int, mach_int)(&zghz3294, zcap_xe_width);
-        RECREATE(lbits)(&zghz3295);
-        sailgen_zzeros_implicit(&zghz3295, zghz3294);
-        zgaz3422 = CONVERT_OF(fbits, lbits)(zghz3295, true);
+        RECREATE(sail_int)(&zghz3329);
+        CONVERT_OF(sail_int, mach_int)(&zghz3329, zcap_xe_width);
+        RECREATE(lbits)(&zghz3330);
+        sailgen_zzeros_implicit(&zghz3330, zghz3329);
+        zgaz3412 = CONVERT_OF(fbits, lbits)(zghz3330, true);
       }
-      zTbits = (zT_ie << 2) | zgaz3422;
-      zgsz3710 = UNIT;
-    } else {  zgsz3710 = UNIT;  }
+      zTbits = (zT_ie << 2) | zgaz3412;
+      zgsz3721 = UNIT;
+    } else {  zgsz3721 = UNIT;  }
   }
-  struct zCapability zghz3293;
+  struct zCapability zghz3328;
   {
-    int64_t zgaz3434;
+    int64_t zgaz3424;
     if (zincE) {
-      bool zgaz3433;
+      bool zgaz3423;
       {
-        int64_t zgaz3432;
-        zgaz3432 = (ze + INT64_C(1));
-        zgaz3433 = (zgaz3432 <= zcap_max_E);
+        int64_t zgaz3422;
+        zgaz3422 = (ze + INT64_C(1));
+        zgaz3423 = (zgaz3422 <= zcap_max_E);
       }
-      if (zgaz3433) {  zgaz3434 = (ze + INT64_C(1));  } else {  zgaz3434 = zcap_min_E;  }
-    } else {  zgaz3434 = ze;  }
-    zghz3293 = zcap;
-    zghz3293.zB = zBbits;
-    zghz3293.zE = zgaz3434;
-    zghz3293.zT = zTbits;
-    zghz3293.zaddress = zbase;
-    zghz3293.zinternal_exponent = zie;
+      if (zgaz3423) {  zgaz3424 = (ze + INT64_C(1));  } else {  zgaz3424 = zcap_min_E;  }
+    } else {  zgaz3424 = ze;  }
+    zghz3328 = zcap;
+    zghz3328.zB = zBbits;
+    zghz3328.zE = zgaz3424;
+    zghz3328.zT = zTbits;
+    zghz3328.zaddress = zbase;
+    zghz3328.zinternal_exponent = zie;
   }
   bool zexact;
   {
-    bool zgaz3431;
-    {    if (zlostSignificantBase) {  zgaz3431 = true;  } else {  zgaz3431 = zlostSignificantTop;  }
+    bool zgaz3421;
+    {    if (zlostSignificantBase) {  zgaz3421 = true;  } else {  zgaz3421 = zlostSignificantTop;  }
     }
-    zexact = not(zgaz3431);
+    zexact = sailgen_not(zgaz3421);
   }
-  zcbz365.ztup0 = zexact;
-  zcbz365.ztup1 = zghz3293;
-
-
-
-
-
-
-
-
-
-
-end_function_598: ;
-  return zcbz365;
-end_block_exception_599: ;
-  struct zCapability zcbz3108 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
-  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz3107 = { .ztup0 = false, .ztup1 = zcbz3108 };
-  return zcbz3107;
+  zcbz366.ztup0 = zexact;
+  zcbz366.ztup1 = zghz3328;
+end_function_562: ;
+  return zcbz366;
+end_block_exception_563: ;
+  struct zCapability zcbz3110 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zcl = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
+  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz3109 = { .ztup0 = false, .ztup1 = zcbz3110 };
+  return zcbz3109;
 }
 
 
 
 static void finish_sailgen_setCapBounds(void)
 {
+  KILL(sail_int)(&zghz3401);
+  KILL(sail_int)(&zghz3400);
+  KILL(sail_int)(&zghz3399);
+  KILL(sail_int)(&zghz3398);
+  KILL(lbits)(&zghz3397);
+  KILL(sail_int)(&zghz3396);
+  KILL(sail_int)(&zghz3395);
+  KILL(sail_int)(&zghz3394);
+  KILL(sail_int)(&zghz3393);
+  KILL(sail_int)(&zghz3392);
+  KILL(sail_int)(&zghz3391);
+  KILL(sail_int)(&zghz3390);
+  KILL(sail_int)(&zghz3389);
+  KILL(lbits)(&zghz3388);
+  KILL(sail_int)(&zghz3387);
+  KILL(lbits)(&zghz3386);
+  KILL(lbits)(&zghz3385);
+  KILL(sail_int)(&zghz3384);
+  KILL(lbits)(&zghz3383);
+  KILL(lbits)(&zghz3382);
+  KILL(sail_int)(&zghz3381);
+  KILL(lbits)(&zghz3380);
+  KILL(sail_int)(&zghz3379);
+  KILL(sail_int)(&zghz3378);
+  KILL(sail_int)(&zghz3377);
+  KILL(lbits)(&zghz3376);
+  KILL(sail_int)(&zghz3375);
+  KILL(lbits)(&zghz3374);
+  KILL(lbits)(&zghz3373);
+  KILL(sail_int)(&zghz3372);
+  KILL(lbits)(&zghz3371);
+  KILL(sail_int)(&zghz3370);
+  KILL(sail_int)(&zghz3369);
+  KILL(sail_int)(&zghz3368);
+  KILL(lbits)(&zghz3367);
   KILL(sail_int)(&zghz3366);
-  KILL(sail_int)(&zghz3365);
-  KILL(sail_int)(&zghz3364);
+  KILL(lbits)(&zghz3365);
+  KILL(lbits)(&zghz3364);
   KILL(sail_int)(&zghz3363);
   KILL(lbits)(&zghz3362);
-  KILL(sail_int)(&zghz3361);
+  KILL(lbits)(&zghz3361);
   KILL(sail_int)(&zghz3360);
-  KILL(sail_int)(&zghz3359);
+  KILL(lbits)(&zghz3359);
   KILL(sail_int)(&zghz3358);
-  KILL(sail_int)(&zghz3357);
+  KILL(lbits)(&zghz3357);
   KILL(sail_int)(&zghz3356);
   KILL(sail_int)(&zghz3355);
   KILL(sail_int)(&zghz3354);
   KILL(lbits)(&zghz3353);
   KILL(sail_int)(&zghz3352);
   KILL(lbits)(&zghz3351);
-  KILL(lbits)(&zghz3350);
+  KILL(sail_int)(&zghz3350);
   KILL(sail_int)(&zghz3349);
-  KILL(lbits)(&zghz3348);
+  KILL(sail_int)(&zghz3348);
   KILL(lbits)(&zghz3347);
   KILL(sail_int)(&zghz3346);
   KILL(lbits)(&zghz3345);
-  KILL(sail_int)(&zghz3344);
+  KILL(lbits)(&zghz3344);
   KILL(sail_int)(&zghz3343);
-  KILL(sail_int)(&zghz3342);
-  KILL(lbits)(&zghz3341);
+  KILL(lbits)(&zghz3342);
+  KILL(sail_int)(&zghz3341);
   KILL(sail_int)(&zghz3340);
-  KILL(lbits)(&zghz3339);
+  KILL(sail_int)(&zghz3339);
   KILL(lbits)(&zghz3338);
   KILL(sail_int)(&zghz3337);
   KILL(lbits)(&zghz3336);
-  KILL(sail_int)(&zghz3335);
+  KILL(lbits)(&zghz3335);
   KILL(sail_int)(&zghz3334);
-  KILL(sail_int)(&zghz3333);
+  KILL(lbits)(&zghz3333);
   KILL(lbits)(&zghz3332);
   KILL(sail_int)(&zghz3331);
   KILL(lbits)(&zghz3330);
-  KILL(lbits)(&zghz3329);
-  KILL(sail_int)(&zghz3328);
-  KILL(lbits)(&zghz3327);
-  KILL(lbits)(&zghz3326);
-  KILL(sail_int)(&zghz3325);
-  KILL(lbits)(&zghz3324);
-  KILL(sail_int)(&zghz3323);
-  KILL(lbits)(&zghz3322);
-  KILL(sail_int)(&zghz3321);
-  KILL(sail_int)(&zghz3320);
-  KILL(sail_int)(&zghz3319);
-  KILL(lbits)(&zghz3318);
-  KILL(sail_int)(&zghz3317);
-  KILL(lbits)(&zghz3316);
-  KILL(sail_int)(&zghz3315);
-  KILL(sail_int)(&zghz3314);
-  KILL(sail_int)(&zghz3313);
-  KILL(lbits)(&zghz3312);
-  KILL(sail_int)(&zghz3311);
-  KILL(lbits)(&zghz3310);
-  KILL(lbits)(&zghz3309);
-  KILL(sail_int)(&zghz3308);
-  KILL(lbits)(&zghz3307);
-  KILL(sail_int)(&zghz3306);
-  KILL(sail_int)(&zghz3305);
-  KILL(sail_int)(&zghz3304);
-  KILL(lbits)(&zghz3303);
-  KILL(sail_int)(&zghz3302);
-  KILL(lbits)(&zghz3301);
-  KILL(lbits)(&zghz3300);
-  KILL(sail_int)(&zghz3299);
-  KILL(lbits)(&zghz3298);
-  KILL(lbits)(&zghz3297);
-  KILL(sail_int)(&zghz3296);
-  KILL(lbits)(&zghz3295);
-  KILL(sail_int)(&zghz3294);
-
+  KILL(sail_int)(&zghz3329);
 }
 
 static bool sailgen_capIsSealed(struct zCapability);
 
 static bool sailgen_capIsSealed(struct zCapability zcap)
 {
-  __label__ end_function_601, end_block_exception_602;
+  __label__ end_function_565, end_block_exception_566;
 
-  bool zcbz366;
-  zcbz366 = zcap.zsealed;
-end_function_601: ;
-  return zcbz366;
-end_block_exception_602: ;
+  bool zcbz367;
+  zcbz367 = zcap.zsealed;
+end_function_565: ;
+  return zcbz367;
+end_block_exception_566: ;
 
   return false;
 }
@@ -10560,54 +10267,51 @@ static bool sailgen_permsMalformed(struct zCapability);
 
 static bool sailgen_permsMalformed(struct zCapability zcap)
 {
-  __label__ end_function_604, end_block_exception_605;
+  __label__ end_function_568, end_block_exception_569;
 
-  bool zcbz367;
-  bool zgaz3443;
+  bool zcbz368;
+  bool zgaz3433;
   {
-    uint64_t zgaz3442;
-    zgaz3442 = zcap.zap_m;
-    zgaz3443 = sailgen_ap_m_encdec_forwards_matches(zgaz3442);
+    uint64_t zgaz3432;
+    zgaz3432 = zcap.zap_m;
+    zgaz3433 = sailgen_ap_m_encdec_forwards_matches(zgaz3432);
   }
-  zcbz367 = not(zgaz3443);
-
-end_function_604: ;
-  return zcbz367;
-end_block_exception_605: ;
+  zcbz368 = sailgen_not(zgaz3433);
+end_function_568: ;
+  return zcbz368;
+end_block_exception_569: ;
 
   return false;
 }
 
 static void sailgen_getCapPermsAndMode(struct zoptionzIz8RArchPermszCEExecutionModez5z9zK *rop, struct zCapability);
 
-
-static void sailgen_getCapPermsAndMode(struct zoptionzIz8RArchPermszCEExecutionModez5z9zK *zcbz368, struct zCapability zcap)
+static void sailgen_getCapPermsAndMode(struct zoptionzIz8RArchPermszCEExecutionModez5z9zK *zcbz369, struct zCapability zcap)
 {
-  __label__ end_function_607, end_block_exception_608, end_function_705;
+  __label__ end_function_571, end_block_exception_572, end_function_669;
 
-  bool zgaz3444;
-  zgaz3444 = sailgen_permsMalformed(zcap);
-  if (zgaz3444) {  sailgen_NonezIz8RArchPermszCEExecutionModez5z9zK((*(&zcbz368)), UNIT);  } else {
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgaz3446;
+  bool zgaz3434;
+  zgaz3434 = sailgen_permsMalformed(zcap);
+  if (zgaz3434) {  sailgen_NonezIz8RArchPermszCEExecutionModez5z9zK((*(&zcbz369)), UNIT);  } else {
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgaz3436;
     {
-      uint64_t zgaz3445;
-      zgaz3445 = zcap.zap_m;
-      zgaz3446 = sailgen_ap_m_encdec_forwards(zgaz3445);
+      uint64_t zgaz3435;
+      zgaz3435 = zcap.zap_m;
+      zgaz3436 = sailgen_ap_m_encdec_forwards(zgaz3435);
     }
-    sailgen_SomezIz8RArchPermszCEExecutionModez5z9zK((*(&zcbz368)), zgaz3446);
+    sailgen_SomezIz8RArchPermszCEExecutionModez5z9zK((*(&zcbz369)), zgaz3436);
   }
-
-end_function_607: ;
-  goto end_function_705;
-end_block_exception_608: ;
-  goto end_function_705;
-end_function_705: ;
+end_function_571: ;
+  goto end_function_669;
+end_block_exception_572: ;
+  goto end_function_669;
+end_function_669: ;
 }
 
 static struct zCapability sailgen_setCapPermsAndMode(struct zCapability, struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9);
 
-struct zCapability zghz3367;
-struct zArchPerms zghz3368;
+struct zCapability zghz3402;
+struct zArchPerms zghz3403;
 
 static void startup_sailgen_setCapPermsAndMode(void)
 {
@@ -10615,83 +10319,80 @@ static void startup_sailgen_setCapPermsAndMode(void)
 
 }
 
-static struct zCapability sailgen_setCapPermsAndMode(struct zCapability zcap, struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3725)
+static struct zCapability sailgen_setCapPermsAndMode(struct zCapability zcap, struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgsz3736)
 {
-  __label__ fundef_fail_609, fundef_body_610, end_function_611, end_block_exception_612;
+  __label__ fundef_fail_573, fundef_body_574, end_function_575, end_block_exception_576;
 
-  struct zCapability zghz3367;
-  struct zArchPerms zghz3368;
-  zghz3368 = zgsz3725.ztup0;
+  struct zCapability zghz3402;
+  struct zArchPerms zghz3403;
+  zghz3403 = zgsz3736.ztup0;
   enum zExecutionMode zmode;
-  zmode = zgsz3725.ztup1;
-  goto fundef_body_610;
-fundef_fail_609: ;
+  zmode = zgsz3736.ztup1;
+  goto fundef_body_574;
+fundef_fail_573: ;
   sail_match_failure("setCapPermsAndMode");
-fundef_body_610: ;
-  uint64_t zgaz3448;
+fundef_body_574: ;
+  uint64_t zgaz3438;
   {
-    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgaz3447;
-    zgaz3447 = sailgen_legalizzePermsAndMode(zghz3368, zmode);
-    zgaz3448 = sailgen_ap_m_encdec_backwards(zgaz3447);
+    struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgaz3437;
+    zgaz3437 = sailgen_legalizzePermsAndMode(zghz3403, zmode);
+    zgaz3438 = sailgen_ap_m_encdec_backwards(zgaz3437);
   }
-  zghz3367 = zcap;
-  zghz3367.zap_m = zgaz3448;
-
-end_function_611: ;
-  return zghz3367;
-end_block_exception_612: ;
-  struct zCapability zcbz3109 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
-  return zcbz3109;
+  zghz3402 = zcap;
+  zghz3402.zap_m = zgaz3438;
+end_function_575: ;
+  return zghz3402;
+end_block_exception_576: ;
+  struct zCapability zcbz3111 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zcl = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
+  return zcbz3111;
 }
 
 
 
 static void finish_sailgen_setCapPermsAndMode(void)
 {
-
-
 }
 
 static void sailgen_getArchPerms(struct zoptionzIRArchPermszK *rop, struct zCapability);
 
-struct zArchPerms zghz3369;
+struct zArchPerms zghz3404;
 
 static void startup_sailgen_getArchPerms(void)
 {
 }
 
-static void sailgen_getArchPerms(struct zoptionzIRArchPermszK *zcbz370, struct zCapability zcap)
+static void sailgen_getArchPerms(struct zoptionzIRArchPermszK *zcbz371, struct zCapability zcap)
 {
-  __label__ case_616, case_615, finish_match_614, end_function_617, end_block_exception_618, end_function_704;
+  __label__ case_580, case_579, finish_match_578, end_function_581, end_block_exception_582, end_function_668;
 
-  struct zoptionzIz8RArchPermszCEExecutionModez5z9zK zgaz3449;
-  CREATE(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zgaz3449);
-  sailgen_getCapPermsAndMode(&zgaz3449, zcap);
-  struct zoptionzIRArchPermszK zgsz3727;
-  CREATE(zoptionzIRArchPermszK)(&zgsz3727);
+  struct zoptionzIz8RArchPermszCEExecutionModez5z9zK zgaz3439;
+  CREATE(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zgaz3439);
+  sailgen_getCapPermsAndMode(&zgaz3439, zcap);
+  struct zoptionzIRArchPermszK zgsz3738;
+  CREATE(zoptionzIRArchPermszK)(&zgsz3738);
   {
-    if (zgaz3449.kind != Kind_zNonezIz8RArchPermszCEExecutionModez5z9zK) goto case_616;
-    sailgen_NonezIRArchPermszK(&zgsz3727, UNIT);
-    goto finish_match_614;
+    if (zgaz3439.kind != Kind_zNonezIz8RArchPermszCEExecutionModez5z9zK) goto case_580;
+    sailgen_NonezIRArchPermszK(&zgsz3738, UNIT);
+    goto finish_match_578;
   }
-case_616: ;
+case_580: ;
   {
     /* complete */
-    struct zArchPerms zghz3369;
-    zghz3369 = zgaz3449.zSomezIz8RArchPermszCEExecutionModez5z9zK.ztup0;
-    sailgen_SomezIRArchPermszK(&zgsz3727, zghz3369);
-    goto finish_match_614;
+    struct zArchPerms zghz3404;
+    zghz3404 = zgaz3439.variants.zSomezIz8RArchPermszCEExecutionModez5z9zK.ztup0;
+    sailgen_SomezIRArchPermszK(&zgsz3738, zghz3404);
+    goto finish_match_578;
   }
-case_615: ;
-finish_match_614: ;
-  COPY(zoptionzIRArchPermszK)((*(&zcbz370)), zgsz3727);
-  KILL(zoptionzIRArchPermszK)(&zgsz3727);
-  KILL(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zgaz3449);
-end_function_617: ;
-  goto end_function_704;
-end_block_exception_618: ;
-  goto end_function_704;
-end_function_704: ;
+case_579: ;
+finish_match_578: ;
+  COPY(zoptionzIRArchPermszK)((*(&zcbz371)), zgsz3738);
+  KILL(zoptionzIRArchPermszK)(&zgsz3738);
+  KILL(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zgaz3439);
+end_function_581: ;
+  goto end_function_668;
+end_block_exception_582: ;
+  goto end_function_668;
+end_function_668: ;
 }
 
 
@@ -10702,8 +10403,8 @@ static void finish_sailgen_getArchPerms(void)
 
 static struct zArchPerms sailgen_getArchPermsLegalizzed(struct zCapability);
 
-struct zArchPerms zghz3370;
-struct zArchPerms zghz3371;
+struct zArchPerms zghz3405;
+struct zArchPerms zghz3406;
 
 static void startup_sailgen_getArchPermsLegalizzed(void)
 {
@@ -10713,142 +10414,140 @@ static void startup_sailgen_getArchPermsLegalizzed(void)
 
 static struct zArchPerms sailgen_getArchPermsLegalizzed(struct zCapability zcap)
 {
-  __label__ case_622, case_621, finish_match_620, end_function_623, end_block_exception_624;
+  __label__ case_586, case_585, finish_match_584, end_function_587, end_block_exception_588;
 
-  struct zArchPerms zghz3370;
-  struct zoptionzIRArchPermszK zgaz3450;
-  CREATE(zoptionzIRArchPermszK)(&zgaz3450);
-  sailgen_getArchPerms(&zgaz3450, zcap);
+  struct zArchPerms zghz3405;
+  struct zoptionzIRArchPermszK zgaz3440;
+  CREATE(zoptionzIRArchPermszK)(&zgaz3440);
+  sailgen_getArchPerms(&zgaz3440, zcap);
   {
-    if (zgaz3450.kind != Kind_zNonezIRArchPermszK) goto case_622;
-    zghz3370 = znull_perms;
-    goto finish_match_620;
+    if (zgaz3440.kind != Kind_zNonezIRArchPermszK) goto case_586;
+    zghz3405 = znull_perms;
+    goto finish_match_584;
   }
-case_622: ;
+case_586: ;
   {
     /* complete */
-    struct zArchPerms zghz3371;
-    zghz3371 = zgaz3450.zSomezIRArchPermszK;
-    zghz3370 = zghz3371;
-    goto finish_match_620;
+    struct zArchPerms zghz3406;
+    zghz3406 = zgaz3440.variants.zSomezIRArchPermszK;
+    zghz3405 = zghz3406;
+    goto finish_match_584;
   }
-case_621: ;
-finish_match_620: ;
-  KILL(zoptionzIRArchPermszK)(&zgaz3450);
-end_function_623: ;
-  return zghz3370;
-end_block_exception_624: ;
-  struct zArchPerms zcbz3110 = { .zASR = false, .zC = false, .zLM = false, .zR = false, .zW = false, .zX = false };
-  return zcbz3110;
+case_585: ;
+finish_match_584: ;
+  KILL(zoptionzIRArchPermszK)(&zgaz3440);
+end_function_587: ;
+  return zghz3405;
+end_block_exception_588: ;
+  struct zArchPerms zcbz3112 = { .zASR = false, .zC = false, .zEL = false, .zLM = false, .zR = false, .zSL = false, .zW = false, .zX = false };
+  return zcbz3112;
 }
 
 
 
 static void finish_sailgen_getArchPermsLegalizzed(void)
 {
-
-
 }
 
 static enum zExecutionMode sailgen_getCapMode(struct zCapability);
 
 static enum zExecutionMode sailgen_getCapMode(struct zCapability zcap)
 {
-  __label__ case_628, case_627, finish_match_626, end_function_629, end_block_exception_630;
+  __label__ case_592, case_591, finish_match_590, end_function_593, end_block_exception_594;
 
-  enum zExecutionMode zcbz372;
-  struct zoptionzIz8RArchPermszCEExecutionModez5z9zK zgaz3451;
-  CREATE(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zgaz3451);
-  sailgen_getCapPermsAndMode(&zgaz3451, zcap);
+  enum zExecutionMode zcbz373;
+  struct zoptionzIz8RArchPermszCEExecutionModez5z9zK zgaz3441;
+  CREATE(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zgaz3441);
+  sailgen_getCapPermsAndMode(&zgaz3441, zcap);
   {
-    if (zgaz3451.kind != Kind_zNonezIz8RArchPermszCEExecutionModez5z9zK) goto case_628;
-    zcbz372 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
-    goto finish_match_626;
+    if (zgaz3441.kind != Kind_zNonezIz8RArchPermszCEExecutionModez5z9zK) goto case_592;
+    zcbz373 = sailgen_execution_mode_encdec_backwards(UINT64_C(0b0));
+    goto finish_match_590;
   }
-case_628: ;
+case_592: ;
   {
     /* complete */
     enum zExecutionMode zmode;
-    zmode = zgaz3451.zSomezIz8RArchPermszCEExecutionModez5z9zK.ztup1;
-    zcbz372 = zmode;
-    goto finish_match_626;
+    zmode = zgaz3441.variants.zSomezIz8RArchPermszCEExecutionModez5z9zK.ztup1;
+    zcbz373 = zmode;
+    goto finish_match_590;
   }
-case_627: ;
-finish_match_626: ;
-  KILL(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zgaz3451);
-end_function_629: ;
-  return zcbz372;
-end_block_exception_630: ;
+case_591: ;
+finish_match_590: ;
+  KILL(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zgaz3441);
+end_function_593: ;
+  return zcbz373;
+end_block_exception_594: ;
 
   return zCapPtrMode;
 }
 
 static int64_t sailgen_getCapLength(struct zCapability);
 
-sail_int zghz3372;
-sail_int zghz3373;
-sail_int zghz3374;
-sail_int zghz3375;
-sail_int zghz3376;
+sail_int zghz3407;
+sail_int zghz3408;
+sail_int zghz3409;
+sail_int zghz3410;
+sail_int zghz3411;
 
 static void startup_sailgen_getCapLength(void)
 {
-  CREATE(sail_int)(&zghz3372);
-  CREATE(sail_int)(&zghz3373);
-  CREATE(sail_int)(&zghz3374);
-  CREATE(sail_int)(&zghz3375);
-  CREATE(sail_int)(&zghz3376);
+  CREATE(sail_int)(&zghz3407);
+  CREATE(sail_int)(&zghz3408);
+  CREATE(sail_int)(&zghz3409);
+  CREATE(sail_int)(&zghz3410);
+  CREATE(sail_int)(&zghz3411);
 }
 
 static int64_t sailgen_getCapLength(struct zCapability zc)
 {
-  __label__ case_634, case_633, finish_match_632, end_function_635, end_block_exception_636;
+  __label__ case_598, case_597, finish_match_596, end_function_599, end_block_exception_600;
 
-  int64_t zcbz373;
-  struct zoptionzIz8izCiz9zK zgaz3452;
-  CREATE(zoptionzIz8izCiz9zK)(&zgaz3452);
-  sailgen_getCapBounds(&zgaz3452, zc);
+  int64_t zcbz374;
+  struct zoptionzIz8izCiz9zK zgaz3442;
+  CREATE(zoptionzIz8izCiz9zK)(&zgaz3442);
+  sailgen_getCapBounds(&zgaz3442, zc);
   {
-    if (zgaz3452.kind != Kind_zNonezIz8izCiz9zK) goto case_634;
-    zcbz373 = INT64_C(0);
-    goto finish_match_632;
+    if (zgaz3442.kind != Kind_zNonezIz8izCiz9zK) goto case_598;
+    zcbz374 = INT64_C(0);
+    goto finish_match_596;
   }
-case_634: ;
+case_598: ;
   {
     /* complete */
     int64_t zbase;
-    zbase = CONVERT_OF(mach_int, sail_int)(zgaz3452.zSomezIz8izCiz9zK.ztup0);
+    zbase = CONVERT_OF(mach_int, sail_int)(zgaz3442.variants.zSomezIz8izCiz9zK.ztup0);
     int64_t ztop;
-    ztop = CONVERT_OF(mach_int, sail_int)(zgaz3452.zSomezIz8izCiz9zK.ztup1);
+    ztop = CONVERT_OF(mach_int, sail_int)(zgaz3442.variants.zSomezIz8izCiz9zK.ztup1);
     {
-      bool zgaz3453;
+      bool zgaz3443;
       {
-        RECREATE(sail_int)(&zghz3375);
-        CONVERT_OF(sail_int, mach_int)(&zghz3375, ztop);
-        RECREATE(sail_int)(&zghz3376);
-        CONVERT_OF(sail_int, mach_int)(&zghz3376, zbase);
-        zgaz3453 = gteq(zghz3375, zghz3376);
+        RECREATE(sail_int)(&zghz3410);
+        CONVERT_OF(sail_int, mach_int)(&zghz3410, ztop);
+        RECREATE(sail_int)(&zghz3411);
+        CONVERT_OF(sail_int, mach_int)(&zghz3411, zbase);
+        zgaz3443 = gteq(zghz3410, zghz3411);
       }
-      unit zgsz3737;
-      zgsz3737 = sail_assert(zgaz3453, "src/cheri_cap_common.sail:433.42-433.43");
+      unit zgsz3748;
+      zgsz3748 = sail_assert(zgaz3443, "src/cheri_cap_common.sail:448.42-448.43");
     }
     {
-      RECREATE(sail_int)(&zghz3372);
-      CONVERT_OF(sail_int, mach_int)(&zghz3372, ztop);
-      RECREATE(sail_int)(&zghz3373);
-      CONVERT_OF(sail_int, mach_int)(&zghz3373, zbase);
-      RECREATE(sail_int)(&zghz3374);
-      sub_int(&zghz3374, zghz3372, zghz3373);
-      zcbz373 = CONVERT_OF(mach_int, sail_int)(zghz3374);
+      RECREATE(sail_int)(&zghz3407);
+      CONVERT_OF(sail_int, mach_int)(&zghz3407, ztop);
+      RECREATE(sail_int)(&zghz3408);
+      CONVERT_OF(sail_int, mach_int)(&zghz3408, zbase);
+      RECREATE(sail_int)(&zghz3409);
+      sub_int(&zghz3409, zghz3407, zghz3408);
+      zcbz374 = CONVERT_OF(mach_int, sail_int)(zghz3409);
     }
-    goto finish_match_632;
+    goto finish_match_596;
   }
-case_633: ;
-finish_match_632: ;
-  KILL(zoptionzIz8izCiz9zK)(&zgaz3452);
-end_function_635: ;
-  return zcbz373;
-end_block_exception_636: ;
+case_597: ;
+finish_match_596: ;
+  KILL(zoptionzIz8izCiz9zK)(&zgaz3442);
+end_function_599: ;
+  return zcbz374;
+end_block_exception_600: ;
 
   return INT64_C(0xdeadc0de);
 }
@@ -10857,90 +10556,89 @@ end_block_exception_636: ;
 
 static void finish_sailgen_getCapLength(void)
 {
-  KILL(sail_int)(&zghz3376);
-  KILL(sail_int)(&zghz3375);
-  KILL(sail_int)(&zghz3374);
-  KILL(sail_int)(&zghz3373);
-  KILL(sail_int)(&zghz3372);
+  KILL(sail_int)(&zghz3411);
+  KILL(sail_int)(&zghz3410);
+  KILL(sail_int)(&zghz3409);
+  KILL(sail_int)(&zghz3408);
+  KILL(sail_int)(&zghz3407);
 }
 
 static bool sailgen_inCapBoundsNoWrap(struct zCapability, uint64_t, int64_t);
 
-sail_int zghz3377;
-sail_int zghz3378;
-sail_int zghz3379;
-sail_int zghz3380;
-lbits zghz3381;
-sail_int zghz3382;
+sail_int zghz3412;
+sail_int zghz3413;
+sail_int zghz3414;
+sail_int zghz3415;
+lbits zghz3416;
+sail_int zghz3417;
 
 static void startup_sailgen_inCapBoundsNoWrap(void)
 {
-  CREATE(sail_int)(&zghz3377);
-  CREATE(sail_int)(&zghz3378);
-  CREATE(sail_int)(&zghz3379);
-  CREATE(sail_int)(&zghz3380);
-  CREATE(lbits)(&zghz3381);
-  CREATE(sail_int)(&zghz3382);
+  CREATE(sail_int)(&zghz3412);
+  CREATE(sail_int)(&zghz3413);
+  CREATE(sail_int)(&zghz3414);
+  CREATE(sail_int)(&zghz3415);
+  CREATE(lbits)(&zghz3416);
+  CREATE(sail_int)(&zghz3417);
 }
 
 static bool sailgen_inCapBoundsNoWrap(struct zCapability zcap, uint64_t zaddr, int64_t zsizze)
 {
-  __label__ case_640, case_639, finish_match_638, end_function_641, end_block_exception_642;
+  __label__ case_604, case_603, finish_match_602, end_function_605, end_block_exception_606;
 
-  bool zcbz374;
+  bool zcbz375;
   int64_t za;
   {
-    RECREATE(lbits)(&zghz3381);
-    CONVERT_OF(lbits, fbits)(&zghz3381, zaddr, UINT64_C(32) , true);
-    RECREATE(sail_int)(&zghz3382);
-    sail_unsigned(&zghz3382, zghz3381);
-    za = CONVERT_OF(mach_int, sail_int)(zghz3382);
+    RECREATE(lbits)(&zghz3416);
+    CONVERT_OF(lbits, fbits)(&zghz3416, zaddr, UINT64_C(32) , true);
+    RECREATE(sail_int)(&zghz3417);
+    sail_unsigned(&zghz3417, zghz3416);
+    za = CONVERT_OF(mach_int, sail_int)(zghz3417);
   }
-  struct zoptionzIz8izCiz9zK zgaz3454;
-  CREATE(zoptionzIz8izCiz9zK)(&zgaz3454);
-  sailgen_getCapBounds(&zgaz3454, zcap);
+  struct zoptionzIz8izCiz9zK zgaz3444;
+  CREATE(zoptionzIz8izCiz9zK)(&zgaz3444);
+  sailgen_getCapBounds(&zgaz3444, zcap);
   {
-    if (zgaz3454.kind != Kind_zNonezIz8izCiz9zK) goto case_640;
-    zcbz374 = false;
-    goto finish_match_638;
+    if (zgaz3444.kind != Kind_zNonezIz8izCiz9zK) goto case_604;
+    zcbz375 = false;
+    goto finish_match_602;
   }
-case_640: ;
+case_604: ;
   {
     /* complete */
     int64_t zbase;
-    zbase = CONVERT_OF(mach_int, sail_int)(zgaz3454.zSomezIz8izCiz9zK.ztup0);
+    zbase = CONVERT_OF(mach_int, sail_int)(zgaz3444.variants.zSomezIz8izCiz9zK.ztup0);
     int64_t ztop;
-    ztop = CONVERT_OF(mach_int, sail_int)(zgaz3454.zSomezIz8izCiz9zK.ztup1);
-    bool zgaz3456;
+    ztop = CONVERT_OF(mach_int, sail_int)(zgaz3444.variants.zSomezIz8izCiz9zK.ztup1);
+    bool zgaz3446;
     {
-      RECREATE(sail_int)(&zghz3379);
-      CONVERT_OF(sail_int, mach_int)(&zghz3379, za);
-      RECREATE(sail_int)(&zghz3380);
-      CONVERT_OF(sail_int, mach_int)(&zghz3380, zbase);
-      zgaz3456 = gteq(zghz3379, zghz3380);
+      RECREATE(sail_int)(&zghz3414);
+      CONVERT_OF(sail_int, mach_int)(&zghz3414, za);
+      RECREATE(sail_int)(&zghz3415);
+      CONVERT_OF(sail_int, mach_int)(&zghz3415, zbase);
+      zgaz3446 = gteq(zghz3414, zghz3415);
     }
-    bool zgsz3741;
-    if (zgaz3456) {
-      int64_t zgaz3455;
-      zgaz3455 = (za + zsizze);
+    bool zgsz3752;
+    if (zgaz3446) {
+      int64_t zgaz3445;
+      zgaz3445 = (za + zsizze);
       {
-        RECREATE(sail_int)(&zghz3377);
-        CONVERT_OF(sail_int, mach_int)(&zghz3377, zgaz3455);
-        RECREATE(sail_int)(&zghz3378);
-        CONVERT_OF(sail_int, mach_int)(&zghz3378, ztop);
-        zgsz3741 = lteq(zghz3377, zghz3378);
+        RECREATE(sail_int)(&zghz3412);
+        CONVERT_OF(sail_int, mach_int)(&zghz3412, zgaz3445);
+        RECREATE(sail_int)(&zghz3413);
+        CONVERT_OF(sail_int, mach_int)(&zghz3413, ztop);
+        zgsz3752 = lteq(zghz3412, zghz3413);
       }
-    } else {  zgsz3741 = false;  }
-    zcbz374 = zgsz3741;
-    goto finish_match_638;
+    } else {  zgsz3752 = false;  }
+    zcbz375 = zgsz3752;
+    goto finish_match_602;
   }
-case_639: ;
-finish_match_638: ;
-  KILL(zoptionzIz8izCiz9zK)(&zgaz3454);
-
-end_function_641: ;
-  return zcbz374;
-end_block_exception_642: ;
+case_603: ;
+finish_match_602: ;
+  KILL(zoptionzIz8izCiz9zK)(&zgaz3444);
+end_function_605: ;
+  return zcbz375;
+end_block_exception_606: ;
 
   return false;
 }
@@ -10949,45 +10647,44 @@ end_block_exception_642: ;
 
 static void finish_sailgen_inCapBoundsNoWrap(void)
 {
-  KILL(sail_int)(&zghz3382);
-  KILL(lbits)(&zghz3381);
-  KILL(sail_int)(&zghz3380);
-  KILL(sail_int)(&zghz3379);
-  KILL(sail_int)(&zghz3378);
-  KILL(sail_int)(&zghz3377);
+  KILL(sail_int)(&zghz3417);
+  KILL(lbits)(&zghz3416);
+  KILL(sail_int)(&zghz3415);
+  KILL(sail_int)(&zghz3414);
+  KILL(sail_int)(&zghz3413);
+  KILL(sail_int)(&zghz3412);
 }
 
 static bool sailgen_capReservedValid(struct zCapability);
 
 static bool sailgen_capReservedValid(struct zCapability zcap)
 {
-  __label__ end_function_644, end_block_exception_645;
+  __label__ end_function_608, end_block_exception_609;
 
-  bool zcbz375;
-  bool zgaz3459;
+  bool zcbz376;
+  bool zgaz3449;
   {
-    uint64_t zgaz3457;
-    zgaz3457 = zcap.zreserved_0;
-    zgaz3459 = (zgaz3457 == UINT64_C(0b000));
+    uint64_t zgaz3447;
+    zgaz3447 = zcap.zreserved_0;
+    zgaz3449 = (zgaz3447 == UINT64_C(0b00));
   }
-  bool zgsz3744;
-  if (zgaz3459) {
-    uint64_t zgaz3458;
-    zgaz3458 = zcap.zreserved_1;
-    zgsz3744 = (zgaz3458 == UINT64_C(0b0));
-  } else {  zgsz3744 = false;  }
-  zcbz375 = zgsz3744;
-
-end_function_644: ;
-  return zcbz375;
-end_block_exception_645: ;
+  bool zgsz3755;
+  if (zgaz3449) {
+    uint64_t zgaz3448;
+    zgaz3448 = zcap.zreserved_1;
+    zgsz3755 = (zgaz3448 == UINT64_C(0b0));
+  } else {  zgsz3755 = false;  }
+  zcbz376 = zgsz3755;
+end_function_608: ;
+  return zcbz376;
+end_block_exception_609: ;
 
   return false;
 }
 
 static struct zCapability sailgen_clearTagIf(struct zCapability, bool);
 
-struct zCapability zghz3383;
+struct zCapability zghz3418;
 
 static void startup_sailgen_clearTagIf(void)
 {
@@ -10995,25 +10692,24 @@ static void startup_sailgen_clearTagIf(void)
 
 static struct zCapability sailgen_clearTagIf(struct zCapability zcap, bool zcond)
 {
-  __label__ end_function_647, end_block_exception_648;
+  __label__ end_function_611, end_block_exception_612;
 
-  struct zCapability zghz3383;
-  bool zgaz3461;
+  struct zCapability zghz3418;
+  bool zgaz3451;
   {
-    bool zgaz3460;
-    zgaz3460 = zcap.ztag;
-    bool zgsz3745;
-    if (zgaz3460) {  zgsz3745 = not(zcond);  } else {  zgsz3745 = false;  }
-    zgaz3461 = zgsz3745;
+    bool zgaz3450;
+    zgaz3450 = zcap.ztag;
+    bool zgsz3756;
+    if (zgaz3450) {  zgsz3756 = sailgen_not(zcond);  } else {  zgsz3756 = false;  }
+    zgaz3451 = zgsz3756;
   }
-  zghz3383 = zcap;
-  zghz3383.ztag = zgaz3461;
-
-end_function_647: ;
-  return zghz3383;
-end_block_exception_648: ;
-  struct zCapability zcbz3111 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
-  return zcbz3111;
+  zghz3418 = zcap;
+  zghz3418.ztag = zgaz3451;
+end_function_611: ;
+  return zghz3418;
+end_block_exception_612: ;
+  struct zCapability zcbz3113 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zcl = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
+  return zcbz3113;
 }
 
 
@@ -11023,35 +10719,31 @@ static void finish_sailgen_clearTagIf(void)
 }
 
 static bool zsys_legalizze_malformed_permission_on_load;
-static void create_letbind_25(void) {
+static void create_letbind_26(void) {
 
 
-  bool zgsz3747;
-  zgsz3747 = false;
-  zsys_legalizze_malformed_permission_on_load = zgsz3747;
-
-let_end_649: ;
+  bool zgsz3758;
+  zgsz3758 = false;
+  zsys_legalizze_malformed_permission_on_load = zgsz3758;
+let_end_613: ;
 }
-static void kill_letbind_25(void) {
+static void kill_letbind_26(void) {
 }
 
 static bool sailgen_capBoundsEqual(struct zCapability, struct zCapability);
 
-sail_int zghz3384;
-sail_int zghz3385;
-sail_int zghz3386;
-sail_int zghz3387;
+sail_int zghz3419;
+sail_int zghz3420;
+sail_int zghz3421;
+sail_int zghz3422;
 
 static void startup_sailgen_capBoundsEqual(void)
 {
-  CREATE(sail_int)(&zghz3384);
-  CREATE(sail_int)(&zghz3385);
-  CREATE(sail_int)(&zghz3386);
-  CREATE(sail_int)(&zghz3387);
+  CREATE(sail_int)(&zghz3419);
+  CREATE(sail_int)(&zghz3420);
+  CREATE(sail_int)(&zghz3421);
+  CREATE(sail_int)(&zghz3422);
 }
-
-
-
 
 // struct tuple_(%union zoptionzIz8izCiz9zK, %union zoptionzIz8izCiz9zK)
 struct ztuple_z8z5unionz0zzoptionzzIzz8izzCizz9zzKzCz0z5unionz0zzoptionzzIzz8izzCizz9zzKz9 {
@@ -11085,73 +10777,73 @@ static bool EQUAL(ztuple_z8z5unionz0zzoptionzzIzz8izzCizz9zzKzCz0z5unionz0zzopti
 
 static bool sailgen_capBoundsEqual(struct zCapability zc1, struct zCapability zc2)
 {
-  __label__ case_654, case_653, case_652, finish_match_651, end_function_655, end_block_exception_656;
+  __label__ case_618, case_617, case_616, finish_match_615, end_function_619, end_block_exception_620;
 
-  bool zcbz377;
-  struct ztuple_z8z5unionz0zzoptionzzIzz8izzCizz9zzKzCz0z5unionz0zzoptionzzIzz8izzCizz9zzKz9 zgaz3464;
-  CREATE(ztuple_z8z5unionz0zzoptionzzIzz8izzCizz9zzKzCz0z5unionz0zzoptionzzIzz8izzCizz9zzKz9)(&zgaz3464);
+  bool zcbz378;
+  struct ztuple_z8z5unionz0zzoptionzzIzz8izzCizz9zzKzCz0z5unionz0zzoptionzzIzz8izzCizz9zzKz9 zgaz3454;
+  CREATE(ztuple_z8z5unionz0zzoptionzzIzz8izzCizz9zzKzCz0z5unionz0zzoptionzzIzz8izzCizz9zzKz9)(&zgaz3454);
   {
-    struct zoptionzIz8izCiz9zK zgaz3462;
-    CREATE(zoptionzIz8izCiz9zK)(&zgaz3462);
-    sailgen_getCapBounds(&zgaz3462, zc1);
-    struct zoptionzIz8izCiz9zK zgaz3463;
-    CREATE(zoptionzIz8izCiz9zK)(&zgaz3463);
-    sailgen_getCapBounds(&zgaz3463, zc2);
-    COPY(zoptionzIz8izCiz9zK)(&((&zgaz3464)->ztup0), zgaz3462);
-    COPY(zoptionzIz8izCiz9zK)(&((&zgaz3464)->ztup1), zgaz3463);
-    KILL(zoptionzIz8izCiz9zK)(&zgaz3463);
-    KILL(zoptionzIz8izCiz9zK)(&zgaz3462);
+    struct zoptionzIz8izCiz9zK zgaz3452;
+    CREATE(zoptionzIz8izCiz9zK)(&zgaz3452);
+    sailgen_getCapBounds(&zgaz3452, zc1);
+    struct zoptionzIz8izCiz9zK zgaz3453;
+    CREATE(zoptionzIz8izCiz9zK)(&zgaz3453);
+    sailgen_getCapBounds(&zgaz3453, zc2);
+    COPY(zoptionzIz8izCiz9zK)(&((&zgaz3454)->ztup0), zgaz3452);
+    COPY(zoptionzIz8izCiz9zK)(&((&zgaz3454)->ztup1), zgaz3453);
+    KILL(zoptionzIz8izCiz9zK)(&zgaz3453);
+    KILL(zoptionzIz8izCiz9zK)(&zgaz3452);
   }
   {
-    if (zgaz3464.ztup0.kind != Kind_zNonezIz8izCiz9zK) goto case_654;
-    zcbz377 = false;
-    goto finish_match_651;
+    if (zgaz3454.ztup0.kind != Kind_zNonezIz8izCiz9zK) goto case_618;
+    zcbz378 = false;
+    goto finish_match_615;
   }
-case_654: ;
+case_618: ;
   {
-    if (zgaz3464.ztup1.kind != Kind_zNonezIz8izCiz9zK) goto case_653;
-    zcbz377 = false;
-    goto finish_match_651;
+    if (zgaz3454.ztup1.kind != Kind_zNonezIz8izCiz9zK) goto case_617;
+    zcbz378 = false;
+    goto finish_match_615;
   }
-case_653: ;
+case_617: ;
   {
     /* complete */
     /* complete */
     int64_t zbase1;
-    zbase1 = CONVERT_OF(mach_int, sail_int)(zgaz3464.ztup0.zSomezIz8izCiz9zK.ztup0);
+    zbase1 = CONVERT_OF(mach_int, sail_int)(zgaz3454.ztup0.variants.zSomezIz8izCiz9zK.ztup0);
     int64_t ztop1;
-    ztop1 = CONVERT_OF(mach_int, sail_int)(zgaz3464.ztup0.zSomezIz8izCiz9zK.ztup1);
+    ztop1 = CONVERT_OF(mach_int, sail_int)(zgaz3454.ztup0.variants.zSomezIz8izCiz9zK.ztup1);
     int64_t zbase2;
-    zbase2 = CONVERT_OF(mach_int, sail_int)(zgaz3464.ztup1.zSomezIz8izCiz9zK.ztup0);
+    zbase2 = CONVERT_OF(mach_int, sail_int)(zgaz3454.ztup1.variants.zSomezIz8izCiz9zK.ztup0);
     int64_t ztop2;
-    ztop2 = CONVERT_OF(mach_int, sail_int)(zgaz3464.ztup1.zSomezIz8izCiz9zK.ztup1);
-    bool zgaz3465;
+    ztop2 = CONVERT_OF(mach_int, sail_int)(zgaz3454.ztup1.variants.zSomezIz8izCiz9zK.ztup1);
+    bool zgaz3455;
     {
-      RECREATE(sail_int)(&zghz3386);
-      CONVERT_OF(sail_int, mach_int)(&zghz3386, zbase1);
-      RECREATE(sail_int)(&zghz3387);
-      CONVERT_OF(sail_int, mach_int)(&zghz3387, zbase2);
-      zgaz3465 = eq_int(zghz3386, zghz3387);
+      RECREATE(sail_int)(&zghz3421);
+      CONVERT_OF(sail_int, mach_int)(&zghz3421, zbase1);
+      RECREATE(sail_int)(&zghz3422);
+      CONVERT_OF(sail_int, mach_int)(&zghz3422, zbase2);
+      zgaz3455 = eq_int(zghz3421, zghz3422);
     }
-    bool zgsz3750;
-    if (zgaz3465) {
+    bool zgsz3761;
+    if (zgaz3455) {
       {
-        RECREATE(sail_int)(&zghz3384);
-        CONVERT_OF(sail_int, mach_int)(&zghz3384, ztop1);
-        RECREATE(sail_int)(&zghz3385);
-        CONVERT_OF(sail_int, mach_int)(&zghz3385, ztop2);
-        zgsz3750 = eq_int(zghz3384, zghz3385);
+        RECREATE(sail_int)(&zghz3419);
+        CONVERT_OF(sail_int, mach_int)(&zghz3419, ztop1);
+        RECREATE(sail_int)(&zghz3420);
+        CONVERT_OF(sail_int, mach_int)(&zghz3420, ztop2);
+        zgsz3761 = eq_int(zghz3419, zghz3420);
       }
-    } else {  zgsz3750 = false;  }
-    zcbz377 = zgsz3750;
-    goto finish_match_651;
+    } else {  zgsz3761 = false;  }
+    zcbz378 = zgsz3761;
+    goto finish_match_615;
   }
-case_652: ;
-finish_match_651: ;
-  KILL(ztuple_z8z5unionz0zzoptionzzIzz8izzCizz9zzKzCz0z5unionz0zzoptionzzIzz8izzCizz9zzKz9)(&zgaz3464);
-end_function_655: ;
-  return zcbz377;
-end_block_exception_656: ;
+case_616: ;
+finish_match_615: ;
+  KILL(ztuple_z8z5unionz0zzoptionzzIzz8izzCizz9zzKzCz0z5unionz0zzoptionzzIzz8izzCizz9zzKz9)(&zgaz3454);
+end_function_619: ;
+  return zcbz378;
+end_block_exception_620: ;
 
   return false;
 }
@@ -11160,15 +10852,15 @@ end_block_exception_656: ;
 
 static void finish_sailgen_capBoundsEqual(void)
 {
-  KILL(sail_int)(&zghz3387);
-  KILL(sail_int)(&zghz3386);
-  KILL(sail_int)(&zghz3385);
-  KILL(sail_int)(&zghz3384);
+  KILL(sail_int)(&zghz3422);
+  KILL(sail_int)(&zghz3421);
+  KILL(sail_int)(&zghz3420);
+  KILL(sail_int)(&zghz3419);
 }
 
 static struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 sailgen_setCapAddr(struct zCapability, uint64_t);
 
-struct zCapability zghz3388;
+struct zCapability zghz3423;
 
 static void startup_sailgen_setCapAddr(void)
 {
@@ -11176,25 +10868,24 @@ static void startup_sailgen_setCapAddr(void)
 
 static struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 sailgen_setCapAddr(struct zCapability zc, uint64_t zaddr)
 {
-  __label__ end_function_658, end_block_exception_659;
+  __label__ end_function_622, end_block_exception_623;
 
-  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz378;
-  struct zCapability zghz3388;
+  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz379;
+  struct zCapability zghz3423;
   {
-    zghz3388 = zc;
-    zghz3388.zaddress = zaddr;
+    zghz3423 = zc;
+    zghz3423.zaddress = zaddr;
   }
   bool zrepresentable;
-  zrepresentable = sailgen_capBoundsEqual(zc, zghz3388);
-  zcbz378.ztup0 = zrepresentable;
-  zcbz378.ztup1 = zghz3388;
-
-end_function_658: ;
-  return zcbz378;
-end_block_exception_659: ;
-  struct zCapability zcbz3113 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
-  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz3112 = { .ztup0 = false, .ztup1 = zcbz3113 };
-  return zcbz3112;
+  zrepresentable = sailgen_capBoundsEqual(zc, zghz3423);
+  zcbz379.ztup0 = zrepresentable;
+  zcbz379.ztup1 = zghz3423;
+end_function_622: ;
+  return zcbz379;
+end_block_exception_623: ;
+  struct zCapability zcbz3115 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zcl = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
+  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz3114 = { .ztup0 = false, .ztup1 = zcbz3115 };
+  return zcbz3114;
 }
 
 
@@ -11205,39 +10896,40 @@ static void finish_sailgen_setCapAddr(void)
 
 static void sailgen_capToString(sail_string *rop, struct zCapability);
 
-lbits zghz3389;
-lbits zghz3390;
-lbits zghz3391;
-struct zEncMetadata zghz3392;
-struct zArchPerms zghz3393;
-lbits zghz3394;
-sail_int zghz3395;
-sail_int zghz3396;
-lbits zghz3397;
-lbits zghz3398;
-sail_int zghz3399;
-lbits zghz3400;
-lbits zghz3401;
-lbits zghz3402;
+lbits zghz3424;
+lbits zghz3425;
+lbits zghz3426;
+lbits zghz3427;
+struct zEncMetadata zghz3428;
+struct zArchPerms zghz3429;
+lbits zghz3430;
+sail_int zghz3431;
+sail_int zghz3432;
+lbits zghz3433;
+lbits zghz3434;
+sail_int zghz3435;
+lbits zghz3436;
+lbits zghz3437;
+lbits zghz3438;
 
 static void startup_sailgen_capToString(void)
 {
-  CREATE(lbits)(&zghz3389);
-  CREATE(lbits)(&zghz3390);
-  CREATE(lbits)(&zghz3391);
+  CREATE(lbits)(&zghz3424);
+  CREATE(lbits)(&zghz3425);
+  CREATE(lbits)(&zghz3426);
+  CREATE(lbits)(&zghz3427);
 
 
-  CREATE(lbits)(&zghz3394);
-  CREATE(sail_int)(&zghz3395);
-  CREATE(sail_int)(&zghz3396);
-  CREATE(lbits)(&zghz3397);
-  CREATE(lbits)(&zghz3398);
-  CREATE(sail_int)(&zghz3399);
-  CREATE(lbits)(&zghz3400);
-  CREATE(lbits)(&zghz3401);
-  CREATE(lbits)(&zghz3402);
+  CREATE(lbits)(&zghz3430);
+  CREATE(sail_int)(&zghz3431);
+  CREATE(sail_int)(&zghz3432);
+  CREATE(lbits)(&zghz3433);
+  CREATE(lbits)(&zghz3434);
+  CREATE(sail_int)(&zghz3435);
+  CREATE(lbits)(&zghz3436);
+  CREATE(lbits)(&zghz3437);
+  CREATE(lbits)(&zghz3438);
 }
-
 
 // struct tuple_(%string, %bool)
 struct ztuple_z8z5stringzCz0z5boolz9 {
@@ -11265,7 +10957,6 @@ static void KILL(ztuple_z8z5stringzCz0z5boolz9)(struct ztuple_z8z5stringzCz0z5bo
 static bool EQUAL(ztuple_z8z5stringzCz0z5boolz9)(struct ztuple_z8z5stringzCz0z5boolz9 op1, struct ztuple_z8z5stringzCz0z5boolz9 op2) {
   return EQUAL(sail_string)(op1.ztup0, op2.ztup0) && EQUAL(bool)(op1.ztup1, op2.ztup1);
 }
-
 
 // struct tuple_(%string, %string, %bool)
 struct ztuple_z8z5stringzCz0z5stringzCz0z5boolz9 {
@@ -11299,94 +10990,94 @@ static bool EQUAL(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(struct ztuple_z8z5s
   return EQUAL(sail_string)(op1.ztup0, op2.ztup0) && EQUAL(sail_string)(op1.ztup1, op2.ztup1) && EQUAL(bool)(op1.ztup2, op2.ztup2);
 }
 
-static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
+static void sailgen_capToString(sail_string *zcbz380, struct zCapability zcap)
 {
-  __label__ case_665, finish_match_664, end_function_676, end_block_exception_677, end_function_703;
+  __label__ case_629, finish_match_628, end_function_640, end_block_exception_641, end_function_667;
 
-  struct ztuple_z8z5stringzCz0z5stringzCz0z5boolz9 zgaz3471;
-  CREATE(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgaz3471);
+  struct ztuple_z8z5stringzCz0z5stringzCz0z5boolz9 zgaz3461;
+  CREATE(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgaz3461);
   {
-    __label__ case_663, case_662, finish_match_661;
+    __label__ case_627, case_626, finish_match_625;
 
-    struct zoptionzIz8bzCbz9zK zgaz3466;
-    CREATE(zoptionzIz8bzCbz9zK)(&zgaz3466);
-    sailgen_getCapBoundsBits(&zgaz3466, zcap);
+    struct zoptionzIz8bzCbz9zK zgaz3456;
+    CREATE(zoptionzIz8bzCbz9zK)(&zgaz3456);
+    sailgen_getCapBoundsBits(&zgaz3456, zcap);
     {
-      if (zgaz3466.kind != Kind_zNonezIz8bzCbz9zK) goto case_663;
-      struct ztuple_z8z5stringzCz0z5stringzCz0z5boolz9 zgsz3759;
-      CREATE(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgsz3759);
-      COPY(sail_string)(&((&zgsz3759)->ztup0), "0 (malformed)");
-      COPY(sail_string)(&((&zgsz3759)->ztup1), "0 (malformed)");
-      zgsz3759.ztup2 = true;
-      COPY(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgaz3471, zgsz3759);
-      KILL(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgsz3759);
-      goto finish_match_661;
+      if (zgaz3456.kind != Kind_zNonezIz8bzCbz9zK) goto case_627;
+      struct ztuple_z8z5stringzCz0z5stringzCz0z5boolz9 zgsz3770;
+      CREATE(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgsz3770);
+      COPY(sail_string)(&((&zgsz3770)->ztup0), "0 (malformed)");
+      COPY(sail_string)(&((&zgsz3770)->ztup1), "0 (malformed)");
+      zgsz3770.ztup2 = true;
+      COPY(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgaz3461, zgsz3770);
+      KILL(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgsz3770);
+      goto finish_match_625;
     }
-  case_663: ;
+  case_627: ;
     {
       /* complete */
       uint64_t zbase;
-      zbase = CONVERT_OF(fbits, lbits)(zgaz3466.zSomezIz8bzCbz9zK.ztup0, true);
+      zbase = CONVERT_OF(fbits, lbits)(zgaz3456.variants.zSomezIz8bzCbz9zK.ztup0, true);
       uint64_t ztop;
-      ztop = CONVERT_OF(fbits, lbits)(zgaz3466.zSomezIz8bzCbz9zK.ztup1, true);
-      sail_string zgaz3469;
-      CREATE(sail_string)(&zgaz3469);
+      ztop = CONVERT_OF(fbits, lbits)(zgaz3456.variants.zSomezIz8bzCbz9zK.ztup1, true);
+      sail_string zgaz3459;
+      CREATE(sail_string)(&zgaz3459);
       {
-        RECREATE(lbits)(&zghz3402);
-        CONVERT_OF(lbits, fbits)(&zghz3402, zbase, UINT64_C(32) , true);
-        string_of_lbits(&zgaz3469, zghz3402);
+        RECREATE(lbits)(&zghz3438);
+        CONVERT_OF(lbits, fbits)(&zghz3438, zbase, UINT64_C(32) , true);
+        string_of_lbits(&zgaz3459, zghz3438);
       }
-      sail_string zgaz3470;
-      CREATE(sail_string)(&zgaz3470);
+      sail_string zgaz3460;
+      CREATE(sail_string)(&zgaz3460);
       {
-        uint64_t zgaz3468;
+        uint64_t zgaz3458;
         {
-          int64_t zgaz3467;
-          zgaz3467 = (zcap_len_width + INT64_C(3));
+          int64_t zgaz3457;
+          zgaz3457 = (zcap_len_width + INT64_C(3));
           {
-            RECREATE(sail_int)(&zghz3399);
-            CONVERT_OF(sail_int, mach_int)(&zghz3399, zgaz3467);
-            RECREATE(lbits)(&zghz3400);
-            CONVERT_OF(lbits, fbits)(&zghz3400, ztop, UINT64_C(33) , true);
-            RECREATE(lbits)(&zghz3401);
-            sailgen_zzero_extend(&zghz3401, zghz3399, zghz3400);
-            zgaz3468 = CONVERT_OF(fbits, lbits)(zghz3401, true);
+            RECREATE(sail_int)(&zghz3435);
+            CONVERT_OF(sail_int, mach_int)(&zghz3435, zgaz3457);
+            RECREATE(lbits)(&zghz3436);
+            CONVERT_OF(lbits, fbits)(&zghz3436, ztop, UINT64_C(33) , true);
+            RECREATE(lbits)(&zghz3437);
+            sailgen_zzero_extend(&zghz3437, zghz3435, zghz3436);
+            zgaz3458 = CONVERT_OF(fbits, lbits)(zghz3437, true);
           }
         }
         {
-          RECREATE(lbits)(&zghz3398);
-          CONVERT_OF(lbits, fbits)(&zghz3398, zgaz3468, UINT64_C(36) , true);
-          string_of_lbits(&zgaz3470, zghz3398);
+          RECREATE(lbits)(&zghz3434);
+          CONVERT_OF(lbits, fbits)(&zghz3434, zgaz3458, UINT64_C(36) , true);
+          string_of_lbits(&zgaz3460, zghz3434);
         }
       }
-      struct ztuple_z8z5stringzCz0z5stringzCz0z5boolz9 zgsz3757;
-      CREATE(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgsz3757);
-      COPY(sail_string)(&((&zgsz3757)->ztup0), zgaz3469);
-      COPY(sail_string)(&((&zgsz3757)->ztup1), zgaz3470);
-      zgsz3757.ztup2 = false;
-      COPY(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgaz3471, zgsz3757);
-      KILL(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgsz3757);
-      KILL(sail_string)(&zgaz3470);
-      KILL(sail_string)(&zgaz3469);
-      goto finish_match_661;
+      struct ztuple_z8z5stringzCz0z5stringzCz0z5boolz9 zgsz3768;
+      CREATE(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgsz3768);
+      COPY(sail_string)(&((&zgsz3768)->ztup0), zgaz3459);
+      COPY(sail_string)(&((&zgsz3768)->ztup1), zgaz3460);
+      zgsz3768.ztup2 = false;
+      COPY(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgaz3461, zgsz3768);
+      KILL(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgsz3768);
+      KILL(sail_string)(&zgaz3460);
+      KILL(sail_string)(&zgaz3459);
+      goto finish_match_625;
     }
-  case_662: ;
-  finish_match_661: ;
-    KILL(zoptionzIz8bzCbz9zK)(&zgaz3466);
+  case_626: ;
+  finish_match_625: ;
+    KILL(zoptionzIz8bzCbz9zK)(&zgaz3456);
   }
-  sail_string zgsz3761;
-  CREATE(sail_string)(&zgsz3761);
+  sail_string zgsz3772;
+  CREATE(sail_string)(&zgsz3772);
   {
-    __label__ case_670, finish_match_669;
+    __label__ case_634, finish_match_633;
 
     sail_string zbase_str;
     CREATE(sail_string)(&zbase_str);
-    COPY(sail_string)(&zbase_str, zgaz3471.ztup0);
+    COPY(sail_string)(&zbase_str, zgaz3461.ztup0);
     sail_string ztop_str;
     CREATE(sail_string)(&ztop_str);
-    COPY(sail_string)(&ztop_str, zgaz3471.ztup1);
+    COPY(sail_string)(&ztop_str, zgaz3461.ztup1);
     bool zbounds_malformed;
-    zbounds_malformed = zgaz3471.ztup2;
+    zbounds_malformed = zgaz3461.ztup2;
     sail_string zlen_str;
     CREATE(sail_string)(&zlen_str);
     {
@@ -11397,188 +11088,220 @@ static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
         int64_t zgaz3526;
         zgaz3526 = sailgen_getCapLength(zcap);
         {
-          RECREATE(sail_int)(&zghz3395);
-          CONVERT_OF(sail_int, mach_int)(&zghz3395, zgaz3525);
-          RECREATE(sail_int)(&zghz3396);
-          CONVERT_OF(sail_int, mach_int)(&zghz3396, zgaz3526);
-          RECREATE(lbits)(&zghz3397);
-          sailgen_to_bits(&zghz3397, zghz3395, zghz3396);
-          zgaz3527 = CONVERT_OF(fbits, lbits)(zghz3397, true);
+          RECREATE(sail_int)(&zghz3431);
+          CONVERT_OF(sail_int, mach_int)(&zghz3431, zgaz3525);
+          RECREATE(sail_int)(&zghz3432);
+          CONVERT_OF(sail_int, mach_int)(&zghz3432, zgaz3526);
+          RECREATE(lbits)(&zghz3433);
+          sailgen_to_bits(&zghz3433, zghz3431, zghz3432);
+          zgaz3527 = CONVERT_OF(fbits, lbits)(zghz3433, true);
         }
       }
       {
-        RECREATE(lbits)(&zghz3394);
-        CONVERT_OF(lbits, fbits)(&zghz3394, zgaz3527, UINT64_C(36) , true);
-        string_of_lbits(&zlen_str, zghz3394);
+        RECREATE(lbits)(&zghz3430);
+        CONVERT_OF(lbits, fbits)(&zghz3430, zgaz3527, UINT64_C(36) , true);
+        string_of_lbits(&zlen_str, zghz3430);
       }
     }
-    struct ztuple_z8z5stringzCz0z5boolz9 zgaz3490;
-    CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3490);
+    struct ztuple_z8z5stringzCz0z5boolz9 zgaz3486;
+    CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3486);
     {
-      __label__ case_668, case_667, finish_match_666;
+      __label__ case_632, case_631, finish_match_630;
 
-      struct zoptionzIRArchPermszK zgaz3472;
-      CREATE(zoptionzIRArchPermszK)(&zgaz3472);
-      sailgen_getArchPerms(&zgaz3472, zcap);
+      struct zoptionzIRArchPermszK zgaz3462;
+      CREATE(zoptionzIRArchPermszK)(&zgaz3462);
+      sailgen_getArchPerms(&zgaz3462, zcap);
       {
-        if (zgaz3472.kind != Kind_zNonezIRArchPermszK) goto case_668;
-        struct ztuple_z8z5stringzCz0z5boolz9 zgsz3765;
-        CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3765);
-        COPY(sail_string)(&((&zgsz3765)->ztup0), "(malformed)");
-        zgsz3765.ztup1 = true;
-        COPY(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3490, zgsz3765);
-        KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3765);
-        goto finish_match_666;
+        if (zgaz3462.kind != Kind_zNonezIRArchPermszK) goto case_632;
+        struct ztuple_z8z5stringzCz0z5boolz9 zgsz3776;
+        CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3776);
+        COPY(sail_string)(&((&zgsz3776)->ztup0), "(malformed)");
+        zgsz3776.ztup1 = true;
+        COPY(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3486, zgsz3776);
+        KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3776);
+        goto finish_match_630;
       }
-    case_668: ;
+    case_632: ;
       {
         /* complete */
-        struct zArchPerms zghz3393;
-        zghz3393 = zgaz3472.zSomezIRArchPermszK;
-        sail_string zgaz3489;
-        CREATE(sail_string)(&zgaz3489);
+        struct zArchPerms zghz3429;
+        zghz3429 = zgaz3462.variants.zSomezIRArchPermszK;
+        sail_string zgaz3485;
+        CREATE(sail_string)(&zgaz3485);
         {
-          sail_string zgaz3487;
-          CREATE(sail_string)(&zgaz3487);
+          sail_string zgaz3483;
+          CREATE(sail_string)(&zgaz3483);
           {
-            bool zgaz3473;
-            zgaz3473 = zghz3393.zR;
-            if (zgaz3473) {  COPY(sail_string)(&zgaz3487, "R");  } else {  COPY(sail_string)(&zgaz3487, "");  }
+            bool zgaz3463;
+            zgaz3463 = zghz3429.zR;
+            if (zgaz3463) {  COPY(sail_string)(&zgaz3483, "R");  } else {  COPY(sail_string)(&zgaz3483, "");  }
           }
-          sail_string zgaz3488;
-          CREATE(sail_string)(&zgaz3488);
+          sail_string zgaz3484;
+          CREATE(sail_string)(&zgaz3484);
           {
-            sail_string zgaz3485;
-            CREATE(sail_string)(&zgaz3485);
+            sail_string zgaz3481;
+            CREATE(sail_string)(&zgaz3481);
             {
-              bool zgaz3474;
-              zgaz3474 = zghz3393.zW;
-              if (zgaz3474) {  COPY(sail_string)(&zgaz3485, "W");  } else {  COPY(sail_string)(&zgaz3485, "");  }
+              bool zgaz3464;
+              zgaz3464 = zghz3429.zW;
+              if (zgaz3464) {  COPY(sail_string)(&zgaz3481, "W");  } else {  COPY(sail_string)(&zgaz3481, "");  }
             }
-            sail_string zgaz3486;
-            CREATE(sail_string)(&zgaz3486);
+            sail_string zgaz3482;
+            CREATE(sail_string)(&zgaz3482);
             {
-              sail_string zgaz3483;
-              CREATE(sail_string)(&zgaz3483);
+              sail_string zgaz3479;
+              CREATE(sail_string)(&zgaz3479);
               {
-                bool zgaz3475;
-                zgaz3475 = zghz3393.zC;
-                if (zgaz3475) {  COPY(sail_string)(&zgaz3483, "C");  } else {  COPY(sail_string)(&zgaz3483, "");  }
+                bool zgaz3465;
+                zgaz3465 = zghz3429.zC;
+                if (zgaz3465) {  COPY(sail_string)(&zgaz3479, "C");  } else {  COPY(sail_string)(&zgaz3479, "");  }
               }
-              sail_string zgaz3484;
-              CREATE(sail_string)(&zgaz3484);
+              sail_string zgaz3480;
+              CREATE(sail_string)(&zgaz3480);
               {
-                sail_string zgaz3481;
-                CREATE(sail_string)(&zgaz3481);
+                sail_string zgaz3477;
+                CREATE(sail_string)(&zgaz3477);
                 {
-                  bool zgaz3476;
-                  zgaz3476 = zghz3393.zX;
-                  if (zgaz3476) {  COPY(sail_string)(&zgaz3481, "X");  } else {  COPY(sail_string)(&zgaz3481, "");  }
+                  bool zgaz3466;
+                  zgaz3466 = zghz3429.zX;
+                  if (zgaz3466) {  COPY(sail_string)(&zgaz3477, "X");  } else {  COPY(sail_string)(&zgaz3477, "");  }
                 }
-                sail_string zgaz3482;
-                CREATE(sail_string)(&zgaz3482);
+                sail_string zgaz3478;
+                CREATE(sail_string)(&zgaz3478);
                 {
-                  sail_string zgaz3479;
-                  CREATE(sail_string)(&zgaz3479);
+                  sail_string zgaz3475;
+                  CREATE(sail_string)(&zgaz3475);
                   {
-                    bool zgaz3477;
-                    zgaz3477 = zghz3393.zLM;
-                    if (zgaz3477) {  COPY(sail_string)(&zgaz3479, "Lm");  } else {  COPY(sail_string)(&zgaz3479, "");  }
+                    bool zgaz3467;
+                    zgaz3467 = zghz3429.zLM;
+                    if (zgaz3467) {  COPY(sail_string)(&zgaz3475, "Lm");  } else {  COPY(sail_string)(&zgaz3475, "");  }
                   }
-                  sail_string zgaz3480;
-                  CREATE(sail_string)(&zgaz3480);
+                  sail_string zgaz3476;
+                  CREATE(sail_string)(&zgaz3476);
                   {
-                    bool zgaz3478;
-                    zgaz3478 = zghz3393.zASR;
-                    if (zgaz3478) {  COPY(sail_string)(&zgaz3480, "Asr");  } else {
-                      COPY(sail_string)(&zgaz3480, "");
+                    sail_string zgaz3473;
+                    CREATE(sail_string)(&zgaz3473);
+                    {
+                      bool zgaz3468;
+                      zgaz3468 = zghz3429.zASR;
+                      if (zgaz3468) {  COPY(sail_string)(&zgaz3473, "Asr");  } else {
+                        COPY(sail_string)(&zgaz3473, "");
+                      }
                     }
+                    sail_string zgaz3474;
+                    CREATE(sail_string)(&zgaz3474);
+                    {
+                      sail_string zgaz3471;
+                      CREATE(sail_string)(&zgaz3471);
+                      {
+                        bool zgaz3469;
+                        zgaz3469 = zghz3429.zSL;
+                        if (zgaz3469) {  COPY(sail_string)(&zgaz3471, "Sl");  } else {
+                          COPY(sail_string)(&zgaz3471, "");
+                        }
+                      }
+                      sail_string zgaz3472;
+                      CREATE(sail_string)(&zgaz3472);
+                      {
+                        bool zgaz3470;
+                        zgaz3470 = zghz3429.zEL;
+                        if (zgaz3470) {  COPY(sail_string)(&zgaz3472, "El");  } else {
+                          COPY(sail_string)(&zgaz3472, "");
+                        }
+                      }
+                      concat_str(&zgaz3474, zgaz3471, zgaz3472);
+                      KILL(sail_string)(&zgaz3472);
+                      KILL(sail_string)(&zgaz3471);
+                    }
+                    concat_str(&zgaz3476, zgaz3473, zgaz3474);
+                    KILL(sail_string)(&zgaz3474);
+                    KILL(sail_string)(&zgaz3473);
                   }
-                  concat_str(&zgaz3482, zgaz3479, zgaz3480);
-                  KILL(sail_string)(&zgaz3480);
-                  KILL(sail_string)(&zgaz3479);
+                  concat_str(&zgaz3478, zgaz3475, zgaz3476);
+                  KILL(sail_string)(&zgaz3476);
+                  KILL(sail_string)(&zgaz3475);
                 }
-                concat_str(&zgaz3484, zgaz3481, zgaz3482);
-                KILL(sail_string)(&zgaz3482);
-                KILL(sail_string)(&zgaz3481);
+                concat_str(&zgaz3480, zgaz3477, zgaz3478);
+                KILL(sail_string)(&zgaz3478);
+                KILL(sail_string)(&zgaz3477);
               }
-              concat_str(&zgaz3486, zgaz3483, zgaz3484);
-              KILL(sail_string)(&zgaz3484);
-              KILL(sail_string)(&zgaz3483);
+              concat_str(&zgaz3482, zgaz3479, zgaz3480);
+              KILL(sail_string)(&zgaz3480);
+              KILL(sail_string)(&zgaz3479);
             }
-            concat_str(&zgaz3488, zgaz3485, zgaz3486);
-            KILL(sail_string)(&zgaz3486);
-            KILL(sail_string)(&zgaz3485);
+            concat_str(&zgaz3484, zgaz3481, zgaz3482);
+            KILL(sail_string)(&zgaz3482);
+            KILL(sail_string)(&zgaz3481);
           }
-          concat_str(&zgaz3489, zgaz3487, zgaz3488);
-          KILL(sail_string)(&zgaz3488);
-          KILL(sail_string)(&zgaz3487);
+          concat_str(&zgaz3485, zgaz3483, zgaz3484);
+          KILL(sail_string)(&zgaz3484);
+          KILL(sail_string)(&zgaz3483);
         }
-        struct ztuple_z8z5stringzCz0z5boolz9 zgsz3763;
-        CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3763);
-        COPY(sail_string)(&((&zgsz3763)->ztup0), zgaz3489);
-        zgsz3763.ztup1 = false;
-        COPY(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3490, zgsz3763);
-        KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3763);
-        KILL(sail_string)(&zgaz3489);
-        goto finish_match_666;
+        struct ztuple_z8z5stringzCz0z5boolz9 zgsz3774;
+        CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3774);
+        COPY(sail_string)(&((&zgsz3774)->ztup0), zgaz3485);
+        zgsz3774.ztup1 = false;
+        COPY(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3486, zgsz3774);
+        KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3774);
+        KILL(sail_string)(&zgaz3485);
+        goto finish_match_630;
       }
-    case_667: ;
-    finish_match_666: ;
-      KILL(zoptionzIRArchPermszK)(&zgaz3472);
+    case_631: ;
+    finish_match_630: ;
+      KILL(zoptionzIRArchPermszK)(&zgaz3462);
     }
-    sail_string zgsz3767;
-    CREATE(sail_string)(&zgsz3767);
+    sail_string zgsz3778;
+    CREATE(sail_string)(&zgsz3778);
     {
-      __label__ case_672, finish_match_671;
+      __label__ case_636, finish_match_635;
 
       sail_string zarch_perms_str;
       CREATE(sail_string)(&zarch_perms_str);
-      COPY(sail_string)(&zarch_perms_str, zgaz3490.ztup0);
+      COPY(sail_string)(&zarch_perms_str, zgaz3486.ztup0);
       bool zperms_malformed;
-      zperms_malformed = zgaz3490.ztup1;
-      struct ztuple_z8z5stringzCz0z5boolz9 zgaz3493;
-      CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3493);
+      zperms_malformed = zgaz3486.ztup1;
+      struct ztuple_z8z5stringzCz0z5boolz9 zgaz3489;
+      CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3489);
       {
-        bool zgaz3492;
+        bool zgaz3488;
         {
-          bool zgaz3491;
-          zgaz3491 = sailgen_capReservedValid(zcap);
-          zgaz3492 = not(zgaz3491);
+          bool zgaz3487;
+          zgaz3487 = sailgen_capReservedValid(zcap);
+          zgaz3488 = sailgen_not(zgaz3487);
         }
-        if (zgaz3492) {
-          struct ztuple_z8z5stringzCz0z5boolz9 zgsz3769;
-          CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3769);
-          COPY(sail_string)(&((&zgsz3769)->ztup0), " (has non-zero reserved bits)");
-          zgsz3769.ztup1 = true;
-          COPY(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3493, zgsz3769);
-          KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3769);
+        if (zgaz3488) {
+          struct ztuple_z8z5stringzCz0z5boolz9 zgsz3780;
+          CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3780);
+          COPY(sail_string)(&((&zgsz3780)->ztup0), " (has non-zero reserved bits)");
+          zgsz3780.ztup1 = true;
+          COPY(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3489, zgsz3780);
+          KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3780);
         } else {
-          struct ztuple_z8z5stringzCz0z5boolz9 zgsz3768;
-          CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3768);
-          COPY(sail_string)(&((&zgsz3768)->ztup0), "");
-          zgsz3768.ztup1 = false;
-          COPY(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3493, zgsz3768);
-          KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3768);
+          struct ztuple_z8z5stringzCz0z5boolz9 zgsz3779;
+          CREATE(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3779);
+          COPY(sail_string)(&((&zgsz3779)->ztup0), "");
+          zgsz3779.ztup1 = false;
+          COPY(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3489, zgsz3779);
+          KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgsz3779);
         }
       }
-      sail_string zgsz3770;
-      CREATE(sail_string)(&zgsz3770);
+      sail_string zgsz3781;
+      CREATE(sail_string)(&zgsz3781);
       {
         sail_string zres_str;
         CREATE(sail_string)(&zres_str);
-        COPY(sail_string)(&zres_str, zgaz3493.ztup0);
+        COPY(sail_string)(&zres_str, zgaz3489.ztup0);
         bool zreserved_malformed;
-        zreserved_malformed = zgaz3493.ztup1;
+        zreserved_malformed = zgaz3489.ztup1;
         sail_string zraw_str;
         CREATE(sail_string)(&zraw_str);
         {
           bool zgaz3521;
           {
             if (zbounds_malformed) {  zgaz3521 = true;  } else {
-              bool zgsz3771;
-              if (zperms_malformed) {  zgsz3771 = true;  } else {  zgsz3771 = zreserved_malformed;  }
-              zgaz3521 = zgsz3771;
+              bool zgsz3782;
+              if (zperms_malformed) {  zgsz3782 = true;  } else {  zgsz3782 = zreserved_malformed;  }
+              zgaz3521 = zgsz3782;
             }
           }
           if (zgaz3521) {
@@ -11587,14 +11310,14 @@ static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
             {
               uint64_t zgaz3523;
               {
-                struct zEncMetadata zghz3392;
-                zghz3392 = sailgen_capToMetadataBits(zcap);
-                zgaz3523 = zghz3392.zbits;
+                struct zEncMetadata zghz3428;
+                zghz3428 = sailgen_capToMetadataBits(zcap);
+                zgaz3523 = zghz3428.zbits;
               }
               {
-                RECREATE(lbits)(&zghz3391);
-                CONVERT_OF(lbits, fbits)(&zghz3391, zgaz3523, UINT64_C(32) , true);
-                string_of_lbits(&zgaz3524, zghz3391);
+                RECREATE(lbits)(&zghz3427);
+                CONVERT_OF(lbits, fbits)(&zghz3427, zgaz3523, UINT64_C(32) , true);
+                string_of_lbits(&zgaz3524, zghz3427);
               }
             }
             concat_str(&zraw_str, " raw:", zgaz3524);
@@ -11604,23 +11327,23 @@ static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
         sail_string zcheri_mode;
         CREATE(sail_string)(&zcheri_mode);
         {
-          __label__ case_675, case_674, finish_match_673;
+          __label__ case_639, case_638, finish_match_637;
 
           enum zExecutionMode zgaz3520;
           zgaz3520 = sailgen_getCapMode(zcap);
           {
-            if ((zCapPtrMode != zgaz3520)) goto case_675;
+            if ((zCapPtrMode != zgaz3520)) goto case_639;
             COPY(sail_string)(&zcheri_mode, "CapPtrMode");
-            goto finish_match_673;
+            goto finish_match_637;
           }
-        case_675: ;
+        case_639: ;
           {
             /* complete */
             COPY(sail_string)(&zcheri_mode, "Integer");
-            goto finish_match_673;
+            goto finish_match_637;
           }
-        case_674: ;
-        finish_match_673: ;
+        case_638: ;
+        finish_match_637: ;
         }
         sail_string zgaz3519;
         CREATE(sail_string)(&zgaz3519);
@@ -11628,9 +11351,9 @@ static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
           sail_string zgaz3517;
           CREATE(sail_string)(&zgaz3517);
           {
-            bool zgaz3494;
-            zgaz3494 = zcap.ztag;
-            if (zgaz3494) {  COPY(sail_string)(&zgaz3517, "1");  } else {  COPY(sail_string)(&zgaz3517, "0");  }
+            bool zgaz3490;
+            zgaz3490 = zcap.ztag;
+            if (zgaz3490) {  COPY(sail_string)(&zgaz3517, "1");  } else {  COPY(sail_string)(&zgaz3517, "0");  }
           }
           sail_string zgaz3518;
           CREATE(sail_string)(&zgaz3518);
@@ -11641,12 +11364,12 @@ static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
               sail_string zgaz3514;
               CREATE(sail_string)(&zgaz3514);
               {
-                uint64_t zgaz3495;
-                zgaz3495 = zcap.zaddress;
+                uint64_t zgaz3491;
+                zgaz3491 = zcap.zaddress;
                 {
-                  RECREATE(lbits)(&zghz3390);
-                  CONVERT_OF(lbits, fbits)(&zghz3390, zgaz3495, UINT64_C(32) , true);
-                  string_of_lbits(&zgaz3514, zghz3390);
+                  RECREATE(lbits)(&zghz3426);
+                  CONVERT_OF(lbits, fbits)(&zghz3426, zgaz3491, UINT64_C(32) , true);
+                  string_of_lbits(&zgaz3514, zghz3426);
                 }
               }
               sail_string zgaz3515;
@@ -11676,9 +11399,9 @@ static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
                               sail_string zgaz3505;
                               CREATE(sail_string)(&zgaz3505);
                               {
-                                bool zgaz3496;
-                                zgaz3496 = zcap.zsealed;
-                                if (zgaz3496) {  COPY(sail_string)(&zgaz3505, "1");  } else {
+                                bool zgaz3492;
+                                zgaz3492 = zcap.zsealed;
+                                if (zgaz3492) {  COPY(sail_string)(&zgaz3505, "1");  } else {
                                   COPY(sail_string)(&zgaz3505, "0");
                                 }
                               }
@@ -11697,12 +11420,12 @@ static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
                                       sail_string zgaz3500;
                                       CREATE(sail_string)(&zgaz3500);
                                       {
-                                        uint64_t zgaz3497;
-                                        zgaz3497 = zcap.zsd_perms;
+                                        uint64_t zgaz3493;
+                                        zgaz3493 = zcap.zsd_perms;
                                         {
-                                          RECREATE(lbits)(&zghz3389);
-                                          CONVERT_OF(lbits, fbits)(&zghz3389, zgaz3497, UINT64_C(2) , true);
-                                          string_of_lbits(&zgaz3500, zghz3389);
+                                          RECREATE(lbits)(&zghz3425);
+                                          CONVERT_OF(lbits, fbits)(&zghz3425, zgaz3493, UINT64_C(2) , true);
+                                          string_of_lbits(&zgaz3500, zghz3425);
                                         }
                                       }
                                       sail_string zgaz3501;
@@ -11711,13 +11434,37 @@ static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
                                         sail_string zgaz3499;
                                         CREATE(sail_string)(&zgaz3499);
                                         {
+                                          sail_string zgaz3497;
+                                          CREATE(sail_string)(&zgaz3497);
+                                          {
+                                            uint64_t zgaz3494;
+                                            zgaz3494 = zcap.zcl;
+                                            {
+                                              RECREATE(lbits)(&zghz3424);
+                                              CONVERT_OF(lbits, fbits)(&zghz3424, zgaz3494, UINT64_C(1) , true);
+                                              string_of_lbits(&zgaz3497, zghz3424);
+                                            }
+                                          }
                                           sail_string zgaz3498;
                                           CREATE(sail_string)(&zgaz3498);
-                                          concat_str(&zgaz3498, zraw_str, zres_str);
-                                          concat_str(&zgaz3499, zcheri_mode, zgaz3498);
+                                          {
+                                            sail_string zgaz3496;
+                                            CREATE(sail_string)(&zgaz3496);
+                                            {
+                                              sail_string zgaz3495;
+                                              CREATE(sail_string)(&zgaz3495);
+                                              concat_str(&zgaz3495, zraw_str, zres_str);
+                                              concat_str(&zgaz3496, zcheri_mode, zgaz3495);
+                                              KILL(sail_string)(&zgaz3495);
+                                            }
+                                            concat_str(&zgaz3498, " mode:", zgaz3496);
+                                            KILL(sail_string)(&zgaz3496);
+                                          }
+                                          concat_str(&zgaz3499, zgaz3497, zgaz3498);
                                           KILL(sail_string)(&zgaz3498);
+                                          KILL(sail_string)(&zgaz3497);
                                         }
-                                        concat_str(&zgaz3501, " mode:", zgaz3499);
+                                        concat_str(&zgaz3501, " level:", zgaz3499);
                                         KILL(sail_string)(&zgaz3499);
                                       }
                                       concat_str(&zgaz3502, zgaz3500, zgaz3501);
@@ -11769,90 +11516,89 @@ static void sailgen_capToString(sail_string *zcbz379, struct zCapability zcap)
           KILL(sail_string)(&zgaz3518);
           KILL(sail_string)(&zgaz3517);
         }
-        concat_str(&zgsz3770, "t:", zgaz3519);
+        concat_str(&zgsz3781, "t:", zgaz3519);
         KILL(sail_string)(&zgaz3519);
         KILL(sail_string)(&zcheri_mode);
         KILL(sail_string)(&zraw_str);
         KILL(sail_string)(&zres_str);
-        goto finish_match_671;
+        goto finish_match_635;
       }
-    case_672: ;
+    case_636: ;
       sail_match_failure("capToString");
-    finish_match_671: ;
-      COPY(sail_string)(&zgsz3767, zgsz3770);
-      KILL(sail_string)(&zgsz3770);
-      KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3493);
+    finish_match_635: ;
+      COPY(sail_string)(&zgsz3778, zgsz3781);
+      KILL(sail_string)(&zgsz3781);
+      KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3489);
       KILL(sail_string)(&zarch_perms_str);
-      goto finish_match_669;
+      goto finish_match_633;
     }
-  case_670: ;
+  case_634: ;
     sail_match_failure("capToString");
-  finish_match_669: ;
-    COPY(sail_string)(&zgsz3761, zgsz3767);
-    KILL(sail_string)(&zgsz3767);
-    KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3490);
+  finish_match_633: ;
+    COPY(sail_string)(&zgsz3772, zgsz3778);
+    KILL(sail_string)(&zgsz3778);
+    KILL(ztuple_z8z5stringzCz0z5boolz9)(&zgaz3486);
     KILL(sail_string)(&zlen_str);
     KILL(sail_string)(&ztop_str);
     KILL(sail_string)(&zbase_str);
-    goto finish_match_664;
+    goto finish_match_628;
   }
-case_665: ;
+case_629: ;
   sail_match_failure("capToString");
-finish_match_664: ;
-  COPY(sail_string)((*(&zcbz379)), zgsz3761);
-  KILL(sail_string)(&zgsz3761);
-  KILL(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgaz3471);
-end_function_676: ;
-  goto end_function_703;
-end_block_exception_677: ;
-  goto end_function_703;
-end_function_703: ;
+finish_match_628: ;
+  COPY(sail_string)((*(&zcbz380)), zgsz3772);
+  KILL(sail_string)(&zgsz3772);
+  KILL(ztuple_z8z5stringzCz0z5stringzCz0z5boolz9)(&zgaz3461);
+end_function_640: ;
+  goto end_function_667;
+end_block_exception_641: ;
+  goto end_function_667;
+end_function_667: ;
 }
 
 
 
 static void finish_sailgen_capToString(void)
 {
-  KILL(lbits)(&zghz3402);
-  KILL(lbits)(&zghz3401);
-  KILL(lbits)(&zghz3400);
-  KILL(sail_int)(&zghz3399);
-  KILL(lbits)(&zghz3398);
-  KILL(lbits)(&zghz3397);
-  KILL(sail_int)(&zghz3396);
-  KILL(sail_int)(&zghz3395);
-  KILL(lbits)(&zghz3394);
-
-
-  KILL(lbits)(&zghz3391);
-  KILL(lbits)(&zghz3390);
-  KILL(lbits)(&zghz3389);
+  KILL(lbits)(&zghz3438);
+  KILL(lbits)(&zghz3437);
+  KILL(lbits)(&zghz3436);
+  KILL(sail_int)(&zghz3435);
+  KILL(lbits)(&zghz3434);
+  KILL(lbits)(&zghz3433);
+  KILL(sail_int)(&zghz3432);
+  KILL(sail_int)(&zghz3431);
+  KILL(lbits)(&zghz3430);
+  KILL(lbits)(&zghz3427);
+  KILL(lbits)(&zghz3426);
+  KILL(lbits)(&zghz3425);
+  KILL(lbits)(&zghz3424);
 }
 
 static uint64_t sailgen_getRepresentableAlignmentMask(uint64_t);
 
-struct zCapability zghz3403;
-sail_int zghz3404;
-lbits zghz3405;
-lbits zghz3406;
-sail_int zghz3407;
-lbits zghz3408;
+struct zCapability zghz3439;
+sail_int zghz3440;
+lbits zghz3441;
+lbits zghz3442;
+sail_int zghz3443;
+lbits zghz3444;
 
 static void startup_sailgen_getRepresentableAlignmentMask(void)
 {
 
-  CREATE(sail_int)(&zghz3404);
-  CREATE(lbits)(&zghz3405);
-  CREATE(lbits)(&zghz3406);
-  CREATE(sail_int)(&zghz3407);
-  CREATE(lbits)(&zghz3408);
+  CREATE(sail_int)(&zghz3440);
+  CREATE(lbits)(&zghz3441);
+  CREATE(lbits)(&zghz3442);
+  CREATE(sail_int)(&zghz3443);
+  CREATE(lbits)(&zghz3444);
 }
 
 static uint64_t sailgen_getRepresentableAlignmentMask(uint64_t zlen)
 {
-  __label__ case_680, finish_match_679, end_function_681, end_block_exception_682;
+  __label__ case_644, finish_match_643, end_function_645, end_block_exception_646;
 
-  uint64_t zcbz380;
+  uint64_t zcbz381;
   struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zgaz3529;
   {
     uint64_t zgaz3528;
@@ -11862,18 +11608,18 @@ static uint64_t sailgen_getRepresentableAlignmentMask(uint64_t zlen)
   {
     bool z_exact;
     z_exact = zgaz3529.ztup0;
-    struct zCapability zghz3403;
-    zghz3403 = zgaz3529.ztup1;
+    struct zCapability zghz3439;
+    zghz3439 = zgaz3529.ztup1;
     bool zgaz3530;
-    zgaz3530 = zghz3403.zinternal_exponent;
+    zgaz3530 = zghz3439.zinternal_exponent;
     if (zgaz3530) {
       int64_t ze;
-      ze = zghz3403.zE;
+      ze = zghz3439.zE;
       {
         bool zgaz3531;
         zgaz3531 = (ze >= INT64_C(0));
-        unit zgsz3781;
-        zgsz3781 = sail_assert(zgaz3531, "src/cheri_cap_common.sail:623.17-623.18");
+        unit zgsz3792;
+        zgsz3792 = sail_assert(zgaz3531, "src/cheri_cap_common.sail:688.17-688.18");
       }
       uint64_t zgaz3534;
       {
@@ -11882,34 +11628,33 @@ static uint64_t sailgen_getRepresentableAlignmentMask(uint64_t zlen)
           int64_t zgaz3532;
           zgaz3532 = (ze + zcap_xe_width);
           {
-            RECREATE(sail_int)(&zghz3407);
-            CONVERT_OF(sail_int, mach_int)(&zghz3407, zgaz3532);
-            RECREATE(lbits)(&zghz3408);
-            sailgen_ones(&zghz3408, zghz3407);
-            zgaz3533 = CONVERT_OF(sbits, lbits)(zghz3408, true);
+            RECREATE(sail_int)(&zghz3443);
+            CONVERT_OF(sail_int, mach_int)(&zghz3443, zgaz3532);
+            RECREATE(lbits)(&zghz3444);
+            sailgen_ones(&zghz3444, zghz3443);
+            zgaz3533 = CONVERT_OF(sbits, lbits)(zghz3444, true);
           }
         }
         {
-          RECREATE(sail_int)(&zghz3404);
-          CONVERT_OF(sail_int, mach_int)(&zghz3404, INT64_C(32));
-          RECREATE(lbits)(&zghz3405);
-          CONVERT_OF(lbits, sbits)(&zghz3405, zgaz3533, true);
-          RECREATE(lbits)(&zghz3406);
-          sailgen_zzero_extend(&zghz3406, zghz3404, zghz3405);
-          zgaz3534 = CONVERT_OF(fbits, lbits)(zghz3406, true);
+          RECREATE(sail_int)(&zghz3440);
+          CONVERT_OF(sail_int, mach_int)(&zghz3440, INT64_C(32));
+          RECREATE(lbits)(&zghz3441);
+          CONVERT_OF(lbits, sbits)(&zghz3441, zgaz3533, true);
+          RECREATE(lbits)(&zghz3442);
+          sailgen_zzero_extend(&zghz3442, zghz3440, zghz3441);
+          zgaz3534 = CONVERT_OF(fbits, lbits)(zghz3442, true);
         }
       }
-      zcbz380 = (~(zgaz3534) & UINT64_C(0xFFFFFFFF));
-    } else {  zcbz380 = UINT64_C(0xFFFFFFFF);  }
-    goto finish_match_679;
+      zcbz381 = (~(zgaz3534) & UINT64_C(0xFFFFFFFF));
+    } else {  zcbz381 = UINT64_C(0xFFFFFFFF);  }
+    goto finish_match_643;
   }
-case_680: ;
+case_644: ;
   sail_match_failure("getRepresentableAlignmentMask");
-finish_match_679: ;
-
-end_function_681: ;
-  return zcbz380;
-end_block_exception_682: ;
+finish_match_643: ;
+end_function_645: ;
+  return zcbz381;
+end_block_exception_646: ;
 
   return UINT64_C(0xdeadc0de);
 }
@@ -11918,21 +11663,20 @@ end_block_exception_682: ;
 
 static void finish_sailgen_getRepresentableAlignmentMask(void)
 {
-  KILL(lbits)(&zghz3408);
-  KILL(sail_int)(&zghz3407);
-  KILL(lbits)(&zghz3406);
-  KILL(lbits)(&zghz3405);
-  KILL(sail_int)(&zghz3404);
-
+  KILL(lbits)(&zghz3444);
+  KILL(sail_int)(&zghz3443);
+  KILL(lbits)(&zghz3442);
+  KILL(lbits)(&zghz3441);
+  KILL(sail_int)(&zghz3440);
 }
 
 static uint64_t sailgen_getRepresentableLength(uint64_t);
 
 static uint64_t sailgen_getRepresentableLength(uint64_t zlen)
 {
-  __label__ end_function_684, end_block_exception_685;
+  __label__ end_function_648, end_block_exception_649;
 
-  uint64_t zcbz381;
+  uint64_t zcbz382;
   uint64_t zm;
   zm = sailgen_getRepresentableAlignmentMask(zlen);
   uint64_t zgaz3536;
@@ -11941,57 +11685,55 @@ static uint64_t sailgen_getRepresentableLength(uint64_t zlen)
     zgaz3535 = (~(zm) & UINT64_C(0xFFFFFFFF));
     zgaz3536 = ((zlen + zgaz3535) & UINT64_C(0xFFFFFFFF));
   }
-  zcbz381 = (zgaz3536 & zm);
-
-
-end_function_684: ;
-  return zcbz381;
-end_block_exception_685: ;
+  zcbz382 = (zgaz3536 & zm);
+end_function_648: ;
+  return zcbz382;
+end_block_exception_649: ;
 
   return UINT64_C(0xdeadc0de);
 }
 
 static struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 sailgen_doCSetBounds(struct zCapability, uint64_t);
 
-struct zCapability zghz3409;
-struct zCapability zghz3410;
-struct zCapability zghz3411;
-lbits zghz3412;
-sail_int zghz3413;
-sail_int zghz3414;
-lbits zghz3415;
-lbits zghz3416;
+struct zCapability zghz3445;
+struct zCapability zghz3446;
+struct zCapability zghz3447;
+lbits zghz3448;
+sail_int zghz3449;
+sail_int zghz3450;
+lbits zghz3451;
+lbits zghz3452;
 
 static void startup_sailgen_doCSetBounds(void)
 {
 
 
 
-  CREATE(lbits)(&zghz3412);
-  CREATE(sail_int)(&zghz3413);
-  CREATE(sail_int)(&zghz3414);
-  CREATE(lbits)(&zghz3415);
-  CREATE(lbits)(&zghz3416);
+  CREATE(lbits)(&zghz3448);
+  CREATE(sail_int)(&zghz3449);
+  CREATE(sail_int)(&zghz3450);
+  CREATE(lbits)(&zghz3451);
+  CREATE(lbits)(&zghz3452);
 }
 
 static struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 sailgen_doCSetBounds(struct zCapability zinput, uint64_t zreq_len)
 {
-  __label__ case_688, finish_match_687, end_function_691, end_block_exception_692;
+  __label__ case_652, finish_match_651, end_function_655, end_block_exception_656;
 
-  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz382;
+  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz383;
   uint64_t znewBase;
   znewBase = zinput.zaddress;
   uint64_t znewTop;
   {
     uint64_t zgaz3546;
     {
-      RECREATE(sail_int)(&zghz3414);
-      CONVERT_OF(sail_int, mach_int)(&zghz3414, INT64_C(33));
-      RECREATE(lbits)(&zghz3415);
-      CONVERT_OF(lbits, fbits)(&zghz3415, znewBase, UINT64_C(32) , true);
-      RECREATE(lbits)(&zghz3416);
-      sailgen_zzero_extend(&zghz3416, zghz3414, zghz3415);
-      zgaz3546 = CONVERT_OF(fbits, lbits)(zghz3416, true);
+      RECREATE(sail_int)(&zghz3450);
+      CONVERT_OF(sail_int, mach_int)(&zghz3450, INT64_C(33));
+      RECREATE(lbits)(&zghz3451);
+      CONVERT_OF(lbits, fbits)(&zghz3451, znewBase, UINT64_C(32) , true);
+      RECREATE(lbits)(&zghz3452);
+      sailgen_zzero_extend(&zghz3452, zghz3450, zghz3451);
+      zgaz3546 = CONVERT_OF(fbits, lbits)(zghz3452, true);
     }
     znewTop = ((zgaz3546 + zreq_len) & UINT64_C(0b111111111111111111111111111111111));
   }
@@ -11999,24 +11741,24 @@ static struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 sailgen_doCSetBounds(s
   {
     int64_t zgaz3545;
     {
-      RECREATE(lbits)(&zghz3412);
-      CONVERT_OF(lbits, fbits)(&zghz3412, zreq_len, UINT64_C(33) , true);
-      RECREATE(sail_int)(&zghz3413);
-      sail_unsigned(&zghz3413, zghz3412);
-      zgaz3545 = CONVERT_OF(mach_int, sail_int)(zghz3413);
+      RECREATE(lbits)(&zghz3448);
+      CONVERT_OF(lbits, fbits)(&zghz3448, zreq_len, UINT64_C(33) , true);
+      RECREATE(sail_int)(&zghz3449);
+      sail_unsigned(&zghz3449, zghz3448);
+      zgaz3545 = CONVERT_OF(mach_int, sail_int)(zghz3449);
     }
     zinBounds = sailgen_inCapBoundsNoWrap(zinput, znewBase, zgaz3545);
   }
   struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zgaz3537;
   zgaz3537 = sailgen_setCapBounds(zinput, znewBase, znewTop);
-  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zgsz3782;
+  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zgsz3793;
   {
-    __label__ case_690, finish_match_689;
+    __label__ case_654, finish_match_653;
 
     bool zexact;
     zexact = zgaz3537.ztup0;
-    struct zCapability zghz3409;
-    zghz3409 = zgaz3537.ztup1;
+    struct zCapability zghz3445;
+    zghz3445 = zgaz3537.ztup1;
     bool zcond;
     {
       bool zgaz3544;
@@ -12024,77 +11766,69 @@ static struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 sailgen_doCSetBounds(s
         bool zgaz3540;
         {    if (zinBounds) {  zgaz3540 = zexact;  } else {  zgaz3540 = false;  }
         }
-        zgaz3544 = not(zgaz3540);
+        zgaz3544 = sailgen_not(zgaz3540);
       }
-      bool zgsz3786;
-      if (zgaz3544) {  zgsz3786 = true;  } else {
+      bool zgsz3797;
+      if (zgaz3544) {  zgsz3797 = true;  } else {
         bool zgaz3543;
-        zgaz3543 = sailgen_boundsMalformed(zghz3409);
-        bool zgsz3785;
-        if (zgaz3543) {  zgsz3785 = true;  } else {
+        zgaz3543 = sailgen_boundsMalformed(zghz3445);
+        bool zgsz3796;
+        if (zgaz3543) {  zgsz3796 = true;  } else {
           bool zgaz3542;
           {
             bool zgaz3541;
-            zgaz3541 = sailgen_capReservedValid(zghz3409);
-            zgaz3542 = not(zgaz3541);
+            zgaz3541 = sailgen_capReservedValid(zghz3445);
+            zgaz3542 = sailgen_not(zgaz3541);
           }
-          bool zgsz3784;
-          if (zgaz3542) {  zgsz3784 = true;  } else {  zgsz3784 = sailgen_capIsSealed(zghz3409);  }
-          zgsz3785 = zgsz3784;
+          bool zgsz3795;
+          if (zgaz3542) {  zgsz3795 = true;  } else {  zgsz3795 = sailgen_capIsSealed(zghz3445);  }
+          zgsz3796 = zgsz3795;
         }
-        zgsz3786 = zgsz3785;
+        zgsz3797 = zgsz3796;
       }
-      zcond = zgsz3786;
+      zcond = zgsz3797;
     }
     struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zgaz3538;
     zgaz3538 = sailgen_setCapBounds(zinput, znewBase, znewTop);
-    struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zgsz3787;
+    struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zgsz3798;
     {
-      bool zexactshadowz310;
-      zexactshadowz310 = zgaz3538.ztup0;
-      struct zCapability zghz3410;
-      zghz3410 = zgaz3538.ztup1;
-      struct zCapability zghz3411;
-      zghz3411 = sailgen_clearTagIf(zghz3410, zcond);
-      zgsz3787.ztup0 = zexactshadowz310;
-      zgsz3787.ztup1 = zghz3411;
-      goto finish_match_689;
+      bool zexactshadowz317;
+      zexactshadowz317 = zgaz3538.ztup0;
+      struct zCapability zghz3446;
+      zghz3446 = zgaz3538.ztup1;
+      struct zCapability zghz3447;
+      zghz3447 = sailgen_clearTagIf(zghz3446, zcond);
+      zgsz3798.ztup0 = zexactshadowz317;
+      zgsz3798.ztup1 = zghz3447;
+      goto finish_match_653;
     }
-  case_690: ;
+  case_654: ;
     sail_match_failure("doCSetBounds");
-  finish_match_689: ;
-    zgsz3782 = zgsz3787;
-    goto finish_match_687;
+  finish_match_653: ;
+    zgsz3793 = zgsz3798;
+    goto finish_match_651;
   }
-case_688: ;
+case_652: ;
   sail_match_failure("doCSetBounds");
-finish_match_687: ;
-  zcbz382 = zgsz3782;
-
-
-
-
-
-end_function_691: ;
-  return zcbz382;
-end_block_exception_692: ;
-  struct zCapability zcbz3115 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
-  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz3114 = { .ztup0 = false, .ztup1 = zcbz3115 };
-  return zcbz3114;
+finish_match_651: ;
+  zcbz383 = zgsz3793;
+end_function_655: ;
+  return zcbz383;
+end_block_exception_656: ;
+  struct zCapability zcbz3117 = { .zB = UINT64_C(0xdeadc0de), .zE = INT64_C(0xdeadc0de), .zT = UINT64_C(0xdeadc0de), .zaddress = UINT64_C(0xdeadc0de), .zap_m = UINT64_C(0xdeadc0de), .zcl = UINT64_C(0xdeadc0de), .zinternal_exponent = false, .zreserved_0 = UINT64_C(0xdeadc0de), .zreserved_1 = UINT64_C(0xdeadc0de), .zsd_perms = UINT64_C(0xdeadc0de), .zsealed = false, .ztag = false };
+  struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zcbz3116 = { .ztup0 = false, .ztup1 = zcbz3117 };
+  return zcbz3116;
 }
 
 
 
 static void finish_sailgen_doCSetBounds(void)
 {
-  KILL(lbits)(&zghz3416);
-  KILL(lbits)(&zghz3415);
-  KILL(sail_int)(&zghz3414);
-  KILL(sail_int)(&zghz3413);
-  KILL(lbits)(&zghz3412);
-
-
-
+  KILL(lbits)(&zghz3452);
+  KILL(lbits)(&zghz3451);
+  KILL(sail_int)(&zghz3450);
+  KILL(sail_int)(&zghz3449);
+  KILL(lbits)(&zghz3448);
 }
 
 // register TestCap
@@ -12108,12 +11842,12 @@ static uint64_t zTestLen;
 
 static unit sailgen_main(unit);
 
-struct zCapability zghz3417;
-struct zCapability zghz3418;
-struct zCapability zghz3419;
-struct zCapability zghz3420;
-struct zArchPerms zghz3421;
-struct zEncMetadata zghz3422;
+struct zCapability zghz3453;
+struct zCapability zghz3454;
+struct zCapability zghz3455;
+struct zCapability zghz3456;
+struct zArchPerms zghz3457;
+struct zEncMetadata zghz3458;
 
 static void startup_sailgen_main(void)
 {
@@ -12125,50 +11859,47 @@ static void startup_sailgen_main(void)
 
 }
 
-
-
-
-static unit sailgen_main(unit zgsz3791)
+static unit sailgen_main(unit zgsz3802)
 {
-  __label__ case_695, finish_match_694, end_function_698, end_block_exception_699;
+  __label__ case_659, finish_match_658, end_function_662, end_block_exception_663;
 
-  unit zcbz383;
+  unit zcbz384;
   {
     zTestCap = znull_cap;
-    unit zgsz3792;
-    zgsz3792 = UNIT;
+    unit zgsz3803;
+    zgsz3803 = UNIT;
   }
-  struct zCapability zghz3417;
+  struct zCapability zghz3453;
   {
     bool zgaz3553;
     zgaz3553 = zTestCap.ztag;
     uint64_t zgaz3554;
     zgaz3554 = (zTestAddr << 32) | zTestAddr;
-    zghz3417 = sailgen_bitsToCap(zgaz3553, zgaz3554);
+    zghz3453 = sailgen_bitsToCap(zgaz3553, zgaz3554);
   }
   uint64_t zcap_bits;
   {
-    struct zEncMetadata zghz3422;
-    zghz3422 = sailgen_capToMetadataBits(zghz3417);
-    zcap_bits = zghz3422.zbits;
+    struct zEncMetadata zghz3458;
+    zghz3458 = sailgen_capToMetadataBits(zghz3453);
+    zcap_bits = zghz3458.zbits;
   }
   struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zgaz3547;
   zgaz3547 = sailgen_doCSetBounds(zTestCap, zTestLen);
-  unit zgsz3793;
+  unit zgsz3804;
   {
-    __label__ case_697, finish_match_696;
+    __label__ case_661, finish_match_660;
 
     bool zexact;
     zexact = zgaz3547.ztup0;
-    struct zCapability zghz3418;
-    zghz3418 = zgaz3547.ztup1;
+    struct zCapability zghz3454;
+    zghz3454 = zgaz3547.ztup1;
     struct ztuple_z8z5boolzCz0z5structz0zzCapabilityz9 zgaz3548;
     zgaz3548 = sailgen_setCapAddr(zTestCap, zTestAddr);
     {
       bool zrepresentable;
       zrepresentable = zgaz3548.ztup0;
-      struct zCapability zghz3419;
-      zghz3419 = zgaz3548.ztup1;
+      struct zCapability zghz3455;
+      zghz3455 = zgaz3548.ztup1;
       struct zoptionzIz8izCiz9zK zbounds;
       CREATE(zoptionzIz8izCiz9zK)(&zbounds);
       sailgen_getCapBounds(&zbounds, zTestCap);
@@ -12177,18 +11908,18 @@ static unit sailgen_main(unit zgsz3791)
       sail_string zcap_str;
       CREATE(sail_string)(&zcap_str);
       sailgen_capToString(&zcap_str, zTestCap);
-      struct zCapability zghz3420;
+      struct zCapability zghz3456;
       {
         struct ztuple_z8z5structz0zzArchPermszCz0z5enumz0zzExecutionModez9 zgaz3551;
         {
-          struct zArchPerms zghz3421;
-          zghz3421 = sailgen_getArchPermsLegalizzed(zTestCap);
+          struct zArchPerms zghz3457;
+          zghz3457 = sailgen_getArchPermsLegalizzed(zTestCap);
           enum zExecutionMode zgaz3550;
           zgaz3550 = sailgen_getCapMode(zTestCap);
-          zgaz3551.ztup0 = zghz3421;
+          zgaz3551.ztup0 = zghz3457;
           zgaz3551.ztup1 = zgaz3550;
         }
-        zghz3420 = sailgen_setCapPermsAndMode(zTestCap, zgaz3551);
+        zghz3456 = sailgen_setCapPermsAndMode(zTestCap, zgaz3551);
       }
       struct zoptionzIz8RArchPermszCEExecutionModez5z9zK zperms_mode;
       CREATE(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zperms_mode);
@@ -12197,27 +11928,24 @@ static unit sailgen_main(unit zgsz3791)
       zlen = sailgen_getRepresentableLength(zTestAddr);
       uint64_t zmask;
       zmask = sailgen_getRepresentableAlignmentMask(zTestAddr);
-      zgsz3793 = UNIT;
+      zgsz3804 = UNIT;
       KILL(zoptionzIz8RArchPermszCEExecutionModez5z9zK)(&zperms_mode);
       KILL(sail_string)(&zcap_str);
       KILL(zoptionzIz8izCiz9zK)(&zbounds);
-      goto finish_match_696;
+      goto finish_match_660;
     }
-  case_697: ;
+  case_661: ;
     sail_match_failure("main");
-  finish_match_696: ;
-    goto finish_match_694;
+  finish_match_660: ;
+    goto finish_match_658;
   }
-case_695: ;
+case_659: ;
   sail_match_failure("main");
-finish_match_694: ;
-  zcbz383 = zgsz3793;
-
-
-
-end_function_698: ;
-  return zcbz383;
-end_block_exception_699: ;
+finish_match_658: ;
+  zcbz384 = zgsz3804;
+end_function_662: ;
+  return zcbz384;
+end_block_exception_663: ;
 
   return UNIT;
 }
@@ -12226,59 +11954,54 @@ end_block_exception_699: ;
 
 static void finish_sailgen_main(void)
 {
-
-
-
-
-
-
 }
 
 static unit sailgen_initializze_registers(unit);
 
-struct zCapability zghz3423;
-sail_int zghz3424;
+struct zCapability zghz3459;
+sail_int zghz3460;
 
 static void startup_sailgen_initializze_registers(void)
 {
 
-  CREATE(sail_int)(&zghz3424);
+  CREATE(sail_int)(&zghz3460);
 }
 
-static unit sailgen_initializze_registers(unit zgsz3798)
+static unit sailgen_initializze_registers(unit zgsz3809)
 {
-  __label__ end_function_701, end_block_exception_702;
+  __label__ end_function_665, end_block_exception_666;
 
-  unit zcbz384;
+  unit zcbz385;
   {
-    struct zCapability zghz3423;
-    zghz3423.zB = UINT64_C(0b0000000000);
-    RECREATE(sail_int)(&zghz3424);
-    CONVERT_OF(sail_int, mach_int)(&zghz3424, INT64_C(-7));
-    zghz3423.zE = CONVERT_OF(mach_int, sail_int)(zghz3424);
-    zghz3423.zT = UINT64_C(0b0000000000);
-    zghz3423.zaddress = UINT64_C(0x00000000);
-    zghz3423.zap_m = UINT64_C(0b00000);
-    zghz3423.zinternal_exponent = false;
-    zghz3423.zreserved_0 = UINT64_C(0b000);
-    zghz3423.zreserved_1 = UINT64_C(0b0);
-    zghz3423.zsd_perms = UINT64_C(0b00);
-    zghz3423.zsealed = false;
-    zghz3423.ztag = false;
-    zTestCap = zghz3423;
-    unit zgsz3802;
-    zgsz3802 = UNIT;
+    struct zCapability zghz3459;
+    zghz3459.zB = UINT64_C(0b0000000000);
+    RECREATE(sail_int)(&zghz3460);
+    CONVERT_OF(sail_int, mach_int)(&zghz3460, INT64_C(-7));
+    zghz3459.zE = CONVERT_OF(mach_int, sail_int)(zghz3460);
+    zghz3459.zT = UINT64_C(0b0000000000);
+    zghz3459.zaddress = UINT64_C(0x00000000);
+    zghz3459.zap_m = UINT64_C(0b00000);
+    zghz3459.zcl = UINT64_C(0b0);
+    zghz3459.zinternal_exponent = false;
+    zghz3459.zreserved_0 = UINT64_C(0b00);
+    zghz3459.zreserved_1 = UINT64_C(0b0);
+    zghz3459.zsd_perms = UINT64_C(0b00);
+    zghz3459.zsealed = false;
+    zghz3459.ztag = false;
+    zTestCap = zghz3459;
+    unit zgsz3813;
+    zgsz3813 = UNIT;
   }
   {
     zTestAddr = UINT64_C(0x00000000);
-    unit zgsz3801;
-    zgsz3801 = UNIT;
+    unit zgsz3812;
+    zgsz3812 = UNIT;
   }
   zTestLen = UINT64_C(0b000000000000000000000000000000000);
-  zcbz384 = UNIT;
-end_function_701: ;
-  return zcbz384;
-end_block_exception_702: ;
+  zcbz385 = UNIT;
+end_function_665: ;
+  return zcbz385;
+end_block_exception_666: ;
 
   return UNIT;
 }
@@ -12286,10 +12009,10 @@ end_block_exception_702: ;
 
 
 static void finish_sailgen_initializze_registers(void)
-{
-  KILL(sail_int)(&zghz3424);
-
+{    KILL(sail_int)(&zghz3460);
 }
+
+
 
 static void model_init(void)
 {
@@ -12307,6 +12030,7 @@ static void model_init(void)
   startup_sailgen__update_EncMetadata_AP_M();
   startup_sailgen__update_EncMetadata_BE();
   startup_sailgen__update_EncMetadata_Bm();
+  startup_sailgen__update_EncMetadata_CL();
   startup_sailgen__update_EncMetadata_CT();
   startup_sailgen__update_EncMetadata_EF();
   startup_sailgen__update_EncMetadata_L8();
@@ -12367,11 +12091,13 @@ static void model_init(void)
   create_letbind_23();
   create_letbind_24();
   create_letbind_25();
+  create_letbind_26();
   sailgen_initializze_registers(UNIT);
 }
 
 static void model_fini(void)
 {
+  kill_letbind_26();
   kill_letbind_25();
   kill_letbind_24();
   kill_letbind_23();
@@ -12407,6 +12133,7 @@ static void model_fini(void)
   finish_sailgen__update_EncMetadata_AP_M();
   finish_sailgen__update_EncMetadata_BE();
   finish_sailgen__update_EncMetadata_Bm();
+  finish_sailgen__update_EncMetadata_CL();
   finish_sailgen__update_EncMetadata_CT();
   finish_sailgen__update_EncMetadata_EF();
   finish_sailgen__update_EncMetadata_L8();
@@ -12462,6 +12189,24 @@ static int model_main(int argc, char *argv[])
   model_fini();
   model_pre_exit();
   return EXIT_SUCCESS;
+}
+
+unit (*const SAIL_TESTS[])(unit) = {
+  NULL
+};
+
+const char* const SAIL_TEST_NAMES[] = {
+};
+
+static void model_test(void)
+{
+  for (size_t i = 0; SAIL_TESTS[i] != NULL; ++i) {
+    model_init();
+    printf("Testing %s\n", SAIL_TEST_NAMES[i]);
+    SAIL_TESTS[i](UNIT);
+    printf("Pass\n");
+    model_fini();
+  }
 }
 
 

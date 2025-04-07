@@ -41,28 +41,7 @@
 /*  Technology) under DARPA/AFRL contracts FA8650-18-C-7809 ("CIFV")        */
 /*  and FA8750-10-C-0237 ("CTSRD").                                         */
 /*                                                                          */
-/*  Redistribution and use in source and binary forms, with or without      */
-/*  modification, are permitted provided that the following conditions      */
-/*  are met:                                                                */
-/*  1. Redistributions of source code must retain the above copyright       */
-/*     notice, this list of conditions and the following disclaimer.        */
-/*  2. Redistributions in binary form must reproduce the above copyright    */
-/*     notice, this list of conditions and the following disclaimer in      */
-/*     the documentation and/or other materials provided with the           */
-/*     distribution.                                                        */
-/*                                                                          */
-/*  THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS''      */
-/*  AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED       */
-/*  TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A         */
-/*  PARTICULAR PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR     */
-/*  CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,            */
-/*  SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT        */
-/*  LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF        */
-/*  USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND     */
-/*  ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,      */
-/*  OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT      */
-/*  OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF      */
-/*  SUCH DAMAGE.                                                            */
+/*  SPDX-License-Identifier: BSD-2-Clause                                   */
 /****************************************************************************/
 
 #ifndef _GNU_SOURCE
@@ -185,13 +164,31 @@ void dec_str(sail_string *str, const mpz_t n)
 void hex_str(sail_string *str, const mpz_t n)
 {
   sail_free(*str);
-  gmp_asprintf(str, "0x%Zx", n);
+
+  if (mpz_cmp_si(n, 0) < 0) {
+    mpz_t abs;
+    mpz_init(abs);
+    mpz_abs(abs, n);
+    gmp_asprintf(str, "-0x%Zx", abs);
+    mpz_clear(abs);
+  } else {
+    gmp_asprintf(str, "0x%Zx", n);
+  }
 }
 
 void hex_str_upper(sail_string *str, const mpz_t n)
 {
   sail_free(*str);
-  gmp_asprintf(str, "0x%ZX", n);
+
+  if (mpz_cmp_si(n, 0) < 0) {
+    mpz_t abs;
+    mpz_init(abs);
+    mpz_abs(abs, n);
+    gmp_asprintf(str, "-0x%ZX", abs);
+    mpz_clear(abs);
+  } else {
+    gmp_asprintf(str, "0x%ZX", n);
+  }
 }
 
 bool eq_string(const_sail_string str1, const_sail_string str2)
@@ -208,10 +205,36 @@ void undefined_string(sail_string *str, const unit u) {}
 
 void concat_str(sail_string *stro, const_sail_string str1, const_sail_string str2)
 {
-  *stro = (sail_string)realloc(*stro, strlen(str1) + strlen(str2) + 1);
+  sail_string in1;
+  sail_string in2;
+  size_t in1_len = strlen(str1);
+  size_t in2_len = strlen(str2);
+  bool in1_free = false;
+  bool in2_free = false;
+
+  if (*stro == str1) {
+    in1 = (sail_string)sail_malloc(in1_len + 1);
+    strcpy(in1, str1);
+    in1_free = true;
+  } else {
+    in1 = (sail_string)str1;
+  }
+
+  if (*stro == str2) {
+    in2 = (sail_string)sail_malloc(in2_len + 1);
+    strcpy(in2, str2);
+    in2_free = true;
+  } else {
+    in2 = (sail_string)str2;
+  }
+
+  *stro = (sail_string)realloc(*stro, in1_len + in2_len + 1);
   (*stro)[0] = '\0';
-  strcat(*stro, str1);
-  strcat(*stro, str2);
+  strcat(*stro, in1);
+  strcat(*stro, in2);
+
+  if (in1_free) sail_free(in1);
+  if (in2_free) sail_free(in2);
 }
 
 bool string_startswith(const_sail_string s, const_sail_string prefix)
@@ -814,6 +837,16 @@ void count_leading_zeros(sail_int *rop, const lbits op)
   } else {
     size_t bits = mpz_sizeinbase(*op.bits, 2);
     mpz_set_ui(*rop, op.len - bits);
+  }
+}
+
+void count_trailing_zeros(sail_int *rop, const lbits op)
+{
+  if (mpz_cmp_ui(*op.bits, 0) == 0) {
+    mpz_set_ui(*rop, op.len);
+  } else {
+    mp_bitcnt_t ix = mpz_scan1(*op.bits, 0);
+    mpz_set_ui(*rop, ix);
   }
 }
 
@@ -1650,6 +1683,58 @@ void decimal_string_of_lbits(sail_string *str, const lbits op)
 {
   sail_free(*str);
   gmp_asprintf(str, "%Z", *op.bits);
+}
+
+void parse_dec_bits(lbits *res, const mpz_t n, const_sail_string dec)
+{
+    if (!valid_dec_bits(n, dec)) {
+        goto failure;
+    }
+
+    mpz_t value;
+    mpz_init(value);
+    
+    if (mpz_set_str(value, dec, 10) == 0) {
+        res->len = mpz_get_ui(n);
+        mpz_set(*(res->bits), value);
+        mpz_clear(value);
+        return;
+    }
+    mpz_clear(value);
+
+failure:
+    res->len = mpz_get_ui(n);
+    mpz_set_ui(*(res->bits), 0);
+}
+
+bool valid_dec_bits(const mpz_t n, const_sail_string dec)
+{
+    size_t len = strlen(dec);
+
+    if (len < 1) {
+        return false;
+    }
+
+    for (size_t i = 0; i < len; i++) {
+        if (!('0' <= dec[i] && dec[i] <= '9')) {
+            return false;
+        }
+    }
+
+    mpz_t value;
+    mpz_init(value);
+
+    if (mpz_set_str(value, dec, 10) != 0) {
+        mpz_clear(value);
+        return false;
+    }
+
+    size_t bit_width = mpz_sizeinbase(value, 2);
+
+    bool valid = (bit_width <= mpz_get_ui(n));
+
+    mpz_clear(value);
+    return valid;
 }
 
 void parse_hex_bits(lbits *res, const mpz_t n, const_sail_string hex)

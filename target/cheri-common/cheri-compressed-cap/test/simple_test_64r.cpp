@@ -149,7 +149,7 @@ TEST_CASE_M_AP_DECOMP(LVB_1, CC64R_AP_Q3 | 5, 0, 0) // needs LVLBITS=2
 
 TEST_CASE("bounds encoding, internal exponent, T8 = 1", "[bounds]") {
     /* params are base, cursor, top */
-    _cc_cap_t cap = CompressedCap64r::make_max_perms_cap(0x0, 0x1000, 0x8000);
+    _cc_cap_t cap = TestAPICC::make_max_perms_cap(0x0, 0x1000, 0x8000, TestAPICC::MODE_INT, /*lvbits=*/0);
 
     /*
      * 11 SDP
@@ -174,7 +174,8 @@ TEST_CASE("bounds encoding, internal exponent, T8 = 1", "[bounds]") {
 }
 
 TEST_CASE("bounds encoding, exponent > 0, T8==0", "[bounds]") {
-    _cc_cap_t cap = CompressedCap64r::make_max_perms_cap(0x4C000000, 0x90000000, 0xAC000000);
+    _cc_cap_t cap =
+        TestAPICC::make_max_perms_cap(0x4C000000, 0x90000000, 0xAC000000, TestAPICC::MODE_INT, /*lvbits=*/0);
 
     /*
      * 00 SDP
@@ -199,7 +200,8 @@ TEST_CASE("bounds encoding, exponent > 0, T8==0", "[bounds]") {
 }
 
 TEST_CASE("bounds encoding, exponent > 0, T8==0, c_b==-1", "[bounds]") {
-    _cc_cap_t cap = CompressedCap64r::make_max_perms_cap(0x9F000000, 0xA0000000, 0xAC000000);
+    _cc_cap_t cap =
+        TestAPICC::make_max_perms_cap(0x9F000000, 0xA0000000, 0xAC000000, TestAPICC::MODE_INT, /*lvbits=*/0);
 
     /*
      * 00 SDP
@@ -262,7 +264,7 @@ TEST_CASE("Malformed bounds L8", "[bounds]") {
     CHECK(cap.base() == 0);                       // this previously reported base=0x0000000c58e0a0
     CHECK(cap.top() == 0);                        // This previously reported top=0x0000000000c58e1d8
     CHECK((int64_t)cap.offset() == input_cursor); // Previously reported 0xffffffffffffff40
-    CHECK(cap.reserved_bits() == 5);
+    CHECK(cap.reserved_bits() == 0xa00000);
     CHECK(cap.type() == CC64R_OTYPE_SENTRY);
 }
 

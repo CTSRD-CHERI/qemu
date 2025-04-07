@@ -34,8 +34,8 @@
 
 #define SAIL_INFINITE_CAP zinfinite_cap
 #define sail_bounds_tuple zoptionzIz8bzCbz9zK
-#define sail_bounds_tuple_base(t) (t).zSomezIz8bzCbz9zK.ztup0
-#define sail_bounds_tuple_top(t) (t).zSomezIz8bzCbz9zK.ztup1
+#define sail_bounds_tuple_base(t) (t).variants.zSomezIz8bzCbz9zK.ztup0
+#define sail_bounds_tuple_top(t) (t).variants.zSomezIz8bzCbz9zK.ztup1
 
 #include "sail_wrapper_common.c"
 
@@ -81,12 +81,14 @@ static struct zCapability cap_t_to_sail_cap(const _cc_cap_t* c) {
     struct zCapability result;
     result = znull_cap;
     result.ztag = c->cr_tag;
+    // TODO: remove this once we have sail with level support
     result.zreserved_0 = _CC_EXTRACT_FIELD(c->cr_pesbt, RESERVED0);
     result.zreserved_1 = _CC_EXTRACT_FIELD(c->cr_pesbt, RESERVED1);
     result.zaddress = c->_cr_cursor;
     result.zsealed = _cc_N(get_otype)(c) != 0;
     result.zsd_perms = _cc_N(get_uperms)(c);
     result.zap_m = _CC_EXTRACT_FIELD(c->cr_pesbt, AP_M);
+    result.zcl = _CC_EXTRACT_FIELD(c->cr_pesbt, LEVEL);
 
     // Extract E,B,T,IE from the cr_pesbt field:
     _cc_addr_t fake_pesbt = c->cr_pesbt;
@@ -104,12 +106,14 @@ static _cc_cap_t sail_cap_to_cap_t(const struct zCapability* sail) {
     c._cr_cursor = sail->zaddress;
     set_top_base_from_sail(sail, &c);
     c.cr_tag = sail->ztag;
-    if (sailgen_boundsMalformed(*sail)) {
+    c.cr_bounds_valid = !sailgen_boundsMalformed(*sail);
+    if (!c.cr_bounds_valid) {
         assert(!sail->ztag && "Input cannot be tagged with malformed bounds");
     }
     c.cr_exp = sail->zE;
-    c.cr_bounds_valid = !sailgen_boundsMalformed(*sail);
     c.cr_pesbt = _compress_sailcap_raw(*sail);
+    // sail currently always has lvbits == 1
+    c.cr_lvbits = 1;
     return c;
 }
 

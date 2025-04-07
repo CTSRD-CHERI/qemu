@@ -37,6 +37,10 @@
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wsometimes-uninitialized"
 #pragma clang diagnostic ignored "-Wstrict-prototypes"
+#pragma clang diagnostic ignored "-Wzero-length-array"
+#if __has_warning("-Wc23-extensions")
+#pragma clang diagnostic ignored "-Wc23-extensions"
+#endif
 #ifdef HAVE_UNUSED_BUT_SET_VARIABLE
 #pragma clang diagnostic ignored "-Wunused-but-set-variable"
 #endif
@@ -173,6 +177,7 @@ _cc_addr_t _cc_sail(null_pesbt)(void) { return _compress_sailcap_raw(znull_cap);
 _cc_addr_t _cc_sail(reset_pesbt)(void) { return _compress_sailcap_raw(SAIL_INFINITE_CAP); }
 
 bool _cc_sail(setbounds)(_cc_cap_t* cap, _cc_length_t req_len) {
+    assert(_cc_N(get_lvbits)(cap) == 1 && "Sail API assumes hardcoded lvlbits");
     struct zCapability sailcap = cap_t_to_sail_cap(cap);
     sail_cap_bits sail_req_len;
     CREATE(sail_cap_bits)(&sail_req_len);

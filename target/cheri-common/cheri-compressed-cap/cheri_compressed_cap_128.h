@@ -55,8 +55,8 @@
 #define CC128_SPECIAL_OTYPE_VAL(subtract) (CC128_MAX_REPRESENTABLE_OTYPE - subtract##u)
 #define CC128_SPECIAL_OTYPE_VAL_SIGNED(subtract) (((int64_t)-1) - subtract##u)
 // ISAv9 always supports exactly one level bit (local/global).
-#define CC128_MANDATORY_LEVELS 1
-#define CC128_MAX_LEVELS CC64_MANDATORY_LEVELS
+#define CC128_MANDATORY_LEVEL_BITS 1
+#define CC128_MAX_LEVEL_BITS CC64_MANDATORY_LEVEL_BITS
 
 /* Use __uint128 to represent 65 bit length */
 __extension__ typedef unsigned __int128 cc128_length_t;
@@ -121,7 +121,7 @@ _CC_STATIC_ASSERT((CC128_HIGHEST_PERM << 1) > CC128_FIELD_HWPERMS_MAX_VALUE, "al
 #define CC128_UPERMS_SHFT (15)
 #define CC128_UPERMS_MEM_SHFT (12)
 #define CC128_PERM_SW_ALL (CC128_UPERMS_ALL << CC128_UPERMS_SHFT)
-#define CC128_ENCODED_INFINITE_PERMS()                                                                                 \
+#define CC128_ENCODED_INFINITE_PERMS(lvbits)                                                                           \
     (_CC_ENCODE_FIELD(CC128_UPERMS_ALL, UPERMS) | _CC_ENCODE_FIELD(CC128_PERMS_ALL, HWPERMS))
 #define CC128_PERMS_MASK (CC128_PERMS_ALL | CC128_PERM_SW_ALL)
 
@@ -156,7 +156,6 @@ _CC_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
 // The exponent bits in memory are xored on load/store, so we encode the raw exponent value.
 #define CC128_ENCODE_EXPONENT(E) _CC_ENCODE_SPLIT_EXPONENT(E)
 #define CC128_EXTRACT_EXPONENT(pesbt) _CC_EXTRACT_SPLIT_EXPONENT(pesbt)
-#define CC128_RESERVED_FIELDS 1
 #define CC128_RESERVED_BITS CC128_FIELD_RESERVED_SIZE
 #define CC128_HAS_BASE_TOP_SPECIAL_CASES 0
 #define CC128_USES_V9_CORRECTION_FACTORS 1

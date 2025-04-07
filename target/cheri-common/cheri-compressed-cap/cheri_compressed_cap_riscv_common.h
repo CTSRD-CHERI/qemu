@@ -1,7 +1,23 @@
 // SPDX-License-Identifier: BSD-2-Clause
 
-static inline uint8_t _cc_N(get_reserved)(const _cc_cap_t* cap) {
-    return _CC_EXTRACT_SPLIT_FIELD(cap->cr_pesbt, RESERVED1, RESERVED0);
+static inline _cc_addr_t _cc_N(get_reserved)(const _cc_cap_t* cap) {
+    _cc_addr_t reserved = cap->cr_pesbt & (_CC_N(FIELD_RESERVED0_MASK64) | _CC_N(FIELD_RESERVED1_MASK64));
+    if (cap->cr_lvbits == 0) {
+        reserved |= cap->cr_pesbt & _CC_N(FIELD_LEVEL_MASK64);
+    }
+    return reserved;
+}
+static inline uint32_t _cc_N(get_level)(const _cc_cap_t* cap) {
+    // With lvbits==0 we always report global.
+    return cap->cr_lvbits == 0 ? 1 : _CC_EXTRACT_FIELD(cap->cr_pesbt, LEVEL);
+}
+static inline void _cc_N(update_level)(_cc_cap_t* cap, uint8_t level) {
+    _cc_api_requirement(level <= _CC_N(MAX_LEVEL_VALUE), "invalid level");
+    if (cap->cr_lvbits == 0) {
+        _cc_api_requirement(level == 1, "cannot change level when levels are reserved");
+        return;
+    }
+    cap->cr_pesbt = _CC_DEPOSIT_FIELD(cap->cr_pesbt, level, LEVEL);
 }
 
 static inline bool _cc_N(bounds_malformed)(_cc_bounds_bits bounds) {

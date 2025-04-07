@@ -77,9 +77,33 @@ TEST_CASE("Invalid exponent caps should never be representable", "[fuzz]") {
     CHECK(!cap.cr_bounds_valid);
     // The precise check should also fail:
     CHECK(!TestAPICC::sail_precise_is_representable(cap, 0));
-    CHECK(!TestAPICC::precise_is_representable_new_addr(cap, 0));
+    CHECK(!_cc_N(_precise_is_representable_new_addr)(&cap, 0));
     CHECK(!cc128m_is_representable_with_addr(&cap, 0, /*precise_representable_check=*/true));
     // Calling cc128m_is_representable_with_addr should fail since it checks the exponent validity in addition to the
     // doing the fast representability check.
     CHECK(!cc128m_is_representable_with_addr(&cap, 0, /*precise_representable_check=*/false));
+}
+
+TEST_CASE("Invalid exponent caps should never be representable 2", "[fuzz]") {
+    // For Morello the representability check should always fail if the input had an invalid exponent.
+    // NB: calling the fast representability check directly succeeds since it does not take this into account, but the
+    // overall check for IncOffset/SetAddr should fail.
+    _cc_addr_t new_addr = 0x909090909090ff16;
+    _cc_addr_t expected_base = 0x23f80000000000;
+    _cc_length_t expected_top = 0x00080000000000000;
+    TestAPICC::cap_t cap = TestAPICC::decompress_raw(0x300000000223ff, 0xff2b55feff39ffff, false);
+    CHECK(cap.base() == expected_base);
+    CHECK(cap.top() == expected_top);
+    CHECK(cap.cr_exp == 40);
+    // The fast rep check internal function passes, but actually changing the address will give us different bounds!
+    CHECK(TestAPICC::sail_fast_is_representable(cap, new_addr));
+    CHECK(_cc_N(_fast_is_representable_new_addr)(&cap, new_addr));
+    // Calling is_representable_with_addr() should return false for both fast and precise check since this
+    // also checks for the sign bit changing.
+    CHECK(!_cc_N(is_representable_with_addr)(&cap, new_addr, /*precise_representable_check=*/false));
+    CHECK(!_cc_N(is_representable_with_addr)(&cap, new_addr, /*precise_representable_check=*/true));
+    TestAPICC::cap_t modified_cap = TestAPICC::decompress_raw(0x300000000223ff, new_addr, false);
+    CHECK(modified_cap.base() == (expected_base | 0xff00000000000000));
+    CHECK(modified_cap.top() == (expected_top | 0xff00000000000000));
+    CHECK(modified_cap.cr_exp == 40);
 }

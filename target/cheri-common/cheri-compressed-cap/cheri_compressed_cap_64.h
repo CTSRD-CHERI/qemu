@@ -55,8 +55,8 @@
 #define CC64_SPECIAL_OTYPE_VAL(subtract) (CC64_MAX_REPRESENTABLE_OTYPE - subtract##u)
 #define CC64_SPECIAL_OTYPE_VAL_SIGNED(subtract) (((int64_t)-1) - subtract##u)
 // ISAv9 always supports exactly one level bit (local/global).
-#define CC64_MANDATORY_LEVELS 1
-#define CC64_MAX_LEVELS CC64_MANDATORY_LEVELS
+#define CC64_MANDATORY_LEVEL_BITS 1
+#define CC64_MAX_LEVEL_BITS CC64_MANDATORY_LEVEL_BITS
 
 /* Use uint64_t to represent 33 bit length */
 typedef uint64_t cc64_length_t;
@@ -118,7 +118,7 @@ _CC_STATIC_ASSERT(CC64_PERM_SETCID < CC64_FIELD_HWPERMS_MAX_VALUE, "permissions 
 #define CC64_PERMS_ALL (0xfff)
 #define CC64_UPERMS_ALL (0)
 #define CC64_UPERMS_SHFT (15)
-#define CC64_ENCODED_INFINITE_PERMS()                                                                                  \
+#define CC64_ENCODED_INFINITE_PERMS(lvbits)                                                                            \
     (_CC_ENCODE_FIELD(CC64_UPERMS_ALL, UPERMS) | _CC_ENCODE_FIELD(CC64_PERMS_ALL, HWPERMS))
 #define CC64_PERMS_MASK (CC64_PERMS_ALL | CC64_PERM_SW_ALL)
 
@@ -145,7 +145,6 @@ _CC_STATIC_ASSERT_SAME(CC64_MANTISSA_WIDTH, CC64_FIELD_EXP_ZERO_BOTTOM_SIZE);
 // The exponent bits in memory are xored on load/store, so we encode the raw exponent value.
 #define CC64_ENCODE_EXPONENT(E) _CC_ENCODE_SPLIT_EXPONENT(E)
 #define CC64_EXTRACT_EXPONENT(pesbt) _CC_EXTRACT_SPLIT_EXPONENT(pesbt)
-#define CC64_RESERVED_FIELDS 1
 #define CC64_RESERVED_BITS CC64_FIELD_RESERVED_SIZE
 #define CC64_HAS_BASE_TOP_SPECIAL_CASES 0
 #define CC64_USES_V9_CORRECTION_FACTORS 1

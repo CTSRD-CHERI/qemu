@@ -60,9 +60,9 @@
 #define CC64R_SPECIAL_OTYPE_VAL(val) (val##u)
 #define CC64R_SPECIAL_OTYPE_VAL_SIGNED(val) (val##u)
 // Levels support depend on Zcherilevels extension. When not supported we have zero level bits.
-#define CC64R_MANDATORY_LEVELS 0
+#define CC64R_MANDATORY_LEVEL_BITS 0
 // The encoding allows for up to two levels, but the current implementation is limited to one level bit.
-#define CC64R_MAX_LEVELS 1
+#define CC64R_MAX_LEVEL_BITS 1
 
 /* Use uint64_t to represent 33 bit length */
 typedef uint64_t cc64r_length_t;
@@ -77,12 +77,12 @@ typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 0, _CC_N(MODE_INT) = 1 } _CC_N(Mode
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
     _CC_FIELD(SDP, 63, 62),
-    _CC_FIELD(AP_M, 61, 57),      // combined architectural permissions and mode
-    _CC_FIELD(MODE, 57, 57),      // Only valid if AP_M grant execute (quadrant 1)
-    _CC_FIELD(FLAGS, 57, 57),     // TODO: remove this field
-    _CC_FIELD(RESERVED1, 56, 56), // Actually the CL field, but reserved for now to match sail
+    _CC_FIELD(AP_M, 61, 57),  // combined architectural permissions and mode
+    _CC_FIELD(MODE, 57, 57),  // Only valid if AP_M grant execute (quadrant 1)
+    _CC_FIELD(FLAGS, 57, 57), // TODO: remove this field
     _CC_FIELD(LEVEL, 56, 56),
-    _CC_FIELD(RESERVED0, 55, 53),
+    _CC_FIELD(RESERVED1, 55, 55),
+    _CC_FIELD(RESERVED0, 54, 53),
     _CC_FIELD(OTYPE, 52, 52),
     _CC_FIELD(EBT, 51, 32),
 
@@ -132,8 +132,9 @@ _CC_STATIC_ASSERT_SAME(CC64R_UPERMS_ALL, CC64R_FIELD_SDP_MAX_VALUE);
 #define CC64R_AP_Q2 ((uint8_t)(2 << 3))
 #define CC64R_AP_Q3 ((uint8_t)(3 << 3))
 // The infinite cap has mode = 1 (if hybrid is supported) and is the first value in quadrant 1 (0x8 or 0x9)
-#define CC64R_ENCODED_INFINITE_PERMS()                                                                                 \
-    (_CC_ENCODE_FIELD(CC64R_UPERMS_ALL, SDP) | _CC_ENCODE_FIELD((CC64R_AP_Q1 | 1), AP_M))
+#define CC64R_ENCODED_INFINITE_PERMS(lvbits)                                                                           \
+    (_CC_ENCODE_FIELD(CC64R_UPERMS_ALL, SDP) | _CC_ENCODE_FIELD((CC64R_AP_Q1 | 1), AP_M) |                             \
+     _CC_ENCODE_FIELD(_CC_BITMASK64(lvbits), LEVEL))
 #define CC64R_PERMS_MASK (CC64R_PERMS_ALL | CC64R_PERM_SW_ALL)
 
 // Currently, only one type (sentry) is defined.
@@ -161,7 +162,6 @@ _CC_STATIC_ASSERT_SAME(CC64R_MANTISSA_WIDTH, CC64R_FIELD_EXP_ZERO_BOTTOM_SIZE);
     ((_CC_EXTRACT_FIELD(pesbt, LEN_MSB) << 4) | _CC_EXTRACT_SPLIT_EXPONENT(pesbt))
 #define CC64R_ENCODE_EXPONENT(E) _CC64R_ENCODE_EXPONENT_RAW(CC64R_MAX_EXPONENT - (E))
 #define CC64R_EXTRACT_EXPONENT(pesbt) (CC64R_MAX_EXPONENT - _CC64R_EXTRACT_EXPONENT_RAW(pesbt))
-#define CC64R_RESERVED_FIELDS 2
 #define CC64R_RESERVED_BITS (CC128R_FIELD_RESERVED0_SIZE + CC128R_FIELD_RESERVED1_SIZE)
 #define CC64R_HAS_BASE_TOP_SPECIAL_CASES 1
 #define CC64R_USES_V9_CORRECTION_FACTORS 0

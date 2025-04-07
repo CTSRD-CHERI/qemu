@@ -75,6 +75,7 @@
 #else
 #define _CC_DEPRECATED(msg) __attribute__((deprecated(msg)))
 #endif
+#define _cc_maybe_unused __attribute__((unused))
 
 #define _cc_N(name) _CC_CONCAT(_CC_CONCAT(_CC_CONCAT(cc, CC_FORMAT_LOWER), _), name)
 #define _CC_N(name) _CC_CONCAT(_CC_CONCAT(_CC_CONCAT(CC, CC_FORMAT_UPPER), _), name)

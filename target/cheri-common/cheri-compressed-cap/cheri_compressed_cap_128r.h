@@ -59,9 +59,9 @@
 #define CC128R_SPECIAL_OTYPE_VAL(val) (val##u)
 #define CC128R_SPECIAL_OTYPE_VAL_SIGNED(val) (val##u)
 // Levels support depend on Zcherilevels extension. When not supported we have zero level bits.
-#define CC128R_MANDATORY_LEVELS 0
+#define CC128R_MANDATORY_LEVEL_BITS 0
 // The encoding allows for many levels, but the current implementation is limited to one level bit.
-#define CC128R_MAX_LEVELS 1
+#define CC128R_MAX_LEVEL_BITS 1
 
 /* Use __uint128 to represent 65 bit length */
 __extension__ typedef unsigned __int128 cc128r_length_t;
@@ -82,7 +82,7 @@ enum {
     _CC_FIELD(MODE, 116, 116),
     _CC_FIELD(AP, 115, 108),
     _CC_FIELD(LEVEL, 107, 107),
-    _CC_FIELD(RESERVED0, 107, 92), // FIXME: Reserved0 should not include level
+    _CC_FIELD(RESERVED0, 106, 92),
     _CC_FIELD(OTYPE, 91, 91),
     _CC_FIELD(EBT, 90, 64),
 
@@ -126,8 +126,9 @@ enum {
 
 _CC_STATIC_ASSERT_SAME(CC128R_UPERMS_ALL, CC128R_FIELD_SDP_MAX_VALUE);
 // Encoded value is 0b100111111 since SL and EL are not supported in sail yet.
-#define CC128R_ENCODED_INFINITE_PERMS()                                                                                \
-    (_CC_ENCODE_FIELD(CC128R_UPERMS_ALL, SDP) | _CC_ENCODE_FIELD(0x13f, AP) | _CC_ENCODE_FIELD(1, MODE))
+#define CC128R_ENCODED_INFINITE_PERMS(lvbits)                                                                          \
+    (_CC_ENCODE_FIELD(CC128R_UPERMS_ALL, SDP) | _CC_ENCODE_FIELD(lvbits == 0 ? 0x13f : 0x1ff, AP) |                    \
+     _CC_ENCODE_FIELD(_CC_BITMASK64(lvbits), LEVEL) | _CC_ENCODE_FIELD(1, MODE))
 #define CC128R_PERMS_MASK (CC128R_PERMS_ALL | CC128R_PERM_SW_ALL)
 
 // Currently, only one type (sentry) is defined.
@@ -152,7 +153,6 @@ _CC_STATIC_ASSERT_SAME(CC128R_MANTISSA_WIDTH, CC128R_FIELD_EXP_ZERO_BOTTOM_SIZE)
 // The exponent bits in memory are subtracted from the max exponent when decoding in the IE case.
 #define CC128R_ENCODE_EXPONENT(E) _CC_ENCODE_SPLIT_EXPONENT(CC128R_MAX_EXPONENT - (E))
 #define CC128R_EXTRACT_EXPONENT(pesbt) (CC128R_MAX_EXPONENT - _CC_EXTRACT_SPLIT_EXPONENT(pesbt))
-#define CC128R_RESERVED_FIELDS 2
 #define CC128R_RESERVED_BITS (CC128R_FIELD_RESERVED0_SIZE + CC128R_FIELD_RESERVED1_SIZE)
 #define CC128R_HAS_BASE_TOP_SPECIAL_CASES 1
 #define CC128R_USES_V9_CORRECTION_FACTORS 0

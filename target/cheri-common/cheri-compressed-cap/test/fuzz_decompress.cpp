@@ -86,16 +86,26 @@ void fuzz_setbounds(const _cc_cap_t& input_cap, _cc_addr_t req_len) {
 }
 
 void fuzz_representable(const _cc_cap_t& input_cap, _cc_addr_t new_addr) {
-    bool cc_fast_rep = TestAPICC::fast_is_representable_new_addr(input_cap, new_addr);
+    bool cc_full_rep = _cc_N(_precise_is_representable_new_addr)(&input_cap, new_addr);
+    bool cc_fast_rep = _cc_N(_fast_is_representable_new_addr)(&input_cap, new_addr);
+    bool sail_full_rep = TestAPICC::sail_precise_is_representable(input_cap, new_addr);
     bool sail_fast_rep = TestAPICC::sail_fast_is_representable(input_cap, new_addr);
+    // The fast rep check can have false negatives but should never return true if the precise check fails
+    // The is_representable_with_addr API performs additional checks beyond the basic check for Morello
+    bool fast_ok = _cc_N(is_representable_with_addr)(&input_cap, new_addr, false);
+    bool precise_ok = _cc_N(is_representable_with_addr)(&input_cap, new_addr, true);
+    if (fast_ok && !precise_ok) {
+        fprintf(stderr, "Fast rep check passed when full check failed for addr %#016" PRIx64 " \nInput was:\n",
+                (uint64_t)new_addr);
+        dump_cap_fields(input_cap);
+        abort();
+    }
     if (cc_fast_rep != sail_fast_rep) {
         fprintf(stderr, "Fast rep check differs for sail (%d) vs cclib (%d) for addr %#016" PRIx64 " \nInput was:\n",
                 sail_fast_rep, cc_fast_rep, (uint64_t)new_addr);
         dump_cap_fields(input_cap);
         abort();
     }
-    bool cc_full_rep = TestAPICC::precise_is_representable_new_addr(input_cap, new_addr);
-    bool sail_full_rep = TestAPICC::sail_precise_is_representable(input_cap, new_addr);
     if (cc_full_rep != sail_full_rep) {
         fprintf(stderr, "Precise rep check differs for sail (%d) vs cclib (%d) for addr %#016" PRIx64 " \nInput was:\n",
                 sail_full_rep, cc_full_rep, (uint64_t)new_addr);
@@ -109,7 +119,7 @@ void fuzz_representable(const _cc_cap_t& input_cap, _cc_addr_t new_addr) {
 /// correctly by detagging.
 _cc_cap_t make_tagged_cap(const _cc_cap_t& c) {
     _cc_cap_t result = c;
-    result.cr_tag = c.reserved_bits() == 0;
+    result.cr_tag = c.reserved_bits() == 0 && c.cr_bounds_valid;
     return result;
 }
 
@@ -130,7 +140,14 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
     if (!compare_caps("DECODE FROM MEM", result, sail_result)) {
         abort();
     }
+    if (!(_cc_N(reserved_bits_valid(&result)) && result.cr_bounds_valid))
+        return 0; // only valid for now.
+
     const _cc_cap_t tagged_result = make_tagged_cap(result);
+
+    fuzz_representable(result, random_base);
+    fuzz_representable(tagged_result, random_base);
+    return 0;
 
 #ifndef TEST_CC_IS_MORELLO
     check_crrl_and_cram(pesbt);

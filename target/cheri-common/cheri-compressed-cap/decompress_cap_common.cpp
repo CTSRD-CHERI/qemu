@@ -82,7 +82,7 @@ static void dump_cap_fields(const CCAPI::cap_t& result) {
     auto otype = result.type();
     printf("OType:       0x%" PRIx32 "%s\n", otype, otype_suffix(otype));
     printf("Flags:       0x%" PRIx8 "\n", result.flags());
-    printf("Reserved:    0x%" PRIx8 "\n", result.reserved_bits());
+    printf("Reserved:    0x%" PRIx64 "\n", (uint64_t)result.reserved_bits());
     printf("Valid decompress: %s", result.cr_bounds_valid ? "yes" : "no");
     printf("\n");
 }

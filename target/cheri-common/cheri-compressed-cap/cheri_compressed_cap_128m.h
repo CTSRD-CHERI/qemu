@@ -78,8 +78,8 @@
 #define CC128M_SPECIAL_OTYPE_VAL(val) (val##u)
 #define CC128M_SPECIAL_OTYPE_VAL_SIGNED(val) (val##u)
 // Morello always supports exactly one level bit (local/global).
-#define CC128M_MANDATORY_LEVELS 1
-#define CC128M_MAX_LEVELS CC64_MANDATORY_LEVELS
+#define CC128M_MANDATORY_LEVEL_BITS 1
+#define CC128M_MAX_LEVEL_BITS CC64_MANDATORY_LEVEL_BITS
 
 /* Use __uint128 to represent 65 bit length */
 __extension__ typedef unsigned __int128 cc128m_length_t;
@@ -157,7 +157,7 @@ _CC_STATIC_ASSERT((CC128M_HIGHEST_PERM << 1) > CC128M_FIELD_ALL_PERMS_MAX_VALUE,
 #define CC128M_PERMS_MASK UINT64_C(0x3FFFF) /* Includes SW perms */
 #define CC128M_PERMS_ALL (CC128M_PERMS_MASK & ~CC128M_UPERMS_ALL)
 enum { _CC_N(PERMS_RESERVED_ONES) = 0 };
-#define CC128M_ENCODED_INFINITE_PERMS() _CC_ENCODE_FIELD(CC128M_PERMS_MASK, ALL_PERMS)
+#define CC128M_ENCODED_INFINITE_PERMS(lvbits) _CC_ENCODE_FIELD(CC128M_PERMS_MASK, ALL_PERMS)
 _CC_STATIC_ASSERT_SAME(CC128M_PERMS_MASK, CC128M_FIELD_ALL_PERMS_MAX_VALUE);
 _CC_STATIC_ASSERT_SAME(CC128M_ENCODED_INFINITE_PERMS(), CC128M_PERMS_MASK << 46);
 
@@ -192,7 +192,6 @@ _CC_STATIC_ASSERT_SAME(CC128M_MANTISSA_WIDTH, CC128M_FIELD_EXP_ZERO_BOTTOM_SIZE)
 // The exponent bits in memory are negated when decoding in the IE case.
 #define CC128M_ENCODE_EXPONENT(E) _CC_ENCODE_SPLIT_EXPONENT(~(E))
 #define CC128M_EXTRACT_EXPONENT(pesbt) ((~_CC_EXTRACT_SPLIT_EXPONENT(pesbt)) & _CC_BITMASK64(CC128M_EXPONENT_WIDTH))
-#define CC128M_RESERVED_FIELDS 0
 #define CC128M_RESERVED_BITS 0
 #define CC128M_HAS_BASE_TOP_SPECIAL_CASES 1
 #define CC128M_USES_V9_CORRECTION_FACTORS 1
@@ -209,10 +208,7 @@ static inline bool _cc_N(set_permissions)(_cc_cap_t* cap, _cc_addr_t permissions
     return true; // all permissions are representable
 }
 
-static inline uint8_t cc128m_get_reserved(const cc128m_cap_t* cap) {
-    (void)cap;
-    return 0;
-}
+static inline _cc_addr_t cc128m_get_reserved(_cc_maybe_unused const cc128m_cap_t* cap) { return 0; }
 
 static inline bool _cc_N(compute_base_top_special_cases)(_cc_bounds_bits bounds, _cc_addr_t* base_out,
                                                          _cc_length_t* top_out, bool* valid) {
