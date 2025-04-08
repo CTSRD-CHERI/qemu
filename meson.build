@@ -3062,9 +3062,10 @@ foreach target : target_dirs
                                'ln -fs @0@ @1@'.format(exe['name'],
                                                        exe_path_alias))
     endif
-    if exe['name'] == 'qemu-system-riscv64cheri' or exe['name'] == 'qemu-system-riscv32cheri'
+    # TODO: in the future the riscv64cheri symlink should point to the standard version
+    if exe['name'] == 'qemu-system-riscv64xcheri' or exe['name'] == 'qemu-system-riscv32xcheri'
       installbindir = get_option('prefix') / get_option('bindir')
-      exe_name_alias = exe['name'].replace('cheri', 'xcheri')
+      exe_name_alias = exe['name'].replace('xcheri', 'cheri')
       exe_path_alias = '$DESTDIR/@0@'.format(installbindir / exe_name_alias)
       meson.add_install_script('sh', '-c',
                                'ln -fs @0@ @1@'.format(exe['name'],

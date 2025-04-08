@@ -1835,6 +1835,11 @@ else
                 add_to new_target_list "mips64$target"
                 echo "Warning, '$target' is a deprecated name for 'mips64$target'."
                 ;;
+            riscv32cheri-*|riscv64cheri-*)
+                _new_target=$(echo "$target" | sed -e 's/cheri-/xcheri-/')
+                add_to new_target_list "${_new_target}"
+                echo "Warning, '$target' is a deprecated name for '${_new_target}'."
+                ;;
             *)
                 add_to new_target_list "$target"
                 ;;

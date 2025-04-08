@@ -32,7 +32,8 @@
   'data' : [ 'aarch64', 'morello', 'alpha', 'arm', 'avr', 'cris', 'hppa', 'i386',
              'm68k', 'microblaze', 'microblazeel', 'mips', 'mips64', 'mips64cheri128',
              'mips64el', 'mipsel', 'nios2', 'or1k', 'ppc',
-             'ppc64', 'riscv32', 'riscv64', 'riscv32cheri', 'riscv64cheri', 'rx', 's390x', 'sh4',
+             'ppc64', 'riscv32', 'riscv64', 'riscv32xcheri', 'riscv64xcheri',
+             'rx', 's390x', 'sh4',
              'sh4eb', 'sparc', 'sparc64', 'tricore',
              'x86_64', 'xtensa', 'xtensaeb' ] }
 
