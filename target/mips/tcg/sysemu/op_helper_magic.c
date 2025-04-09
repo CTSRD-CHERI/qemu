@@ -260,8 +260,10 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
 
     const bool has_overlap = MAX(original_dest, original_src) >= MAX(dest_past_end, src_past_end);
     if (has_overlap) {
-        warn_report("Found multipage magic memmove with overlap: dst=" TARGET_FMT_plx " src=" TARGET_FMT_plx
-                    " len=0x" TARGET_FMT_lx "\r", original_dest, original_src, original_len);
+        warn_report(
+            "Found multipage magic memmove with overlap: dst=" TARGET_FMT_lx
+            " src=" TARGET_FMT_lx " len=0x" TARGET_FMT_lx "\r",
+            original_dest, original_src, original_len);
         // slow path: byte copies
     }
 
@@ -320,15 +322,19 @@ static bool do_magic_memmove(CPUMIPSState *env, uint64_t ra, int dest_regnum, in
     env->lladdr = 1;
 success:
     if (unlikely(already_written != original_len)) {
-        error_report("ERROR: %s: failed to memmove all bytes to " TARGET_FMT_plx " (" TARGET_FMT_plx " with $ddc added).\r\n"
-                     "Remainig len = " TARGET_FMT_plx ", full len = " TARGET_FMT_plx ".\r\n"
-                     "Source address = " TARGET_FMT_plx " (" TARGET_FMT_plx " with $ddc added)\r\n",
-                     __func__, original_dest_ddc_offset, original_dest, len, original_len, original_src_ddc_offset, original_src);
-        error_report("$a0: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_A0]);
-        error_report("$a1: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_A1]);
-        error_report("$a2: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_A2]);
-        error_report("$v0: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_V0]);
-        error_report("$v1: " TARGET_FMT_plx "\r\n", env->active_tc.gpr[MIPS_REGNUM_V1]);
+        error_report("ERROR: %s: failed to memmove all bytes to " TARGET_FMT_lx
+                     " (" TARGET_FMT_lx " with $ddc added).\r\n"
+                     "Remainig len = " TARGET_FMT_lx
+                     ", full len = " TARGET_FMT_lx ".\r\n"
+                     "Source address = " TARGET_FMT_lx " (" TARGET_FMT_lx
+                     " with $ddc added)\r\n",
+                     __func__, original_dest_ddc_offset, original_dest, len,
+                     original_len, original_src_ddc_offset, original_src);
+        error_report("$a0: " TARGET_FMT_lx "\r\n", env->active_tc.gpr[MIPS_REGNUM_A0]);
+        error_report("$a1: " TARGET_FMT_lx "\r\n", env->active_tc.gpr[MIPS_REGNUM_A1]);
+        error_report("$a2: " TARGET_FMT_lx "\r\n", env->active_tc.gpr[MIPS_REGNUM_A2]);
+        error_report("$v0: " TARGET_FMT_lx "\r\n", env->active_tc.gpr[MIPS_REGNUM_V0]);
+        error_report("$v1: " TARGET_FMT_lx "\r\n", env->active_tc.gpr[MIPS_REGNUM_V1]);
         abort();
     }
     env->active_tc.gpr[MIPS_REGNUM_V0] = original_dest_ddc_offset; // return value of memcpy is the dest argument
@@ -533,7 +539,7 @@ static bool do_magic_memset(CPUMIPSState *env, uint64_t ra, uint pattern_length)
              *    bounce buffer was in use
              */
             warn_report("%s: Falling back to memset slowpath for address "
-                        TARGET_FMT_plx " (phys addr=%" HWADDR_PRIx", len_nitems=0x"
+                        TARGET_FMT_lx " (phys addr=%" HWADDR_PRIx", len_nitems=0x"
                         TARGET_FMT_lx ")! I/O memory or QEMU TLB bug?\r",
                         __func__, dest, mips_cpu_get_phys_page_debug(env_cpu(env), dest), len_nitems);
             target_ulong end = original_dest + original_len_bytes;
@@ -637,13 +643,13 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
         // to match memset/memcpy calling convention (use a0 and a2)
         target_ulong src = env->active_tc.gpr[MIPS_REGNUM_A0];
         target_ulong real_len = env->active_tc.gpr[MIPS_REGNUM_A2];
-        fprintf(stderr, "--- Memory dump at %s(%s): " TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
+        fprintf(stderr, "--- Memory dump at %s(%s): " TARGET_FMT_lu " bytes at " TARGET_FMT_lx "\r\n",
                 lookup_symbol(PC_ADDR(env)), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), real_len, src);
         while (real_len > 0) {
             target_ulong len = adj_len_to_page(real_len, src);
             real_len -= len;
             if (len != env->active_tc.gpr[MIPS_REGNUM_A2]) {
-                fprintf(stderr, "--- partial dump at %s(%s): " TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
+                fprintf(stderr, "--- partial dump at %s(%s): " TARGET_FMT_lu " bytes at " TARGET_FMT_lx "\r\n",
                         lookup_symbol(PC_ADDR(env)), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
             }
             if (cpu_memory_rw_debug(env_cpu(env), src, buffer, len, false) == 0) {
@@ -661,7 +667,7 @@ void helper_magic_library_function(CPUMIPSState *env, target_ulong which)
                 else
                     fprintf(stderr, "   -- all zeroes\r\n");
             } else {
-                fprintf(stderr, "--- Memory dump at %s(%s): Could not fetch" TARGET_FMT_lu " bytes at " TARGET_FMT_plx "\r\n",
+                fprintf(stderr, "--- Memory dump at %s(%s): Could not fetch" TARGET_FMT_lu " bytes at " TARGET_FMT_lx "\r\n",
                         lookup_symbol(PC_ADDR(env)), ((which & UINT32_MAX) == 0xf0 ? "entry" : "exit"), len, src);
             }
         }
