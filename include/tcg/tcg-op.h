@@ -879,30 +879,11 @@ static inline void tcg_gen_plugin_cb_end(void)
 #define tcg_temp_local_new_cap_checked() (TCGv_cap_checked_ptr)tcg_temp_local_new()
 #define tcg_temp_free_cap_checked(val) tcg_temp_free((TCGv)val)
 
-#ifdef TARGET_CHERI
-#pragma GCC poison tcg_gen_qemu_ld_tl
-#pragma GCC poison tcg_gen_qemu_st_tl
-#define TCG_LD_HELPER(name, memop)
-#define TCG_ST_HELPER(name, memop)
-#else
-#define tcg_gen_qemu_ld_i32 tcg_gen_qemu_ld_i32_with_checked_addr
-#define tcg_gen_qemu_st_i32 tcg_gen_qemu_st_i32_with_checked_addr
-#define tcg_gen_qemu_ld_i64 tcg_gen_qemu_ld_i64_with_checked_addr
-#define tcg_gen_qemu_st_i64 tcg_gen_qemu_st_i64_with_checked_addr
-#define TCG_LD_HELPER(name, memop)                                             \
-    static inline void tcg_gen_qemu_##name(TCGv ret, TCGv addr,                \
-                                           int mem_index) {                    \
-        tcg_gen_qemu_ld_tl(ret, addr, mem_index, memop);                       \
-    }
-#define TCG_ST_HELPER(name, memop)                                             \
-    static inline void tcg_gen_qemu_##name(TCGv ret, TCGv addr,                \
-                                           int mem_index) {                    \
-        tcg_gen_qemu_st_tl(ret, addr, mem_index, memop);                       \
-    }
-#endif
-
-// These can be called if the address has already been checked (e.g. $ddc indirection of CHERI capability loads)
-// For non-CHERI targets these are the same as as the non-checked version.
+/*
+ * These can be called if the address has already been checked (e.g. CHERI ddc
+ * checked loads/stores). For non-CHERI targets these are the same as as the
+ * non-checked version.
+ */
 void tcg_gen_qemu_ld_i32_with_checked_addr(TCGv_i32 ret,
                                            TCGv_cap_checked_ptr checked_addr,
                                            TCGArg mem_index, MemOp op);
@@ -915,6 +896,42 @@ void tcg_gen_qemu_ld_i64_with_checked_addr(TCGv_i64 ret,
 void tcg_gen_qemu_st_i64_with_checked_addr(TCGv_i64 ret,
                                            TCGv_cap_checked_ptr checked_addr,
                                            TCGArg mem_index, MemOp op);
+#ifdef TARGET_CHERI
+#pragma GCC poison tcg_gen_qemu_ld_tl
+#pragma GCC poison tcg_gen_qemu_st_tl
+#else
+#define tcg_gen_qemu_ld_i32 tcg_gen_qemu_ld_i32_with_checked_addr
+#define tcg_gen_qemu_st_i32 tcg_gen_qemu_st_i32_with_checked_addr
+#define tcg_gen_qemu_ld_i64 tcg_gen_qemu_ld_i64_with_checked_addr
+#define tcg_gen_qemu_st_i64 tcg_gen_qemu_st_i64_with_checked_addr
+#define TCG_LD_HELPER(name, memop)                                             \
+    static inline void tcg_gen_qemu_##name(TCGv ret, TCGv addr,                \
+                                           int mem_index) {                    \
+        tcg_gen_qemu_ld_tl(ret, addr, mem_index, memop);                       \
+    }
+TCG_LD_HELPER(ld8u, MO_UB)
+TCG_LD_HELPER(ld8s, MO_SB)
+TCG_LD_HELPER(ld16u, MO_TEUW)
+TCG_LD_HELPER(ld16s, MO_TESW)
+TCG_LD_HELPER(ld32u, MO_TEUL)
+TCG_LD_HELPER(ld32s, MO_TESL)
+static inline void tcg_gen_qemu_ld64(TCGv_i64 ret, TCGv addr, int mem_index)
+{
+    tcg_gen_qemu_ld_i64(ret, addr, mem_index, MO_TEQ);
+}
+#define TCG_ST_HELPER(name, memop)                                             \
+    static inline void tcg_gen_qemu_##name(TCGv ret, TCGv addr,                \
+                                           int mem_index) {                    \
+        tcg_gen_qemu_st_tl(ret, addr, mem_index, memop);                       \
+    }
+TCG_ST_HELPER(st8, MO_UB)
+TCG_ST_HELPER(st16, MO_TEUW)
+TCG_ST_HELPER(st32, MO_TEUL)
+static inline void tcg_gen_qemu_st64(TCGv_i64 ret, TCGv addr, int mem_index)
+{
+    tcg_gen_qemu_st_i64(ret, addr, mem_index, MO_TEQ);
+}
+#endif
 // The same as tcg_gen_qemu_st_i64_with_checked_addr but takes a boolean option
 // as to whether a tag clear should take place.
 void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
@@ -926,19 +943,6 @@ void tcg_gen_qemu_st_i64_with_checked_addr_cond_invalidate(
 void handle_conditional_invalidate(TCGv_cap_checked_ptr checked_addr,
                                    MemOp memop, TCGArg mmu_idx,
                                    TCGv_i32 store_happens);
-
-TCG_LD_HELPER(ld8u, MO_UB)
-TCG_LD_HELPER(ld8s, MO_SB)
-TCG_LD_HELPER(ld16u, MO_TEUW)
-TCG_LD_HELPER(ld16s, MO_TESW)
-TCG_LD_HELPER(ld32u, MO_TEUL)
-TCG_LD_HELPER(ld32s, MO_TESL)
-TCG_LD_HELPER(ld64, MO_TEQ)
-
-TCG_ST_HELPER(st8, MO_UB)
-TCG_ST_HELPER(st16, MO_TEUW)
-TCG_ST_HELPER(st32, MO_TEUL)
-TCG_ST_HELPER(st64, MO_TEQ)
 
 #ifdef TARGET_CHERI
 #pragma GCC poison tcg_gen_atomic_cmpxchg_i32

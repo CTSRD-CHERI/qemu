@@ -134,7 +134,7 @@ void mips_log_instr_mode_changed(CPUMIPSState *env, target_ulong pc)
  * Log a special user-specified message to the trace
  * TODO(am2419): Always print these messages even if user-space only tracing is on.
  */
-void helper_cheri_debug_message(struct CPUMIPSState* env, uint64_t pc)
+void helper_cheri_debug_message(struct CPUMIPSState* env, target_ulong pc)
 {
     if (!qemu_log_instr_enabled(env) || !qemu_loglevel_mask(CPU_LOG_GUEST_DEBUG_MSG))
         return;

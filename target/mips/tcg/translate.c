@@ -2791,15 +2791,15 @@ static void gen_arith_imm(DisasContext *ctx, uint32_t opc,
 
 #define GEN_INSTR_TRACE_HELPER(env, name)                                      \
     {                                                                          \
-        TCGv_i64 tpc = tcg_const_i64(ctx->base.pc_next);                       \
+        TCGv tpc = tcg_constant_tl(ctx->base.pc_next);                         \
         gen_save_pc(ctx->base.pc_next);                                        \
         gen_helper_##name(env, tpc);                                           \
-        tcg_temp_free_i64(tpc);                                                \
         /* Exit translation block since tracing flag may change */             \
         if (ctx->hflags & MIPS_HFLAG_BMASK) {                                  \
             warn_report("warning: magic trace helper "                         \
-                "in delay / forbidden slot at PC 0x" TARGET_FMT_lx             \
-                " may not work as expected\n", ctx->base.pc_next);             \
+                        "in delay / forbidden slot at PC 0x" TARGET_FMT_lx     \
+                        " may not work as expected\n",                         \
+                        ctx->base.pc_next);                                    \
             return; /* We are already exiting the TB */                        \
         }                                                                      \
         gen_save_pc(ctx->base.pc_next + 4);                                    \

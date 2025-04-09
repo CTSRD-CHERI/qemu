@@ -38,7 +38,7 @@ DEF_HELPER_FLAGS_4(mips_log_instr_hilo, TCG_CALL_NO_WG, void, env, i32, i32, tl)
 DEF_HELPER_FLAGS_3(mips_log_instr32, TCG_CALL_NO_WG, void, env, tl, i32)
 DEF_HELPER_FLAGS_1(mips_log_instr_drop, TCG_CALL_NO_WG, void, env)
 /* Extra MIPS-only helpers */
-DEF_HELPER_2(cheri_debug_message, void, env, i64)
+DEF_HELPER_2(cheri_debug_message, void, env, tl)
 // Dump MIPS register state
 DEF_HELPER_2(mtc0_dumpstate, void, env, tl)
 #endif /* CONFIG_TCG_LOG_INSTR */
