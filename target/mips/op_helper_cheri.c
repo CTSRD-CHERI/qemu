@@ -346,8 +346,6 @@ target_ulong CHERI_HELPER_IMPL(cjr(CPUArchState *env, uint32_t cb))
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     } else if (!cap_has_perms(cbp, CAP_PERM_EXECUTE)) {
         raise_cheri_exception(env, CapEx_PermitExecuteViolation, cb);
-    } else if (!cap_has_perms(cbp, CAP_PERM_GLOBAL)) {
-        raise_cheri_exception(env, CapEx_GlobalViolation, cb);
     } else if (!cap_is_in_bounds(cbp, cap_get_cursor(cbp), 4)) {
         raise_cheri_exception(env, CapEx_LengthViolation, cb);
     } else if (align_of(4, cap_get_cursor(cbp))) {
