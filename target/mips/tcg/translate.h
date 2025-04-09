@@ -267,7 +267,10 @@ static inline void gen_log_instr_hilo_update(DisasContext *ctx, int hiLO,
 
 ATTRIBUTE_UNUSED static void _debug_value(TCGv value, const char* msg) {
     TCGv_ptr dbg_msg = tcg_const_ptr(msg);
-    gen_helper_log_value(cpu_env, dbg_msg, value);
+    TCGv_i64 tmp = tcg_temp_new_i64();
+    tcg_gen_ext_tl_i64(tmp, value);
+    gen_helper_log_value(cpu_env, dbg_msg, tmp);
+    tcg_temp_free_i64(tmp);
     tcg_temp_free_ptr(dbg_msg);
 }
 #define DEBUG_VALUE(value) _debug_value(value, #value)
