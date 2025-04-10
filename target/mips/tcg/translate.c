@@ -2837,6 +2837,7 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
             if ((uint16_t)imm == 0xface)
                 GEN_INSTR_TRACE_HELPER(cpu_env, cheri_debug_message);
 
+#ifdef TARGET_MIPS64
             /* With 0xcode invoke QEMU helper functions such as fast memset, memcpy etc.
              * They are designed to take the same register arguments as the libc function:
              * Currently supported values are:
@@ -2853,6 +2854,7 @@ static void gen_logic_imm(DisasContext *ctx, uint32_t opc,
                 save_cpu_state(ctx, 1);
                 gen_helper_magic_library_function(cpu_env, cpu_gpr[3]);
             }
+#endif
 
             /* With 'li $0, 0xea1d' perform smp yield. */
             if ((uint16_t)imm == 0xea1d) {

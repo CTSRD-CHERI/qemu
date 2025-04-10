@@ -44,7 +44,9 @@ DEF_HELPER_2(mtc0_dumpstate, void, env, tl)
 #endif /* CONFIG_TCG_LOG_INSTR */
 /* Break after n cycles have been executed */
 DEF_HELPER_1(check_breakcount, void, env)
+#ifdef TARGET_MIPS64
 DEF_HELPER_2(magic_library_function, void, env, tl)
+#endif
 DEF_HELPER_1(smp_yield, void, env)
 
 #if defined(TARGET_CHERI)

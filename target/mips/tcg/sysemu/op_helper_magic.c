@@ -42,6 +42,8 @@
 #include "cheri_tagmem.h"
 #endif
 
+/* Mostmagic libcall helpers need 64-bit registers, skip them all for MIPS32 */
+#ifdef TARGET_MIPS64
 #define TARGET_PAGE_SIZE_MIN (1 << TARGET_PAGE_BITS_MIN)
 static uint8_t ZEROARRAY[TARGET_PAGE_SIZE_MIN];
 
@@ -707,6 +709,8 @@ error:
                     env->active_tc.gpr[MIPS_REGNUM_A0], env->active_tc.gpr[MIPS_REGNUM_A1],
                     env->active_tc.gpr[MIPS_REGNUM_A2], env->active_tc.gpr[MIPS_REGNUM_A3]);
 }
+
+#endif /* TARGET_MIPS64 */
 
 void helper_smp_yield(CPUMIPSState *env) {
     CPUState *cs = env_cpu(env);
