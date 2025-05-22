@@ -119,6 +119,9 @@ static bool trans_sfence_vma(DisasContext *ctx, arg_sfence_vma *a)
 {
 #ifndef CONFIG_USER_ONLY
     gen_helper_tlb_flush(cpu_env);
+    gen_update_cpu_pc(ctx->pc_succ_insn);
+    tcg_gen_exit_tb(NULL, 0);
+    ctx->base.is_jmp = DISAS_NORETURN;
     return true;
 #endif
     return false;
