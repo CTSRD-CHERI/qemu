@@ -24,10 +24,24 @@
 #include "hw/loader.h"
 #include "hw/riscv/riscv_hart.h"
 
+#if defined(TARGET_CHERI_RISCV_V9)
+/* Use a purecap BBL fw_jump as the BIOS for CHERIv9 */
+#define RISCV32_BIOS_BIN    "bbl-riscv32cheri-virt-fw_jump.bin"
+#define RISCV32_BIOS_ELF    "bbl-riscv32cheri-virt-fw_jump.elf"
+#define RISCV64_BIOS_BIN    "bbl-riscv64cheri-virt-fw_jump.bin"
+#define RISCV64_BIOS_ELF    "bbl-riscv64cheri-virt-fw_jump.elf"
+#elif defined(TARGET_CHERI_RISCV_STD)
+/* Use a purecap OpenSBI fw_jump as the BIOS for RVY. TODO: Use fw_dynamic? */
+#define RISCV32_BIOS_BIN    "opensbi-riscv32cheristd-generic-fw_jump.bin"
+#define RISCV32_BIOS_ELF    "opensbi-riscv32cheristd-generic-fw_jump.elf"
+#define RISCV64_BIOS_BIN    "opensbi-riscv64cheristd-generic-fw_jump.bin"
+#define RISCV64_BIOS_ELF    "opensbi-riscv64cheristd-generic-fw_jump.elf"
+#else
 #define RISCV32_BIOS_BIN    "opensbi-riscv32-generic-fw_dynamic.bin"
 #define RISCV32_BIOS_ELF    "opensbi-riscv32-generic-fw_dynamic.elf"
 #define RISCV64_BIOS_BIN    "opensbi-riscv64-generic-fw_dynamic.bin"
 #define RISCV64_BIOS_ELF    "opensbi-riscv64-generic-fw_dynamic.elf"
+#endif
 
 bool riscv_is_32bit(RISCVHartArrayState *harts);
 
