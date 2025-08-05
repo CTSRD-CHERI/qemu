@@ -976,9 +976,18 @@ int load_elf_binary(struct bsd_binprm *bprm, struct target_pt_regs *regs,
         break;
     }
 
+    /* XXXZY You don't want et_dyn_addr to be fixed if the target executable is big
+       otherwise load_elf_sections() may overwrite existing mappings */
     et_dyn_addr = 0;
-    if (elf_ex.e_type == ET_DYN && baddr == 0)
-        et_dyn_addr = ELF_ET_DYN_LOAD_ADDR;
+    if (elf_ex.e_type == ET_DYN) {
+        error = target_mmap(ELF_ET_DYN_LOAD_ADDR, ET_DYN_MAP_SIZE, PROT_NONE,
+            MAP_PRIVATE | MAP_ANON, -1, 0);
+        if (error == -1) {
+            perror("mmap");
+            exit(-1);
+        }
+        et_dyn_addr = TARGET_ELF_PAGESTART(error - baddr);
+    }
 
     /* Do this so that we can load the interpreter, if need be.  We will
        change some of these later */
