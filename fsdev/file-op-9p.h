@@ -21,9 +21,11 @@
 
 #ifdef CONFIG_LINUX
 # include <sys/vfs.h>
-#endif
-#ifdef CONFIG_DARWIN
+#elif defined(CONFIG_DARWIN) || defined(CONFIG_BSD)
 # include <sys/param.h>
+# ifdef CONFIG_BSD
+#  undef MACHINE /* work around some unfortunate namespace pollution */
+# endif
 # include <sys/mount.h>
 #endif
 
