@@ -513,6 +513,7 @@ typedef enum {
     rv_op_cram,
     rv_op_cmove,
     rv_op_ccleartag,
+    rv_op_cpoison,
     rv_op_cjalr,
     rv_op_cgethigh,
     rv_op_cgetaddr,
@@ -1161,6 +1162,7 @@ const rv_opcode_data opcode_data[] = {
     { "c.sdsp", rv_codec_css_sdsp, rv_fmt_rs2_offset_rs1, NULL, 0, rv_op_sd, rv_op_sd },
     { "c.lq", rv_codec_cl_lq, rv_fmt_rd_offset_rs1, NULL, 0, 0, rv_op_lq },
     { "c.sq", rv_codec_cs_sq, rv_fmt_rs2_offset_rs1, NULL, 0, 0, rv_op_sq },
+    { "cpoison", rv_codec_cs_sq, rv_fmt_rs2_offset_rs1, NULL, 0, 0, rv_op_sq },
     { "c.lqsp", rv_codec_ci_lqsp, rv_fmt_rd_offset_rs1, NULL, 0, 0, rv_op_lq },
     { "c.sqsp", rv_codec_css_sqsp, rv_fmt_rs2_offset_rs1, NULL, 0, 0, rv_op_sq },
     { "nop", rv_codec_i, rv_fmt_none, NULL, 0, 0, 0 },
@@ -1504,6 +1506,7 @@ static rv_opcode decode_cheri_two_op(unsigned func) {
     case 0b01010: return rv_op_cmove;
     case 0b01011: return rv_op_ccleartag;
     case 0b01100: return rv_op_cjalr;
+    case 0b01101: return rv_op_cpoison;
     case 0b01111: return rv_op_cgetaddr;
     case 0b10001: return rv_op_csealentry;
     case 0b10010: return rv_op_cloadtags;

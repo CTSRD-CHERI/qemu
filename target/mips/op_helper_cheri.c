@@ -693,7 +693,7 @@ target_ulong CHERI_HELPER_IMPL(cscc_without_tcg(CPUArchState *env, uint32_t cs, 
         vaddr, env->lladdr, env->CP0_LLAddr);
     if (env->lladdr != vaddr)
         return 0;
-    store_cap_to_memory(env, cs, vaddr, retpc);
+    store_cap_to_memory(env, cs, vaddr, retpc, false);
     env->lladdr = 1;
     return 1;
 }

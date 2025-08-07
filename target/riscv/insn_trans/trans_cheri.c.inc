@@ -476,11 +476,12 @@ static inline bool gen_cap_store(DisasContext *ctx, int32_t addr_regnum,
     static bool trans_##name##_cap(DisasContext *ctx, arg_##name##_cap *a)     \
     {                                                                          \
         return gen_cap_store(ctx, a->rs1, a->rs2, /*offset=*/0, op);           \
-    }
+    }                                                                          
 
 TRANSLATE_EXPLICIT_STORE(st_b, MO_UB)
 TRANSLATE_EXPLICIT_STORE(st_h, MO_UW)
 TRANSLATE_EXPLICIT_STORE(st_w, MO_UL)
+
 #ifdef TARGET_RISCV64
 TRANSLATE_EXPLICIT_STORE(st_d, MO_Q)
 #endif
@@ -581,6 +582,15 @@ static inline bool trans_sc_c_cap(DisasContext *ctx, arg_sc_c_cap *a)
     a->rd = a->rs2; /* Not enough encoding space for explicit rd */
     return trans_sc_c_impl(ctx, a, &gen_helper_sc_c_cap);
 }
+
+static inline bool trans_cpoison(DisasContext *ctx, arg_cpoison *a)
+{
+    //a->rd = a->rs2; /* Not enough encoding space for explicit rd */
+    printf("cpoison \n");
+    return gen_cheri_cap_loadstore(ctx, a->rs1, a->rs1,0,
+                                   &gen_helper_cpoison);
+}
+
 
 static inline bool trans_amoswap_c(DisasContext *ctx, arg_amoswap_c *a)
 {
