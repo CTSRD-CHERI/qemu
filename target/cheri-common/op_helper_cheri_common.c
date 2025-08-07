@@ -347,6 +347,7 @@ void CHERI_HELPER_IMPL(ccleartag(CPUArchState *env, uint32_t cd, uint32_t cb))
     update_capreg(env, cd, &result);
 }
 
+
 void cheri_jump_and_link(CPUArchState *env, const cap_register_t *target,
                          target_ulong addr, uint32_t link_reg,
                          target_ulong link_pc, uint32_t cjalr_flags)
@@ -1319,7 +1320,21 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t valreg,
                              CHERI_CAP_SIZE, _host_return_address, cbp,
                              CHERI_CAP_SIZE, raise_unaligned_store_exception);
 
-    store_cap_to_memory(env, valreg, checked_addr, _host_return_address);
+    store_cap_to_memory(env, valreg, checked_addr, _host_return_address, false);
+}
+
+void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t valreg,
+                                         target_ulong addr, uint32_t authreg))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
+
+    const target_ulong checked_addr =
+        cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_store_exception);
+
+    store_cap_to_memory(env, valreg, checked_addr, _host_return_address, true);
 }
 
 void CHERI_HELPER_IMPL(store_cap_via_ddc(CPUArchState *env, uint32_t valreg,
@@ -1331,7 +1346,7 @@ void CHERI_HELPER_IMPL(store_cap_via_ddc(CPUArchState *env, uint32_t valreg,
         cheri_ddc_relative_addr(env, intaddr), CHERI_CAP_SIZE,
         _host_return_address, cheri_get_ddc(env), CHERI_CAP_SIZE,
         raise_unaligned_store_exception);
-    store_cap_to_memory(env, valreg, checked_addr, _host_return_address);
+    store_cap_to_memory(env, valreg, checked_addr, _host_return_address, false);
 }
 
 static inline bool
@@ -1494,7 +1509,7 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
 
 void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
                                    target_ulong vaddr, uintptr_t retpc,
-                                   int mmu_idx)
+                                   int mmu_idx, bool poison)
 {
     target_ulong cursor = get_capreg_cursor(env, cs);
     target_ulong pesbt_for_mem = get_capreg_pesbt(env, cs) ^ CAP_MEM_XOR_MASK;
@@ -1536,17 +1551,30 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
 #error "Unhandled target long width"
 #endif
         // Fast path, host address in TLB
-        st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
-        st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
+        
+        if(poison){
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, 0xFFFFFFFF);
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, 0xFFFFFFFF);
+        }else{
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
+        }
 #undef st_cap_word_p
     } else {
         // Slow path for e.g. IO regions.
         qemu_maybe_log_instr_extra(env, "Using slow path for store to guest "
             "address " TARGET_FMT_lx "\n", vaddr);
+        if(poison){
+        cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
+                           0xFFFFFFFF, retpc);
+        cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, 0xFFFFFFFF,
+                           retpc);
+        }else{
         cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
                            pesbt_for_mem, retpc);
         cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, cursor,
                            retpc);
+        }
     }
 #if defined(TARGET_RISCV) && defined(CONFIG_RVFI_DII)
     env->rvfi_dii_trace.MEM.rvfi_mem_addr = vaddr;
@@ -1574,10 +1602,10 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
 }
 
 void store_cap_to_memory(CPUArchState *env, uint32_t cs, target_ulong vaddr,
-                         uintptr_t retpc)
+                         uintptr_t retpc, bool poison)
 {
     return store_cap_to_memory_mmu_index(env, cs, vaddr, retpc,
-                                         cpu_mmu_index(env, false));
+                                         cpu_mmu_index(env, false), poison);
 }
 
 target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
