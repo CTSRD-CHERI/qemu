@@ -66,8 +66,13 @@ bool ras_thread_set = false;
 int singlestep;
 static const char *cpu_model;
 static const char *cpu_type;
-unsigned long guest_base;
-bool have_guest_base;
+/*
+ * XXXKW: As a workaround, set the guest base to 4GB possibly making enough
+ * space for the user mode itself. In the long term, we need a change that will
+ * automatically tune this value depending on the user mode's mappings.
+ */
+unsigned long guest_base = 0x100000000;
+bool have_guest_base = true;
 #if (TARGET_LONG_BITS == 32) && (HOST_LONG_BITS == 64)
 /*
  * When running 32-on-64 we should make sure we can fit all of the possible
@@ -161,7 +166,8 @@ static void usage(void)
            "-drop-ld-preload  drop LD_PRELOAD for target process\n"
            "-E var=value      sets/modifies targets environment variable(s)\n"
            "-U var            unsets targets environment variable(s)\n"
-           "-B address        set guest_base address to address\n"
+           "-B address        set guest_base address to address (default=0x%lx)\n"
+           "                  (use '-B 0' to disable guest_base)\n"
            "-bsd type         select emulated BSD type FreeBSD/NetBSD/OpenBSD (default)\n"
            "\n"
            "Debug options:\n"
@@ -187,7 +193,8 @@ static void usage(void)
            ,
            TARGET_NAME,
            interp_prefix,
-           target_dflssiz);
+           target_dflssiz,
+           guest_base);
     exit(1);
 }
 
@@ -400,7 +407,6 @@ int main(int argc, char **argv)
             }
         } else if (!strcmp(r, "B")) {
            guest_base = strtol(argv[optind++], NULL, 0);
-           have_guest_base = true;
         } else if (!strcmp(r, "drop-ld-preload")) {
             (void) envlist_unsetenv(envlist, "LD_PRELOAD");
         } else if (!strcmp(r, "bsd")) {
@@ -497,6 +503,7 @@ int main(int argc, char **argv)
      * proper page alignment for guest_base.
      */
     guest_base = HOST_PAGE_ALIGN(guest_base);
+    have_guest_base = (guest_base != 0);
 
     /* build Task State */
     ts = g_new0(TaskState, 1);
