@@ -1119,6 +1119,10 @@ static Property riscv_cpu_properties[] = {
     DEFINE_PROP_BOOL("mmu", RISCVCPU, cfg.mmu, true),
     DEFINE_PROP_BOOL("pmp", RISCVCPU, cfg.pmp, true),
 
+#if defined(TARGET_CHERI_RISCV_STD_093)
+    /* zish4add is part of the cheri spec, so we enable it by default */
+    DEFINE_PROP_BOOL("zish4add", RISCVCPU, cfg.ext_zish4add, true),
+#endif
     DEFINE_PROP_STRING("priv_spec", RISCVCPU, cfg.priv_spec),
 
     /* These are experimental so mark with 'x-' */
