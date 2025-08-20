@@ -1304,8 +1304,24 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t dstreg,
         cap_check_common_reg(perms_for_load(), env, authreg, addr,
                              CHERI_CAP_SIZE, _host_return_address, cbp,
                              CHERI_CAP_SIZE, raise_unaligned_load_exception);
-
+    check_poison_from_memory(env, dstreg, authreg, cbp, checked_addr,
+                         _host_return_address, /*physaddr_out=*/NULL);
     load_cap_from_memory(env, dstreg, authreg, cbp, checked_addr,
+                         _host_return_address, /*physaddr_out=*/NULL);
+}
+
+void CHERI_HELPER_IMPL(check_poison(CPUArchState *env, uint32_t dstreg,
+                                        target_ulong addr, uint32_t authreg))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
+
+    const target_ulong checked_addr =
+        cap_check_common_reg(perms_for_load(), env, authreg, addr,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_load_exception);
+
+    check_poison_from_memory(env, dstreg, authreg, cbp, checked_addr,
                          _host_return_address, /*physaddr_out=*/NULL);
 }
 
@@ -1333,7 +1349,8 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t valreg,
         cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
                              CHERI_CAP_SIZE, _host_return_address, cbp,
                              CHERI_CAP_SIZE, raise_unaligned_store_exception);
-
+    check_poison_from_memory(env, 0, valreg, cbp, checked_addr,
+                         _host_return_address, /*physaddr_out=*/NULL);
     store_cap_to_memory(env, valreg, checked_addr, _host_return_address, false);
 }
 
@@ -1396,6 +1413,39 @@ void squash_mutable_permissions(CPUArchState *env, target_ulong *pesbt,
             CAP_PERM_STORE_CAP | CAP_PERM_STORE);
     }
 #endif
+}
+
+bool check_poison_from_memory_raw_tag_mmu_idx(
+    CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
+    const cap_register_t *source, target_ulong vaddr, uintptr_t retpc,
+    hwaddr *physaddr, bool *raw_tag, int mmu_idx)
+{
+    cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
+    void *host = probe_read(env, vaddr, CHERI_CAP_SIZE, mmu_idx, retpc);
+    if (likely(host)) {
+        // Fast path, host address in TLB
+#if TARGET_LONG_BITS == 32
+#define ld_cap_word_p ldl_p
+#elif TARGET_LONG_BITS == 64
+#define ld_cap_word_p ldq_p
+#else
+#error "Unhandled target long width"
+#endif
+        *pesbt = ld_cap_word_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
+                CAP_NULL_XOR_MASK;
+        *cursor = ld_cap_word_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
+#undef ld_cap_word_p
+    } else {
+        // Slow path for e.g. IO regions.
+        qemu_maybe_log_instr_extra(env, "Using slow path for load from guest "
+            "address " TARGET_FMT_lx "\n", vaddr);
+        *pesbt = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA, retpc) ^
+                CAP_NULL_XOR_MASK;
+        *cursor = cpu_ld_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, retpc);
+    }
+    if(*pesbt == 0x12345678|| *cursor == 0x12345678){
+        printf("check poison triggered\n");
+    }
 }
 
 bool load_cap_from_memory_raw_tag_mmu_idx(
@@ -1487,6 +1537,17 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
                                                 cpu_mmu_index(env, false));
 }
 
+bool check_poison_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
+                                  target_ulong *cursor, uint32_t cb,
+                                  const cap_register_t *source,
+                                  target_ulong vaddr, uintptr_t retpc,
+                                  hwaddr *physaddr, bool *raw_tag)
+{
+    return check_poison_from_memory_raw_tag_mmu_idx(env, pesbt, cursor, cb, source,
+                                                vaddr, retpc, physaddr, raw_tag,
+                                                cpu_mmu_index(env, false));
+}
+
 bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                               target_ulong *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
@@ -1496,6 +1557,14 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                                         retpc, physaddr, NULL);
 }
 
+bool check_poison_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
+                              target_ulong *cursor, uint32_t cb,
+                              const cap_register_t *source, target_ulong vaddr,
+                              uintptr_t retpc, hwaddr *physaddr)
+{
+    return check_poison_from_memory_raw_tag(env, pesbt, cursor, cb, source, vaddr,
+                                        retpc, physaddr, NULL);
+}
 cap_register_t load_and_decompress_cap_from_memory_raw(
     CPUArchState *env, uint32_t cb, const cap_register_t *source,
     target_ulong vaddr, uintptr_t retpc, hwaddr *physaddr)
@@ -1518,6 +1587,16 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, cb, source, vaddr,
                                         retpc, physaddr);
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
+}
+
+void check_poison_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+                          const cap_register_t *source, target_ulong vaddr,
+                          uintptr_t retpc, hwaddr *physaddr)
+{
+    target_ulong pesbt;
+    target_ulong cursor;
+    bool tag = check_poison_from_memory_raw(env, &pesbt, &cursor, cb, source, vaddr,
+                                        retpc, physaddr);
 }
 
 void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
@@ -1566,8 +1645,8 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         // Fast path, host address in TLB
         
         if(poison){
-            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, 0xFFFFFFFF);
-            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, 0xFFFFFFFF);
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, 0x12345678);
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, 0x12345678);
         }else{
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
@@ -1579,8 +1658,8 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
             "address " TARGET_FMT_lx "\n", vaddr);
         if(poison){
         cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
-                           0xFFFFFFFF, retpc);
-        cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, 0xFFFFFFFF,
+                           0x12345678, retpc);
+        cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, 0x12345678,
                            retpc);
         }else{
         cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,

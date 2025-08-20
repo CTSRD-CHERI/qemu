@@ -260,6 +260,10 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
 void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
                           uintptr_t retpc, hwaddr *physaddr);
+void check_poison_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+                          const cap_register_t *source, target_ulong vaddr,
+                          uintptr_t retpc, hwaddr *physaddr);
+
 
 static inline bool cap_is_local(CPUArchState *env, uint32_t cs)
 {
@@ -366,7 +370,20 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
     }
     return addr;
 }
-
+//Helper for poison check
+bool check_poison_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
+                              target_ulong *cursor, uint32_t cb,
+                              const cap_register_t *source, target_ulong vaddr,
+                              uintptr_t retpc, hwaddr *physaddr);
+bool check_poison_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
+                                  target_ulong *cursor, uint32_t cb,
+                                  const cap_register_t *source,
+                                  target_ulong vaddr, uintptr_t retpc,
+                                  hwaddr *physaddr, bool *raw_tag);
+bool check_poison_from_memory_raw_tag_mmu_idx(
+    CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
+    const cap_register_t *source, target_ulong vaddr, uintptr_t retpc,
+    hwaddr *physaddr, bool *raw_tag, int mmu_idx);
 // Helper for RISCV AMOSWAP
 bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                               target_ulong *cursor, uint32_t cb,
