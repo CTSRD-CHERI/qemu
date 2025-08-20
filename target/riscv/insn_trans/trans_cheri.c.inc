@@ -368,6 +368,8 @@ static inline bool gen_cap_load_mem_idx(DisasContext *ctx, int32_t rd,
     TCGv value = tcg_temp_new();
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
     generate_cap_load_check_imm(vaddr, cs, offset, op);
+    bool poison = gen_cheri_cap_loadstore(ctx, rd, cs, (target_long)vaddr,
+                                   &gen_helper_check_poison);
     tcg_gen_qemu_ld_tl_with_checked_addr(value, vaddr, mem_idx, op);
     gen_set_gpr(rd, value);
     tcg_temp_free_cap_checked(vaddr);
