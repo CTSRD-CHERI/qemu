@@ -222,7 +222,7 @@ pmem_set_poison(void *pmem, size_t index, bool poison)
 {
     g_assert(pmem != ALL_ZERO_PMEM); // should have allocated vermem before reaching here
     bool *parray = (bool *) pmem;
-    printf("pmem_set_poison\n");
+    //printf("pmem_set_poison\n");
     parray[index] = poison;
 }
 
@@ -805,7 +805,7 @@ void cheri_poison_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hw
         env, "    Cap Version Write [" TARGET_FMT_lx "/" RAM_ADDR_FMT "] %d -> %d\n",
         vaddr, qemu_ram_addr_from_host(host_addr),
         pmem_get_ver(vermem, tag_offset), true);*/
-    printf("cheri_poison_set_aligned\n");
+    //printf("cheri_poison_set_aligned\n");
     pmem_set_poison(pmem, tag_offset, poison);
 }
 
