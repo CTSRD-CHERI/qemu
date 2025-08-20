@@ -814,7 +814,7 @@ void cheri_poison_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hw
         vaddr, qemu_ram_addr_from_host(host_addr),
         pmem_get_ver(vermem, tag_offset), true);*/
     printf("cheri_poison_set_aligned\n");
-    pmem_set_poison(pmem, tag_offset, true);
+    pmem_set_poison(pmem, tag_offset, poison);
 }
 
 static bool cheri_poison_check_one(CPUArchState *env, target_ulong vaddr, 

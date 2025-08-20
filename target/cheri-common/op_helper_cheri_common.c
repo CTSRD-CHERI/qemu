@@ -1373,6 +1373,42 @@ void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t cb,
     cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, true);
 }
 
+void CHERI_HELPER_IMPL(cclearpoison(CPUArchState *env, uint32_t cb,
+                               target_ulong version))
+{   
+    /*
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
+
+    const target_ulong checked_addr =
+        cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_store_exception);
+
+    store_cap_to_memory(env, valreg, checked_addr, _host_return_address, true);
+    */
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (!(cap_get_perms(cbp) & CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
+    }
+    const target_ulong addr = cap_get_cursor(cbp);
+    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
+        /*
+        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
+            "Failed capability bounds check: cursor=" TARGET_FMT_plx "\n", addr);*/
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    }
+    if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
+        raise_unaligned_load_exception(env, addr, _host_return_address);
+    }
+    cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, false);
+}
+
 void CHERI_HELPER_IMPL(store_cap_via_ddc(CPUArchState *env, uint32_t valreg,
                                          target_ulong intaddr))
 {
