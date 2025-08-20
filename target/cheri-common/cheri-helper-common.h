@@ -146,6 +146,7 @@ DEF_HELPER_4(load_cap_via_cap, void, env, i32, tl, i32)
 DEF_HELPER_4(check_poison, void, env, i32, tl, i32)
 DEF_HELPER_3(load_cap_via_ddc, void, env, i32, tl)
 DEF_HELPER_3(cpoison, void, env, i32, tl)
+DEF_HELPER_3(cclearpoison, void, env, i32, tl)
 
 DEF_HELPER_4(store_cap_via_cap, void, env, i32, tl, i32)
 DEF_HELPER_3(store_cap_via_ddc, void, env, i32, tl)
