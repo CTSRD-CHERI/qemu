@@ -187,6 +187,7 @@ sc_b_cap       1111100  ..... ..... 000 11000 1011011 @atom_st_cap_or_ddc
 sc_h_cap       1111100  ..... ..... 000 11001 1011011 @atom_st_cap_or_ddc
 sc_w_cap       1111100  ..... ..... 000 11010 1011011 @atom_st_cap_or_ddc
 cpoison        1111100  ..... ..... 000 11111 1011011 @atom_st_cap_or_ddc
+cclearpoison   1111100  ..... ..... 000 10111 1011011 @atom_st_cap_or_ddc
 #                                       11011 is sc_d_cap for RV64/sc_c_cap for RV32
 #                                       11100 is sc_c_cap for RV64
 #                                       11101 is reserved
