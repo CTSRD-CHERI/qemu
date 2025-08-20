@@ -595,6 +595,16 @@ static inline bool trans_cpoison(DisasContext *ctx, arg_cpoison *a)
     return true;
 }
 
+static inline bool trans_cclearpoison(DisasContext *ctx, arg_cpoison *a)
+{
+    TCGv_i32 base_regnum = tcg_const_i32(a->rs1);
+    TCGv gpr_value = tcg_temp_new();
+    gen_get_gpr(gpr_value, a->rs2);
+    gen_helper_cclearpoison(cpu_env, base_regnum, gpr_value);
+    tcg_temp_free_i32(base_regnum);
+    tcg_temp_free(gpr_value);
+    return true;
+}
 
 static inline bool trans_amoswap_c(DisasContext *ctx, arg_amoswap_c *a)
 {
