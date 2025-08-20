@@ -370,7 +370,7 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
 #endif
     }
     MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
-    if (cheri_poison_check(env, addr, size, rw, _host_return_address)) {
+    if (cheri_poison_check(env, addr, size, rw, _host_return_address)&& cpu_in_user_mode(env)) {
         raise_cheri_exception_addr_wnr(env, CapEx_TagViolation, cb, addr,
                                        !is_load);
         //printf("check poison trap \n");
