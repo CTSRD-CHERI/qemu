@@ -32,4 +32,10 @@ void *probe_cap_write(CPUArchState *env, target_ulong addr, int size,
     return probe_access_inlined(env, addr, size, MMU_DATA_CAP_STORE, mmu_idx,
                                 retaddr);
 }
+void *probe_poison_write(CPUArchState *env, target_ulong addr, int size,
+                      int mmu_idx, uintptr_t retaddr)
+{
+    return probe_access_inlined(env, addr, size, MMU_POISON_STORE, mmu_idx,
+                                retaddr);
+}
 #endif

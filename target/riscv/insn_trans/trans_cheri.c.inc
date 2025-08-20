@@ -369,6 +369,7 @@ static inline bool gen_cap_load_mem_idx(DisasContext *ctx, int32_t rd,
     TCGv_cap_checked_ptr vaddr = tcg_temp_new_cap_checked();
     generate_cap_load_check_imm(vaddr, cs, offset, op);
     tcg_gen_qemu_ld_tl_with_checked_addr(value, vaddr, mem_idx, op);
+
     gen_set_gpr(rd, value);
     tcg_temp_free_cap_checked(vaddr);
     tcg_temp_free(value);
@@ -585,10 +586,13 @@ static inline bool trans_sc_c_cap(DisasContext *ctx, arg_sc_c_cap *a)
 
 static inline bool trans_cpoison(DisasContext *ctx, arg_cpoison *a)
 {
-    //a->rd = a->rs2; /* Not enough encoding space for explicit rd */
-    printf("cpoison \n");
-    return gen_cheri_cap_loadstore(ctx, a->rs1, a->rs1,0,
-                                   &gen_helper_cpoison);
+    TCGv_i32 base_regnum = tcg_const_i32(a->rs1);
+    TCGv gpr_value = tcg_temp_new();
+    gen_get_gpr(gpr_value, a->rs2);
+    gen_helper_cpoison(cpu_env, base_regnum, gpr_value);
+    tcg_temp_free_i32(base_regnum);
+    tcg_temp_free(gpr_value);
+    return true;
 }
 
 

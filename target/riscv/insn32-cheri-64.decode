@@ -54,7 +54,7 @@ sc_d_cap    1111100  ..... ..... 000 11011 1011011 @atom_st_cap_or_ddc  # RV64-o
 sc_c_ddc    1111100  ..... ..... 000 10100 1011011 @atom_st_cap_or_ddc  # RV64-only (would be sc_q_ddc for RV128)
 sc_c_cap    1111100  ..... ..... 000 11100 1011011 @atom_st_cap_or_ddc  # RV64-only (would be sc_q_cap for RV128)
 cpoison     1111100  ..... ..... 000 11101 1011011 @atom_st_cap_or_ddc  # RV64-only (would be sc_q_cap for RV128)
-
+cclearpoison     1111100  ..... ..... 000 11110 1011011 @atom_st_cap_or_ddc  # RV64-only (would be sc_q_cap for RV128)
 lc       ............   ..... 010 ..... 0001111 @i  # def LC_128  : RVInstI<0x2, OPC_MISC_MEM (0b0001111)
 sc       ....... .....  ..... 100 ..... 0100011 @s  # def SC_128  : RVInstS<0x4, OPC_STORE (0b0100011)
 

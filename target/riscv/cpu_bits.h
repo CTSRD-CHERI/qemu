@@ -533,6 +533,7 @@
 #define PTE_D               0x080 /* Dirty */
 #define PTE_SOFT            0x300 /* Reserved for Software */
 #if defined(TARGET_CHERI) && !defined(TARGET_RISCV32)
+#define PTE_CWP             0x0400000000000000 /* POISON write */
 #define PTE_CRG             0x0800000000000000 /* Cap Read Generation */
 #define PTE_CRM             0x1000000000000000 /* Cap Read Modifier */
 #define PTE_CD              0x2000000000000000 /* Cap Dirty */
@@ -577,6 +578,8 @@
 #define RISCV_EXCP_STORE_AMO_CAP_PAGE_FAULT      0x1b
 #endif
 #define RISCV_EXCP_CHERI                         0x1c
+#define RISCV_EXCP_POISON                        0x1d
+#define RISCV_EXCP_STORE_AMO_POI_PAGE_FAULT      RISCV_EXCP_POISON
 #endif
 
 #define RISCV_EXCP_INT_FLAG                0x80000000
