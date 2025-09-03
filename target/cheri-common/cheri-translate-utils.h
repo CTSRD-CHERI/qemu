@@ -1130,6 +1130,7 @@ static inline void gen_cap_load_pesbt(DisasContext *ctx, int regnum, TCGv pesbt)
     WRAP_PESBT_CLEAR(name)
 
 WRAP_PESBT_ALL(OTYPE)
+WRAP_PESBT_ALL(POISON)
 WRAP_PESBT_ALL(HWPERMS)
 #ifndef TARGET_ARRCH64
 WRAP_PESBT_ALL(FLAGS)

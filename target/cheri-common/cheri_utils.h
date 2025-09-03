@@ -82,6 +82,12 @@ static inline cap_offset_t cap_get_offset(const cap_register_t *c)
     return (cap_offset_t)c->_cr_cursor - (cap_offset_t)c->cr_base;
 }
 
+static inline bool cap_get_poison(const cap_register_t *c)
+{
+    return CAP_cc(get_poison)(c);
+}
+
+
 static inline uint32_t cap_get_uperms(const cap_register_t *c)
 {
     return CAP_cc(get_uperms)(c);

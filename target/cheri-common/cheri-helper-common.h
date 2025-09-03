@@ -70,6 +70,7 @@ DEF_HELPER_FLAGS_2(cgettype, 0, tl, env, i32)
 
 // Two operands (cap cap)
 DEF_HELPER_3(ccleartag, void, env, i32, i32)
+DEF_HELPER_3(csetcappoison, void, env, i32, i32)
 DEF_HELPER_3(cmove, void, env, i32, i32)
 DEF_HELPER_3(cchecktype, void, env, i32, i32)
 DEF_HELPER_3(csealentry, void, env, i32, i32)

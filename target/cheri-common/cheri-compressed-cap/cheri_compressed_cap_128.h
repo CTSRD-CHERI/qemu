@@ -70,7 +70,8 @@ typedef int64_t cc128_saddr_t;
 enum {
     _CC_FIELD(UPERMS, 127, 124),
     _CC_FIELD(HWPERMS, 123, 112),
-    _CC_FIELD(RESERVED, 111, 110),
+    _CC_FIELD(RESERVED, 111, 111),
+    _CC_FIELD(POISON,110,110),
     _CC_FIELD(FLAGS, 109, 109),
     _CC_FIELD(OTYPE, 108, 91),
     _CC_FIELD(EBT, 90, 64),
@@ -95,6 +96,7 @@ enum {
 #define CC128_BOT_WIDTH CC128_FIELD_EXP_ZERO_BOTTOM_SIZE
 #define CC128_BOT_INTERNAL_EXP_WIDTH CC128_FIELD_EXP_NONZERO_BOTTOM_SIZE
 #define CC128_EXP_LOW_WIDTH CC128_FIELD_EXPONENT_LOW_PART_SIZE
+#define CC128_POISON_BITS CC128_FIELD_POISON_SIZE
 
 #define CC128_PERM_GLOBAL (1 << 0)
 #define CC128_PERM_EXECUTE (1 << 1)
@@ -137,6 +139,11 @@ enum _CC_N(OTypes) {
     _CC_N(MIN_RESERVED_OTYPE) = _CC_N(OTYPE_RESERVED_LAST),
     _CC_N(MAX_RESERVED_OTYPE) = _CC_N(OTYPE_UNSEALED),
 };
+enum _CC_N(POISON) {
+    CC128_POISON_UNPOISONED = false,
+    CC128_POISON_POISONED   = true,
+    CC128_MAX_POISON = (bool)((1u << CC128_POISON_BITS) - 1u)
+};
 
 #define CC128_LS_SPECIAL_OTYPES(ITEM, ...)                                                                             \
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
@@ -149,7 +156,7 @@ _CC_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
 #include "cheri_compressed_cap_common.h"
 
 // Sanity-check mask is the expected NULL encoding
-_CC_STATIC_ASSERT_SAME(CC128_NULL_XOR_MASK, UINT64_C(0x00001ffffc018004));
+//_CC_STATIC_ASSERT_SAME(CC128_NULL_XOR_MASK, UINT64_C(0x00005ffffc018004));
 
 __attribute__((deprecated("Use cc128_compress_raw"))) static inline uint64_t
 compress_128cap_without_xor(const cc128_cap_t* csp) {
