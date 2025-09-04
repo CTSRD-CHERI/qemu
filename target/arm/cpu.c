@@ -935,6 +935,46 @@ static void arm_disas_set_info(CPUState *cpu, disassemble_info *info)
 
 #ifdef TARGET_AARCH64
 
+#ifdef TARGET_CHERI
+static void aarch64_cpu_dump_cap_register(FILE *f, const char *capname,
+    const cap_register_t *capreg)
+{
+    uint32_t perms;
+
+    perms = cap_get_all_perms(capreg);
+
+    qemu_fprintf(f, " %8s  0x%016" PRIx64 "%016" PRIx64 "  0x%" PRIx64
+        " [%s%s%s%s%s%s,0x%" PRIx64 "-0x%" PRIx64 "]",
+        capname,
+        CAP_cc(compress_raw)(capreg) ^ CAP_MEM_XOR_MASK,
+        cap_get_cursor(capreg),
+        cap_get_cursor(capreg),
+        perms & CAP_PERM_LOAD ? "r" : "",
+        perms & CAP_PERM_STORE ? "w" : "",
+        perms & CAP_PERM_EXECUTE ? "x" : "",
+        perms & CAP_PERM_LOAD_CAP ? "R" : "",
+        perms & CAP_PERM_STORE_CAP ? "W" : "",
+        perms & CAP_PERM_EXECUTIVE ? "E" : "",
+        cap_get_base(capreg),
+        cap_get_top(capreg));
+    if (!capreg->cr_tag || !cap_is_unsealed(capreg)) {
+        qemu_fprintf(f, " (");
+        if (!capreg->cr_tag) {
+            qemu_fprintf(f, "invalid");
+            if (!cap_is_unsealed(capreg)) {
+                qemu_fprintf(f, ", ");
+            }
+        }
+        if (!cap_is_unsealed(capreg)) {
+            qemu_fprintf(f, "%s",
+                cap_is_sealed_entry(capreg) ?  "sentry" : "sealed");
+        }
+        qemu_fprintf(f, ")");
+    }
+    qemu_fprintf(f, "\n");
+}
+#endif
+
 static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 {
     ARMCPU *cpu = ARM_CPU(cs);
@@ -944,6 +984,14 @@ static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     int el = arm_current_el(env);
     const char *ns_status;
 
+#ifdef TARGET_CHERI
+    aarch64_cpu_dump_cap_register(f, "pcc", cheri_get_recent_pcc(env));
+    aarch64_cpu_dump_cap_register(f, "ddc", cheri_get_ddc(env));
+    for (i = 0; i < 32; i++) {
+        aarch64_cpu_dump_cap_register(f, cheri_gp_regnames[i],
+            get_readonly_capreg(env, i));
+    }
+#else
     qemu_fprintf(f, " PC=%016" PRIx64 " ", get_aarch_reg_as_x(&env->pc));
     for (i = 0; i < 32; i++) {
         target_ulong reg = arm_get_xreg(env, i);
@@ -954,13 +1002,19 @@ static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
                          (i + 2) % 3 ? " " : "\n");
         }
     }
+#endif
 
     if (arm_feature(env, ARM_FEATURE_EL3) && el != 3) {
         ns_status = env->cp15.scr_el3 & SCR_NS ? "NS " : "S ";
     } else {
         ns_status = "";
     }
-    qemu_fprintf(f, "PSTATE=%08x %c%c%c%c %sEL%d%c",
+#ifdef TARGET_CHERI
+    qemu_fprintf(f, " %8s  %08x %c%c%c%c %sEL%d%c\n",
+#else
+    qemu_fprintf(f, "%s=%08x %c%c%c%c %sEL%d%c",
+#endif
+                 "PSTATE",
                  psr,
                  psr & PSTATE_N ? 'N' : '-',
                  psr & PSTATE_Z ? 'Z' : '-',
@@ -971,7 +1025,13 @@ static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
                  psr & PSTATE_SP ? 'h' : 't');
 
     if (cpu_isar_feature(aa64_bti, cpu)) {
-        qemu_fprintf(f, "  BTYPE=%d", (psr & PSTATE_BTYPE) >> 10);
+#ifdef TARGET_CHERI
+        qemu_fprintf(f, " %8s  %d\n",
+#else
+        qemu_fprintf(f, "  %s=%d",
+#endif
+                     "BTYPE",
+                     (psr & PSTATE_BTYPE) >> 10);
     }
     if (!(flags & CPU_DUMP_FPU)) {
         qemu_fprintf(f, "\n");
