@@ -239,6 +239,7 @@ static void rv64_codasip_a730_cpu_init(Object *obj)
     qdev_prop_set_bit(DEVICE(obj), "zicboz", true);
     qdev_prop_set_bit(DEVICE(obj), "zba", true);
     qdev_prop_set_bit(DEVICE(obj), "zbb", true);
+    qdev_prop_set_bit(DEVICE(obj), "zbc", true);
     qdev_prop_set_bit(DEVICE(obj), "zbs", true);
     qdev_prop_set_bit(DEVICE(obj), "Zfhmin", true);
 #if !defined(TARGET_CHERI_RISCV_V9)
