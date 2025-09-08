@@ -1354,8 +1354,8 @@ void CHERI_HELPER_IMPL(csetcappoison(CPUArchState *env, uint32_t cd, uint32_t cb
     //printf("csetcappoison get poison cd %x\n", (int)cap_get_poison( get_readonly_capreg(env, cd)));
 }
 
-void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t cb,
-                               target_ulong poison))
+void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t valreg,
+                                         target_ulong addr, uint32_t authreg))
 {   
     /*
     GET_HOST_RETPC();
@@ -1370,28 +1370,37 @@ void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t cb,
     */
     
     GET_HOST_RETPC();
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    printf("cpoison addr begin %lx\n", (long) cap_get_cursor(cbp));
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
+    //printf("cpoison addr begin %lx\n", (long) cap_get_cursor(cbp));
     if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
+        raise_cheri_exception(env, CapEx_TagViolation, authreg);
     } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
+        raise_cheri_exception(env, CapEx_SealViolation, authreg);
     } else if (!(cap_get_all_perms(cbp) & CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, authreg);
     }
-    const target_ulong addr = cap_get_cursor(cbp);
     if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
         /*
         qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
             "Failed capability bounds check: cursor=" TARGET_FMT_plx "\n", addr);*/
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+        raise_cheri_exception(env, CapEx_LengthViolation, authreg);
     }
     if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_load_exception(env, addr, _host_return_address);
     }
-    printf("cpoison addr end %lx\n", (long) addr);
+    //printf("cpoison addr end %lx\n", (long) addr);
     store_cap_to_memory(env, 0, addr, _host_return_address, true);
-    cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, true);
+
+    //const target_ulong checked_addr =
+    //    cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
+    //                         CHERI_CAP_SIZE, _host_return_address, cbp,
+    //                         CHERI_CAP_SIZE, raise_unaligned_store_exception);
+
+    cheri_poison_set_aligned(env, addr, authreg, NULL, _host_return_address, true);
+
+    //if((long)addr >= 0x40cda000 && (long)addr <= 0x40cda040){
+	//printf("qemu poison addr %lx\n", (long) addr);
+	//}
 }
 
 void CHERI_HELPER_IMPL(cclearpoison(CPUArchState *env, uint32_t cb,
@@ -1411,7 +1420,7 @@ void CHERI_HELPER_IMPL(cclearpoison(CPUArchState *env, uint32_t cb,
     
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    printf("cclearpoison addr begin%lx\n", (long) cap_get_cursor(cbp));
+    //printf("cclearpoison addr begin%lx\n", (long) cap_get_cursor(cbp));
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -1429,7 +1438,7 @@ void CHERI_HELPER_IMPL(cclearpoison(CPUArchState *env, uint32_t cb,
     if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_load_exception(env, addr, _host_return_address);
     }
-    printf("cclearpoison addr end%lx\n", (long) addr);
+    //printf("cclearpoison addr end%lx\n", (long) addr);
     cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, false);
 }
 
@@ -1686,8 +1695,8 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         // Fast path, host address in TLB
         
         if(poison){
-            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, 0x12345678);
-            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, 0x12345678);
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, 0x1234567812345678);
+            //st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, 0x1234567812345678);
         }else{
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
@@ -1698,10 +1707,10 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         qemu_maybe_log_instr_extra(env, "Using slow path for store to guest "
             "address " TARGET_FMT_lx "\n", vaddr);
         if(poison){
-        cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
-                           0x12345678, retpc);
-        cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, 0x12345678,
-                           retpc);
+        //cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
+        //                   0x1234567812345678, retpc);
+        //cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_CURSOR, 0x1234567812345678,
+        //                   retpc);
         }else{
         cpu_st_cap_word_ra(env, vaddr + CHERI_MEM_OFFSET_METADATA,
                            pesbt_for_mem, retpc);

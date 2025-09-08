@@ -848,7 +848,7 @@ bool cheri_poison_check(CPUArchState *env, target_ulong vaddr, int32_t size,
         assert(ntags == 2 && "Should check at most two version granules here");
         bool poison = false;
         for (target_ulong addr = tag_offset_to_addr(tag_start);
-             addr <= tag_offset_to_addr(tag_end); addr += CHERI_CAP_SIZE) {
+             addr <= tag_offset_to_addr(tag_start)+CHERI_CAP_SIZE; addr += CHERI_CAP_SIZE) {
             poison |= cheri_poison_check_one(env, addr, rw, pc);
         }
         return poison;
