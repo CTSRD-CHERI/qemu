@@ -380,9 +380,21 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
     }
     bool cap_poison = cap_get_poison(cbp);
     MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
-    if (cheri_poison_check(env, addr, size, rw, _host_return_address)&& cpu_in_user_mode(env) && cap_poison) {
-        printf("poison exception faulting addr %lx, size %d\n",(long)addr, (int) size );
-	    raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
+
+    if (cheri_poison_check(env, addr, size, rw, _host_return_address)&& cpu_in_user_mode(env) && cap_poison &&cheri_in_capmode(env)) {
+        printf("poison exception faulting addr %lx, size %d rw%x\n",(long)addr, (int) size , rw);
+        unsigned int mask = ~((1 << 0) | (1 << 2) | (1 << 3)| (1 << 4));
+        void *host = probe_read(env, addr&mask, CHERI_CAP_SIZE, cpu_mmu_index(env, false), _host_return_address);
+        target_ulong cursor;
+        if (likely(host)) {
+            //target_ulong pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
+            //        CAP_NULL_XOR_MASK;
+            //printf("qemu poison check pesbt %lx\n", (long) pesbt);
+            cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
+            printf("qemu poison check cursor %lx\n", (long) cursor);
+        }
+        if((long long)cursor == 0x1234567812345678)
+	        raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
                                      !is_load);
         //printf("check poison trap \n");
     }
