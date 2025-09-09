@@ -1409,7 +1409,7 @@ void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t valreg,
         raise_unaligned_load_exception(env, addr, _host_return_address);
     }
     //printf("cpoison addr end %lx\n", (long) addr);
-    store_cap_to_memory(env, 0, addr, _host_return_address, true);
+    //store_cap_to_memory(env, 0, addr, _host_return_address, true);
 
     //const target_ulong checked_addr =
     //    cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
