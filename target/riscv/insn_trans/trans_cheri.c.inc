@@ -544,10 +544,13 @@ static inline bool trans_sc_c_cap(DisasContext *ctx, arg_sc_c_cap *a)
 
 static inline bool trans_cpoison(DisasContext *ctx, arg_cpoison *a)
 {
-    //a->rd = a->rs2; /* Not enough encoding space for explicit rd */
-    printf("cpoison \n");
-    return gen_cheri_cap_loadstore(ctx, a->rs1, a->rs1,0,
-                                   &gen_helper_cpoison);
+    TCGv_i32 base_regnum = tcg_const_i32(a->rs1);
+    TCGv gpr_value = tcg_temp_new();
+    gen_get_gpr(ctx, gpr_value, a->rs2);
+    gen_helper_cpoison(cpu_env, base_regnum, gpr_value);
+    tcg_temp_free_i32(base_regnum);
+    tcg_temp_free(gpr_value);
+    return true;
 }
 
 

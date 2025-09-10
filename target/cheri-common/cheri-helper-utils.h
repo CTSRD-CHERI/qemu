@@ -42,6 +42,7 @@
 #include "tcg/tcg.h"
 #include "tcg/tcg-op.h"
 #include "exec/exec-all.h"
+#include "cheri_tagmem.h"
 
 static inline target_ulong cpu_get_current_pc(CPUArchState *env,
                                               uintptr_t retpc, bool will_exit)
@@ -269,6 +270,10 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
                           const cap_register_t *source, target_ulong vaddr,
                           uintptr_t retpc, hwaddr *physaddr);
 
+void check_poison_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+                          const cap_register_t *source, target_ulong vaddr,
+                          uintptr_t retpc, hwaddr *physaddr);
+
 static inline bool cap_is_local(CPUArchState *env, uint32_t cs)
 {
     return get_capreg_tag(env, cs) &&
@@ -373,6 +378,13 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
                                    size, access_type, addr);
 #endif
     }
+    MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
+    if (cheri_poison_check(env, addr, size, rw, _host_return_address)) {
+        //raise_cheri_exception_addr_wnr(env, CapEx_TagViolation, cb, addr,
+          //                             !is_load);
+        printf("check poison trap \n");
+    }
+    
     return addr;
 }
 
@@ -387,6 +399,20 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
                                   target_ulong vaddr, uintptr_t retpc,
                                   hwaddr *physaddr, bool *raw_tag);
 bool load_cap_from_memory_raw_tag_mmu_idx(
+    CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
+    const cap_register_t *source, target_ulong vaddr, uintptr_t retpc,
+    hwaddr *physaddr, bool *raw_tag, int mmu_idx);
+
+bool check_poison_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
+                              target_ulong *cursor, uint32_t cb,
+                              const cap_register_t *source, target_ulong vaddr,
+                              uintptr_t retpc, hwaddr *physaddr);
+bool check_poison_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
+                                  target_ulong *cursor, uint32_t cb,
+                                  const cap_register_t *source,
+                                  target_ulong vaddr, uintptr_t retpc,
+                                  hwaddr *physaddr, bool *raw_tag);
+bool check_poison_from_memory_raw_tag_mmu_idx(
     CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
     const cap_register_t *source, target_ulong vaddr, uintptr_t retpc,
     hwaddr *physaddr, bool *raw_tag, int mmu_idx);

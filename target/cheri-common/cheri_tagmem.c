@@ -130,6 +130,7 @@ static inline size_t num_tagblocks(RAMBlock* ram)
 
 typedef struct CheriTagBlock {
     DECLARE_BITMAP(tag_bitmap, CAP_TAGBLK_SIZE);
+    bool poison_tag[CAP_TAGBLK_SIZE];
 } CheriTagBlock;
 
 
@@ -203,6 +204,74 @@ tagblock_set_tag_tagmem(void *tagmem, size_t block_index)
     qatomic_or(p, BIT_MASK(block_index));
 }
 
+static inline QEMU_ALWAYS_INLINE bool tagblock_get_poison(CheriTagBlock *block,
+                                                       size_t block_index)
+{
+    return block ? block->poison_tag[block_index] : false;
+}
+
+static inline QEMU_ALWAYS_INLINE void tagblock_set_poison(CheriTagBlock *block,
+                                                       size_t block_index, bool v)
+{
+    block->poison_tag[block_index] = v;
+}
+
+static inline QEMU_ALWAYS_INLINE bool pmem_get_poison(void *pmem, size_t index)
+{
+    if (pmem  == ALL_ZERO_PMEM)
+        return 0;
+    bool *parray = (bool *) pmem;
+    return parray[index];
+}
+
+static inline QEMU_ALWAYS_INLINE void
+pmem_set_poison(void *pmem, size_t index, bool poison)
+{
+    g_assert(pmem != ALL_ZERO_PMEM); // should have allocated vermem before reaching here
+    bool *parray = (bool *) pmem;
+    printf("pmem_set_poison\n");
+    parray[index] = poison;
+}
+
+static inline void *get_pmem_from_iotlb_entry(CPUArchState *env,
+                                                target_ulong vaddr, int mmu_idx,
+                                                uintptr_t *flags_out)
+{
+    /* XXXAR: see mte_helper.c */
+    /*
+     * Find the iotlbentry for ptr.  This *must* be present in the TLB
+     * because we just found the mapping.
+     * TODO: Perhaps there should be a cputlb helper that returns a
+     * matching tlb entry + iotlb entry.
+     */
+#ifdef CONFIG_DEBUG_TCG
+    CPUTLBEntry *entry = tlb_entry(env, mmu_idx, vaddr);
+    g_assert(tlb_hit(isWrite ? tlb_addr_write(entry) : entry->addr_read, vaddr));
+#endif
+    CPUIOTLBEntry *iotlbentry =
+        &env_tlb(env)->d[mmu_idx].iotlb[tlb_index(env, mmu_idx, vaddr)];
+    if (flags_out != NULL)
+        *flags_out = IOTLB_GET_PMEM_FLAGS(iotlbentry);
+    return IOTLB_GET_PMEM(iotlbentry);
+}
+
+
+static inline QEMU_ALWAYS_INLINE bool get_poison(size_t index, RAMBlock *ram)
+{
+    return tagblock_get_poison(cheri_tag_block(index, ram), CAP_TAGBLK_IDX(index));
+}
+
+static inline QEMU_ALWAYS_INLINE void set_poison(size_t index, RAMBlock *ram,
+                                                  bool *allocated, bool val)
+{
+    CheriTagBlock *block = cheri_tag_block(index, ram);
+    if (!block) {
+        block = cheri_tag_new_tagblk(ram, index);
+        *allocated = true;
+    }
+    tagblock_set_poison(block, CAP_TAGBLK_IDX(index), val);
+}
+
 static inline QEMU_ALWAYS_INLINE void
 tagblock_set_tag_many_tagmem(void *tagmem, size_t block_index, uint8_t tags)
 {
@@ -262,13 +331,14 @@ void cheri_tag_init(MemoryRegion *mr, uint64_t memory_size)
 
 void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
                             RAMBlock *ram, ram_addr_t ram_offset, size_t size,
-                            int *prot, bool tag_write)
+                            int *prot, bool tag_write, void **pmem_out)
 {
 
     if (unlikely(!ram || !ram->cheri_tags)) {
         /* Tags stored here are effectively cleared (unless they should trap) */
         if (!(*prot & PAGE_SC_TRAP)) {
             *prot |= PAGE_SC_CLEAR;
+            *prot |= PAGE_SV_TRAP;
         }
         if (tag_write) {
             error_report("Attempting change tag bit on memory without tags:");
@@ -276,6 +346,7 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
                          (uintmax_t)vaddr, ram ? ram->idstr : NULL,
                          (uintmax_t)ram_offset);
         }
+        *pmem_out = ALL_ZERO_PMEM;
         return ALL_ZERO_TAGBLK;
     }
 
@@ -305,6 +376,7 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
 
     if (tagblk != NULL) {
         const size_t tagblk_index = CAP_TAGBLK_IDX(tag);
+        *pmem_out = &(tagblk->poison_tag[tagblk_index]);
         return tagblk->tag_bitmap + BIT_WORD(tagblk_index);
     }
 
@@ -313,7 +385,8 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
         // to this location. See the comment around TLBENTRYCAP_INVALID_WRITE_*.
         *prot |= PAGE_SC_TRAP;
     }
-
+    *prot |= PAGE_SV_TRAP;
+    *pmem_out = ALL_ZERO_PMEM;
     return ALL_ZERO_TAGBLK;
 }
 
@@ -701,6 +774,83 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     cheri_debug_assert(tagmem);
 
     tagblock_set_tag_many_tagmem(tagmem, page_vaddr_to_tag_offset(vaddr), tags);
+}
+
+void cheri_poison_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_paddr, uintptr_t pc, bool poison)
+{
+    const int mmu_idx = cpu_mmu_index(env, false);
+    store_capcause_reg(env, reg);
+    // XXX FIXME should be probe_ver_write but that results in page fault loop!
+    void *host_addr = probe_poison_write(env, vaddr, 1, mmu_idx, pc);
+    clear_capcause_reg(env);
+
+    handle_paddr_return(write); /* is ret_paddr needed? */
+
+    if (unlikely(!host_addr)) {
+        /* Guest bug? Warn? */
+        warn_report("Attempt to set poison on non-RAM "
+                    "via vaddr 0x" TARGET_FMT_lx "\r\n", vaddr);
+        return;
+    }
+
+    uintptr_t pmem_flags;
+    void *pmem = get_pmem_from_iotlb_entry(env, vaddr, mmu_idx, &pmem_flags);
+
+    if (pmem_flags & TLBENTRYPOISON_TRAP) {
+        raise_store_tag_exception(env, vaddr, reg, pc);
+    }
+
+    /*
+     * probe_ver_write() should have ensured there was a tagmem for this
+     * location. A NULL ram should have been indicated via
+     * TLBENTRYVER_TRAP.
+     */
+    //cheri_debug_assert(vermem != ALL_ZERO_VERMEM);
+
+    target_ulong tag_offset = page_vaddr_to_tag_offset(vaddr);
+    /*
+    qemu_maybe_log_instr_extra(
+        env, "    Cap Version Write [" TARGET_FMT_lx "/" RAM_ADDR_FMT "] %d -> %d\n",
+        vaddr, qemu_ram_addr_from_host(host_addr),
+        pmem_get_ver(vermem, tag_offset), true);*/
+    printf("cheri_poison_set_aligned\n");
+    pmem_set_poison(pmem, tag_offset, true);
+}
+
+static bool cheri_poison_check_one(CPUArchState *env, target_ulong vaddr, 
+        MMUAccessType rw, uintptr_t pc)
+{
+    const int mmu_idx = cpu_mmu_index(env, false);
+    probe_access(env, vaddr, 1, rw, mmu_idx, pc);
+
+    void *pmem = get_pmem_from_iotlb_entry(env, vaddr, mmu_idx, NULL);
+    target_ulong tag_offset = page_vaddr_to_tag_offset(vaddr);
+    bool result = pmem_get_poison(pmem, tag_offset);
+    return result;
+}
+
+bool cheri_poison_check(CPUArchState *env, target_ulong vaddr, int32_t size,
+                         MMUAccessType rw, uintptr_t pc)
+{
+    cheri_debug_assert(size > 0);
+    target_ulong first_addr = vaddr;
+    target_ulong last_addr = (vaddr + size - 1);
+    TagOffset tag_start = addr_to_tag_offset(first_addr);
+    TagOffset tag_end = addr_to_tag_offset(last_addr);
+    if (likely(tag_start.value == tag_end.value)) {
+        // Common case, only one granule (i.e. aligned load / store)
+        return cheri_poison_check_one(env, vaddr, rw, pc);
+    }
+    // Unaligned -> can cross a capabiblity alignment boundary and
+    // therefore invalidate two tags. It can also cross pages
+    size_t ntags = tag_end.value - tag_start.value + 1;
+    //assert(ntags == 2 && "Should check at most two version granules here");
+    bool poison = false;
+    for (target_ulong addr = tag_offset_to_addr(tag_start);
+         addr <= tag_offset_to_addr(tag_end); addr += CHERI_CAP_SIZE) {
+        poison |= cheri_poison_check_one(env, addr, rw, pc);
+    }
+    return poison;
 }
 
 bool cheri_tag_get_debug(RAMBlock *ram, ram_addr_t ram_offset)
