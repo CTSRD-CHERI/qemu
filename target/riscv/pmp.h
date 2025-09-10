@@ -37,6 +37,7 @@ static inline pmp_priv_t access_type_to_pmp_priv(MMUAccessType at)
     case MMU_DATA_LOAD: return PMP_READ;
     case MMU_DATA_STORE: return PMP_WRITE;
     case MMU_INST_FETCH: return PMP_EXEC;
+    case MMU_POISON_STORE : return PMP_WRITE;
     }
     abort();
 }

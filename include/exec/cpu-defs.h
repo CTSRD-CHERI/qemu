@@ -148,6 +148,12 @@ typedef struct CPUIOTLBEntry {
      */
     hwaddr addr;
 #ifdef TARGET_CHERI
+#define TLBENTRYPOISON_MASK    ((uintptr_t) 1)
+#define TLBENTRYPOISON_INVALID ((uintptr_t) (~0 & ~TLBENTRYPOISON_MASK))
+#define TLBENTRYPOISON_TRAP    ((uintptr_t) 1)
+
+#define ALL_ZERO_PMEM     ((void *) TLBENTRYPOISON_INVALID)
+
 #define TLBENTRYCAP_MASK (uintptr_t)0x7
     /* Trap if a non-zero tag is read/written. */
 #define TLBENTRYCAP_FLAG_TRAP (uintptr_t)0x1
@@ -175,6 +181,7 @@ typedef struct CPUIOTLBEntry {
     (TLBENTRYCAP_FLAG_TRAP | TLBENTRYCAP_FLAG_CLEAR)
 #define TLBENTRYCAP_INVALID_WRITE_VALUE (TLBENTRYCAP_FLAG_TRAP)
     uintptr_t tagmem_write;
+    uintptr_t pmem; 
 #endif
     MemTxAttrs attrs;
 } CPUIOTLBEntry;
@@ -190,6 +197,16 @@ typedef struct CPUIOTLBEntry {
  * Data elements that are per MMU mode, minus the bits accessed by
  * the TCG fast path.
  */
+#define IOTLB_GET_PMEM(iotlbentry)                                       \
+    ({                                                                         \
+        cheri_debug_assert(iotlbentry->pmem != (uintptr_t)0);           \
+        (void *)((uintptr_t)iotlbentry->pmem & ~TLBENTRYPOISON_MASK);      \
+    })
+
+#define IOTLB_GET_PMEM_FLAGS(iotlbentry)                                \
+    (iotlbentry->pmem & TLBENTRYPOISON_MASK)
+
+
 typedef struct CPUTLBDesc {
     /*
      * Describe a region covering all of the large pages allocated
