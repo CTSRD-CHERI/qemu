@@ -82,6 +82,11 @@ static inline target_ulong cap_get_all_perms(const cap_register_t *c)
     return CAP_cc(get_all_permissions)(c);
 }
 
+static inline bool cap_get_poison(const cap_register_t *c)
+{
+    return CAP_cc(get_poison)(c);
+}
+
 static inline void cap_set_perms(cap_register_t *c, target_ulong perms)
 {
     bool success = CAP_cc(set_permissions)(c, perms);
