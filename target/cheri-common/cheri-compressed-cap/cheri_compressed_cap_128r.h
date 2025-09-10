@@ -75,7 +75,8 @@ typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 0, _CC_N(MODE_INT) = 1 } _CC_N(Mode
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
-    _CC_FIELD(RESERVED1, 127, 121),
+    _CC_FIELD(RESERVED1, 127, 122),
+    _CC_FIELD(POISON, 121, 121),
     _CC_FIELD(SDP, 120, 117),
     _CC_FIELD(FLAGS, 116, 116), // TODO: remove this old alias
     _CC_FIELD(AP_M, 116, 108),  // Combined architectural permissions and mode
@@ -105,6 +106,7 @@ enum {
 #pragma GCC diagnostic pop
 
 #define CC128R_OTYPE_BITS CC128R_FIELD_OTYPE_SIZE
+#define CC128R_POISON_BITS CC128R_FIELD_POISON_SIZE
 #define CC128R_BOT_WIDTH CC128R_FIELD_EXP_ZERO_BOTTOM_SIZE
 #define CC128R_BOT_INTERNAL_EXP_WIDTH CC128R_FIELD_EXP_NONZERO_BOTTOM_SIZE
 #define CC128R_EXP_LOW_WIDTH CC128R_FIELD_EXPONENT_LOW_PART_SIZE
@@ -139,6 +141,12 @@ enum _CC_N(OTypes) {
     _CC_SPECIAL_OTYPE(OTYPE_SENTRY, 1),
     _CC_N(MIN_RESERVED_OTYPE) = _CC_N(OTYPE_UNSEALED),
     _CC_N(MAX_RESERVED_OTYPE) = _CC_N(OTYPE_SENTRY),
+};
+
+enum _CC_N(POISON) {
+    CC128R_POISON_UNPOISONED = false,
+    CC128R_POISON_POISONED   = true,
+    CC128R_MAX_POISON = (bool)((1u << CC128R_POISON_BITS) - 1u)
 };
 
 #define CC128R_LS_SPECIAL_OTYPES(ITEM, ...)                                                                            \

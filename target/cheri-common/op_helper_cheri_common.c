@@ -1387,7 +1387,7 @@ void CHERI_HELPER_IMPL(cclearpoison(CPUArchState *env, uint32_t cb,
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
         raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cap_get_perms(cbp) & CAP_PERM_STORE)) {
+    } else if (!(cap_get_all_perms(cbp) & CAP_PERM_STORE)) {
         raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
     }
     const target_ulong addr = cap_get_cursor(cbp);
