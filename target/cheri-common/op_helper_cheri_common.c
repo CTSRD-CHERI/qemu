@@ -1331,8 +1331,31 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t valreg,
     store_cap_to_memory(env, valreg, checked_addr, _host_return_address, false);
 }
 
+void CHERI_HELPER_IMPL(csetcappoison(CPUArchState *env, uint32_t cd, uint32_t cb))
+{
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    GET_HOST_RETPC();
+    /*
+     * CSetVersion: Set capability version
+     */
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (!cap_is_unsealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (cap_get_poison(cbp) != CAP_POISON_UNPOISONED) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    }
+    cap_register_t result = *cbp;
+    _Static_assert(((CAP_MAX_POISON + 1) & CAP_MAX_POISON) == 0, "Expected power of two CAP_MAX_POISON");
+    CAP_cc(update_poison)(&result, CC128_POISON_POISONED);
+    //printf("csetcapoison %llx\n", (long long) &result);
+    //printf("csetcappoison get poison cbp%x\n", (int)cap_get_poison(cbp));
+    update_capreg(env, cd, &result);
+    //printf("csetcappoison get poison cd %x\n", (int)cap_get_poison( get_readonly_capreg(env, cd)));
+}
+
 void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t cb,
-                               target_ulong version))
+                               target_ulong poison))
 {   
     /*
     GET_HOST_RETPC();
@@ -1345,8 +1368,10 @@ void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t cb,
 
     store_cap_to_memory(env, valreg, checked_addr, _host_return_address, true);
     */
+    
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    printf("cpoison addr begin %lx\n", (long) cap_get_cursor(cbp));
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -1364,6 +1389,8 @@ void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t cb,
     if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_load_exception(env, addr, _host_return_address);
     }
+    printf("cpoison addr end %lx\n", (long) addr);
+    store_cap_to_memory(env, 0, addr, _host_return_address, true);
     cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, true);
 }
 
@@ -1381,8 +1408,10 @@ void CHERI_HELPER_IMPL(cclearpoison(CPUArchState *env, uint32_t cb,
 
     store_cap_to_memory(env, valreg, checked_addr, _host_return_address, true);
     */
+    
     GET_HOST_RETPC();
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    printf("cclearpoison addr begin%lx\n", (long) cap_get_cursor(cbp));
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (is_cap_sealed(cbp)) {
@@ -1400,6 +1429,7 @@ void CHERI_HELPER_IMPL(cclearpoison(CPUArchState *env, uint32_t cb,
     if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
         raise_unaligned_load_exception(env, addr, _host_return_address);
     }
+    printf("cclearpoison addr end%lx\n", (long) addr);
     cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, false);
 }
 

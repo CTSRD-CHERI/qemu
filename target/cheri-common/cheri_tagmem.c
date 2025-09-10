@@ -844,13 +844,17 @@ bool cheri_poison_check(CPUArchState *env, target_ulong vaddr, int32_t size,
     // Unaligned -> can cross a capabiblity alignment boundary and
     // therefore invalidate two tags. It can also cross pages
     size_t ntags = tag_end.value - tag_start.value + 1;
-    //assert(ntags == 2 && "Should check at most two version granules here");
-    bool poison = false;
-    for (target_ulong addr = tag_offset_to_addr(tag_start);
-         addr <= tag_offset_to_addr(tag_end); addr += CHERI_CAP_SIZE) {
-        poison |= cheri_poison_check_one(env, addr, rw, pc);
+    if(ntags ==2){
+        assert(ntags == 2 && "Should check at most two version granules here");
+        bool poison = false;
+        for (target_ulong addr = tag_offset_to_addr(tag_start);
+             addr <= tag_offset_to_addr(tag_end); addr += CHERI_CAP_SIZE) {
+            poison |= cheri_poison_check_one(env, addr, rw, pc);
+        }
+        return poison;
+    }else{
+        return false;
     }
-    return poison;
 }
 
 bool cheri_tag_get_debug(RAMBlock *ram, ram_addr_t ram_offset)

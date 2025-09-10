@@ -72,6 +72,7 @@ DEF_HELPER_2(cgettype, tl, env, i32)
 
 // Two operands (cap cap)
 DEF_HELPER_3(ccleartag, void, env, i32, i32)
+DEF_HELPER_3(csetcappoison, void, env, i32, i32)
 DEF_HELPER_3(cmove, void, env, i32, i32)
 DEF_HELPER_3(csealentry, void, env, i32, i32)
 #ifndef TARGET_CHERI_RISCV_STD

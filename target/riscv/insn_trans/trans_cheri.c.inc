@@ -217,6 +217,7 @@ TRANSLATE_INT_CAP(cgetsealed)
 
 TRANSLATE_INT_CAP(cloadtags)
 
+
 // Two operand (int int)
 static inline bool trans_crrl(DisasContext *ctx, arg_crrl *a)
 {
@@ -226,6 +227,7 @@ static inline bool trans_crrl(DisasContext *ctx, arg_crrl *a)
 // Two operand (cap cap)
 TRANSLATE_CAP_CAP(ccleartag)
 TRANSLATE_CAP_CAP(csealentry)
+TRANSLATE_CAP_CAP(csetcappoison)
 
 // Three operand (cap cap cap)
 TRANSLATE_CAP_CAP_CAP(cbuildcap)
