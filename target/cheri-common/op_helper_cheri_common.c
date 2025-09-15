@@ -1337,7 +1337,7 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t valreg,
     store_cap_to_memory(env, valreg, checked_addr, _host_return_address, false);
 }
 
-void CHERI_HELPER_IMPL(csetcappoison(CPUArchState *env, uint32_t cd, uint32_t cb))
+void CHERI_HELPER_IMPL(csetcappermpoison(CPUArchState *env, uint32_t cd, uint32_t cb))
 {
     const cap_register_t *cbp = get_readonly_capreg(env, cb);
     GET_HOST_RETPC();
@@ -1352,8 +1352,8 @@ void CHERI_HELPER_IMPL(csetcappoison(CPUArchState *env, uint32_t cd, uint32_t cb
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     }
     cap_register_t result = *cbp;
-    _Static_assert(((CAP_MAX_POISON + 1) & CAP_MAX_POISON) == 0, "Expected power of two CAP_MAX_POISON");
-    CAP_cc(update_poison)(&result, CC128_POISON_POISONED);
+    //_Static_assert(((CAP_MAX_POISON + 1) & CAP_MAX_POISON) == 0, "Expected power of two CAP_MAX_POISON");
+    CAP_cc(update_perm_poison)(&result, CC128_PERM_POISON_PERMED);
     //printf("csetcapoison %llx\n", (long long) &result);
     //printf("csetcappoison get poison cbp%x\n", (int)cap_get_poison(cbp));
     update_capreg(env, cd, &result);
@@ -1395,13 +1395,13 @@ void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t valreg,
         raise_unaligned_load_exception(env, addr, _host_return_address);
     }
     //printf("cpoison addr end %lx\n", (long) addr);
-    store_cap_to_memory(env, 0, addr, _host_return_address, true);
+    store_cap_to_memory(env, valreg, addr, _host_return_address, true);
 
     //const target_ulong checked_addr =
     //    cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
     //                         CHERI_CAP_SIZE, _host_return_address, cbp,
     //                         CHERI_CAP_SIZE, raise_unaligned_store_exception);
-
+    
     cheri_poison_set_aligned(env, addr, authreg, NULL, _host_return_address, true);
 
     //if((long)addr >= 0x40cda000 && (long)addr <= 0x40cda040){
@@ -1701,8 +1701,8 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         // Fast path, host address in TLB
         
         if(poison){
-            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, 0x1234567812345678);
-            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, 0x1234567812345678);
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
         }else{
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
