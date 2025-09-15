@@ -33,7 +33,7 @@ jobProperties.add(parameters(paramsArray))
 // Set the default job properties (work around properties() not being additive but replacing)
 setDefaultJobProperties(jobProperties)
 
-jobs = [:]
+def jobs = [:]
 
 def extraBuildSteps(params, String os) {
     sh "rm -rf \$WORKSPACE/qemu-${os} && mv \$WORKSPACE/tarball/usr \$WORKSPACE/qemu-${os}"
@@ -161,14 +161,17 @@ selectedConfigs.each { config ->
     }
     jobs[config] = { ->
         node(nodeLabel) {
-            def extraQemuArgs = ''
+            def extraQemuArgs = []
             boolean isDebug = config.endsWith('-debug')
             if (isDebug) {
-                extraQemuArgs = '"--qemu/configure-options=--enable-rvfi-dii --extra-cflags=-O2 --extra-cxxflags=-O2" --qemu/build-type=Debug'
+                extraQemuArgs += [
+                    '--qemu/configure-options=--enable-rvfi-dii --extra-cflags=-O2 --extra-cxxflags=-O2',
+                    '--qemu/build-type=Debug',
+                ]
             }
             def qemuResult = cheribuildProject(target: 'qemu', cpu: 'native', skipArtifacts: true,
                     nodeLabel: null,
-                    extraArgs: "--without-sdk --install-prefix=/usr $extraQemuArgs",
+                    extraArgs: ['--without-sdk', '--install-prefix=/usr'] + extraQemuArgs,
                     runTests: true,
                     uniqueId: "qemu-build-${config}",
                     skipTarball: true,
@@ -207,7 +210,7 @@ pytest qemu/tests/morello \
                         customGitCheckoutDir: 'cheritest', scmOverride: gitRepoWithLocalReference(url: 'https://github.com/CTSRD-CHERI/cheritest.git'),
                         nodeLabel: null,
                         // Ensure that test failures don't prevent creation of the junit file
-                        extraArgs: '--install-prefix=/ --cheritest-qemu/no-run-tests-with-build',
+                        extraArgs: ['--install-prefix=/', '--cheritest-qemu/no-run-tests-with-build'],
                         runTests: true,
                         // Set the status message on the QEMU repo not the cheritest one
                         gitHubStatusArgs: qemuResult.gitInfo,
