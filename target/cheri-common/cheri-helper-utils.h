@@ -380,25 +380,30 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
     }
     bool cap_perm_poison = cap_get_perm_poison(cbp);
     MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
-    /*
+    
     unsigned int mask = ~((1 << 0) | (1 << 2) | (1 << 3)| (1 << 4));
-    void *host = probe_read(env, addr&mask, CHERI_CAP_SIZE, cpu_mmu_index(env, false), _host_return_address);
-    target_ulong cursor;
-    if (likely(host)) {
-        //target_ulong pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
-        //        CAP_NULL_XOR_MASK;
-        //printf("qemu poison check pesbt %lx\n", (long) pesbt);
-        cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
-    }
-    */
+
+    
     //if (((long long)cursor == 0x1234567812345678)&& cpu_in_user_mode(env) && cap_poison &&cheri_in_capmode(env)) {
+    
     if (cheri_poison_check(env, addr, size, rw, _host_return_address)) {
         if(cap_perm_poison ){
-            printf("poison exception faulting addr %lx, size %d rw%x\n",(long)addr, (int) size , rw);
+            void *host = probe_read(env, addr&mask, CHERI_CAP_SIZE, cpu_mmu_index(env, false), _host_return_address);
+            target_ulong cursor;
+            target_ulong pesbt;
+            if (likely(host)) {
+                pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
+                        CC128_NULL_XOR_MASK;
+                printf("qemu poison check pesbt %lx\n", (long) pesbt);
+                cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
+                printf("qemu poison check cursor %lx\n", (long) cursor);
+            }
+            if(pesbt>>(111-64) & 0x1){
+                printf("poison exception faulting addr %lx, size %d rw%x\n",(long)addr, (int) size , rw);
 
-        
-	        raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
+	            raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
                                      !is_load);
+            }
         }
         else {
             if((int)rw ==1 ){

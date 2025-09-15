@@ -1696,7 +1696,9 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         
         if(poison){
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
-            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, ((long) pesbt_for_mem) | ((long)1 << 47));
+            printf("pesbt before poison %lx\n", (long) pesbt_for_mem);
+            printf("pesbt after  poison %lx\n", ((long) pesbt_for_mem) | ((long)1 << 47));
         }else{
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
