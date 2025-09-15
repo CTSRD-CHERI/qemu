@@ -75,7 +75,8 @@ typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 0, _CC_N(MODE_INT) = 1 } _CC_N(Mode
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
-    _CC_FIELD(RESERVED1, 127, 122),
+    _CC_FIELD(RESERVED1, 127, 123),
+    _CC_FIELD(PERM_POISON, 122, 122),
     _CC_FIELD(POISON, 121, 121),
     _CC_FIELD(SDP, 120, 117),
     _CC_FIELD(FLAGS, 116, 116), // TODO: remove this old alias
@@ -148,7 +149,10 @@ enum _CC_N(POISON) {
     CC128R_POISON_POISONED   = true,
     CC128R_MAX_POISON = (bool)((1u << CC128R_POISON_BITS) - 1u)
 };
-
+enum _CC_N(PERM_POISON){
+    CC128R_PERM_POISON_UNPERMED = false,
+    CC128R_PERM_POISON_PERMED   = true
+};
 #define CC128R_LS_SPECIAL_OTYPES(ITEM, ...)                                                                            \
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)

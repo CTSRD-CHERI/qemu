@@ -91,6 +91,7 @@ enum {
     _CC_FIELD(RESERVED, 31, 32), /* No reserved bits */
     _CC_FIELD(UPERMS, 31, 32),   /* No uperms */
     _CC_FIELD(POISON, 31, 32),   /* No poison */
+    _CC_FIELD(PERM_POISON, 31, 32),   /* No poison */
 };
 #pragma GCC diagnostic pop
 _CC_STATIC_ASSERT_SAME(CC64_FIELD_UPERMS_SIZE, 0);
@@ -140,7 +141,10 @@ enum _CC_N(POISON){
     CC64_POISON_POISONED   = true,
     CC64_MAX_POISON = (bool)((1u << CC64_POISON_BITS) - 1u)
 };
-
+enum _CC_N(PERM_POISON){
+    CC64_PERM_POISON_UNPERMED = false,
+    CC64_PERM_POISON_PERMED   = true
+};
 #define CC64_LS_SPECIAL_OTYPES(ITEM, ...)                                                                              \
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)

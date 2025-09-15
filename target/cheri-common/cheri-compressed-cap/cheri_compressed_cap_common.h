@@ -120,7 +120,7 @@ static inline _cc_addr_t _cc_N(get_reserved)(const _cc_cap_t* cap);
 static inline bool _cc_N(reserved_bits_valid)(const _cc_cap_t* cap) { return _cc_N(get_reserved)(cap) == 0; }
 static inline _cc_addr_t _cc_N(get_uperms)(const _cc_cap_t* cap);
 static inline bool _cc_N(get_poison)(const struct _cc_N(cap)* cap);
-static inline bool _cc_N(get_cap_poison)(const struct _cc_N(cap)* cap);
+static inline bool _cc_N(get_perm_poison)(const struct _cc_N(cap)* cap);
 /// Returns the combined permissions in the format specified by GCPERM/CGetPerm.
 static inline _cc_addr_t _cc_N(get_all_permissions)(const _cc_cap_t* cap);
 static inline bool _cc_N(has_permissions)(const _cc_cap_t* cap, _cc_addr_t permissions) {
@@ -284,6 +284,7 @@ struct _cc_N(bounds_bits) {
     }
 ALL_WRAPPERS(OTYPE, otype, uint32_t)
 ALL_WRAPPERS(POISON, poison, bool)
+ALL_WRAPPERS(PERM_POISON, perm_poison, bool)
 ALL_WRAPPERS(FLAGS, flags, uint8_t)
 #undef ALL_WRAPPERS
 

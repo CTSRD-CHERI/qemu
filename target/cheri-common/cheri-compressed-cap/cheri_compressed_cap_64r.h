@@ -103,6 +103,7 @@ enum {
     _CC_FIELD(EXPONENT_HIGH_PART, 43, 42),
     _CC_FIELD(EXP_NONZERO_BOTTOM, 41, 34),
     _CC_FIELD(EXPONENT_LOW_PART, 33, 32),
+    _CC_FIELD(PERM_POISON, 53, 54),
 };
 #pragma GCC diagnostic pop
 
@@ -154,7 +155,10 @@ enum _CC_N(POISON){
     CC64R_POISON_POISONED   = true,
     CC64R_MAX_POISON = (bool)((1u << CC64R_POISON_BITS) - 1u)
 };
-
+enum _CC_N(PERM_POISON){
+    CC64R_PERM_POISON_UNPERMED = false,
+    CC64R_PERM_POISON_PERMED   = true
+};
 #define CC64R_LS_SPECIAL_OTYPES(ITEM, ...)                                                                             \
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)
