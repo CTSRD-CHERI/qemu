@@ -378,7 +378,7 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
                                    size, access_type, addr);
 #endif
     }
-    bool cap_poison = cap_get_poison(cbp);
+    bool cap_perm_poison = cap_get_perm_poison(cbp);
     MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
     /*
     unsigned int mask = ~((1 << 0) | (1 << 2) | (1 << 3)| (1 << 4));
@@ -393,7 +393,7 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
     */
     //if (((long long)cursor == 0x1234567812345678)&& cpu_in_user_mode(env) && cap_poison &&cheri_in_capmode(env)) {
     if (cheri_poison_check(env, addr, size, rw, _host_return_address)) {
-        if(cap_poison ){
+        if(cap_perm_poison ){
             printf("poison exception faulting addr %lx, size %d rw%x\n",(long)addr, (int) size , rw);
 
         
