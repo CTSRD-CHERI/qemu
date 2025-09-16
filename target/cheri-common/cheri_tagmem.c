@@ -776,7 +776,8 @@ void cheri_tag_set_many(CPUArchState *env, uint32_t tags, target_ulong vaddr,
     tagblock_set_tag_many_tagmem(tagmem, page_vaddr_to_tag_offset(vaddr), tags);
 }
 
-void cheri_poison_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_paddr, uintptr_t pc, bool poison)
+void cheri_poison_set_aligned(CPUArchState *env, target_ulong vaddr, int reg,
+    hwaddr *ret_paddr, uintptr_t pc, bool poison)
 {
     const int mmu_idx = cpu_mmu_index(env, false);
     store_capcause_reg(env, reg);
@@ -817,8 +818,8 @@ void cheri_poison_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hw
     pmem_set_poison(pmem, tag_offset, poison);
 }
 
-static bool cheri_poison_check_one(CPUArchState *env, target_ulong vaddr, 
-        MMUAccessType rw, uintptr_t pc)
+static bool cheri_poison_check_one(CPUArchState *env, target_ulong vaddr,
+    MMUAccessType rw, uintptr_t pc)
 {
     const int mmu_idx = cpu_mmu_index(env, false);
     probe_access(env, vaddr, 1, rw, mmu_idx, pc);
@@ -830,29 +831,30 @@ static bool cheri_poison_check_one(CPUArchState *env, target_ulong vaddr,
 }
 
 bool cheri_poison_check(CPUArchState *env, target_ulong vaddr, int32_t size,
-                         MMUAccessType rw, uintptr_t pc)
+        MMUAccessType rw, uintptr_t pc)
 {
     cheri_debug_assert(size > 0);
     target_ulong first_addr = vaddr;
     target_ulong last_addr = (vaddr + size - 1);
     TagOffset tag_start = addr_to_tag_offset(first_addr);
     TagOffset tag_end = addr_to_tag_offset(last_addr);
-    if (likely(tag_start.value == tag_end.value)) {
+    size_t ntags = tag_end.value - tag_start.value + 1;
+    bool poison = false;
+    target_ulong addr;
+
+    if (likely(ntags == 1)) {
         // Common case, only one granule (i.e. aligned load / store)
         return cheri_poison_check_one(env, vaddr, rw, pc);
-    }
-    // Unaligned -> can cross a capabiblity alignment boundary and
-    // therefore invalidate two tags. It can also cross pages
-    size_t ntags = tag_end.value - tag_start.value + 1;
-    if(ntags ==2){
-        assert(ntags == 2 && "Should check at most two version granules here");
-        bool poison = false;
-        for (target_ulong addr = tag_offset_to_addr(tag_start);
-             addr <= tag_offset_to_addr(tag_start)+CHERI_CAP_SIZE; addr += CHERI_CAP_SIZE) {
+    } else if (ntags == 2) {
+        // Unaligned -> can cross a capabiblity alignment boundary and
+        // therefore invalidate two tags. It can also cross pages
+        for (addr = tag_offset_to_addr(tag_start);
+            addr <= tag_offset_to_addr(tag_start) + CHERI_CAP_SIZE;
+            addr += CHERI_CAP_SIZE) {
             poison |= cheri_poison_check_one(env, addr, rw, pc);
         }
         return poison;
-    }else{
+    } else {
         return false;
     }
 }
