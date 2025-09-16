@@ -380,54 +380,45 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
     }
     bool cap_perm_poison = cap_get_perm_poison(cbp);
     MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
-    
-    unsigned int mask = ~((1 << 0) | (1 << 2) | (1 << 3)| (1 << 4));
+    const target_ulong mask = ~(0xfULL);
 
-    
-    //if (((long long)cursor == 0x1234567812345678)&& cpu_in_user_mode(env) && cap_poison &&cheri_in_capmode(env)) {
-    
     if (cheri_poison_check(env, addr, size, rw, _host_return_address)) {
-        if(cap_perm_poison ){
-            void *host = probe_read(env, addr&mask, CHERI_CAP_SIZE, cpu_mmu_index(env, false), _host_return_address);
-            target_ulong cursor;
+        if (cap_perm_poison) {
+            void *host = probe_read(env, addr & mask, CHERI_CAP_SIZE,
+                cpu_mmu_index(env, false), _host_return_address);
+            cap_register_t poison_cap;
             target_ulong pesbt;
-            if (likely(host)) {
-                pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
-                        CC128_NULL_XOR_MASK;
-                //printf("qemu poison check pesbt %lx\n", (long) pesbt);
-                cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
-                //printf("qemu poison check cursor %lx\n", (long) cursor);
+            target_ulong cursor;
+
+            if (unlikely(!host)) {
+                return addr;
             }
-            if(pesbt>>(111-64) & 0x1){
+            pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
+                CAP_MEM_XOR_MASK;
+            cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
+            CAP_cc(decompress_raw)(pesbt, cursor, 1, &poison_cap);
+
+            if (cap_get_poison(&poison_cap)) {
                 cap_length_t cbp_top = cap_get_top(cbp);
                 target_ulong cbp_base = cap_get_base(cbp);
-                cap_register_t poison_cap;
-                CAP_cc(decompress_raw)(pesbt, cursor, 1, &poison_cap);
                 cap_length_t poison_top = cap_get_top(&poison_cap);
                 target_ulong poison_base = cap_get_base(&poison_cap);
-                //printf("cbp top %lx\n",(long) cbp_top);
-                //printf("cbp base %lx\n",(long) cbp_base);
-                //printf("poison top %lx\n",(long) poison_top);
-                //printf("poison base %lx\n",(long) poison_base);
-                if(cbp_top<= poison_top && cbp_base >= poison_base){
-                    printf("poison exception faulting addr %lx, size %d rw%x\n",(long)addr, (int) size , rw);
-                    
-	                raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
-                                     !is_load);
-                //}else{
-                //    printf("master cap no trap\n");
+                if(cbp_top <= poison_top && cbp_base >= poison_base) {
+                    qemu_log_instr_extra(env,
+                        "Poison exception faulting addr " TARGET_FMT_lx
+                        ", size " PRId32 " rw=%x\n", addr, size , rw);
+	                raise_cheri_exception_addr_wnr(env, CapEx_SealViolation,
+                                                   cb, addr, !is_load);
                 }
             }
-        }
-        else {
-            if((int)rw ==1 ){
-                //printf("priviledged poison clearing on addr %lx, size %d rw%x\n",(long)addr, (int) size , rw);
-                cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, false);
+        } else {
+            if (rw == MMU_DATA_STORE) {
+                cheri_poison_set_aligned(env, addr, cb, NULL,
+                    _host_return_address, false);
             }
         }
-        //printf("check poison trap \n");
     }
-    
+
     return addr;
 }
 
