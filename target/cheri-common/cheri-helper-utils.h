@@ -383,7 +383,7 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
     const target_ulong mask = ~(0xfULL);
 
     if (cheri_poison_check(env, addr, size, rw, _host_return_address)) {
-        if (cap_perm_poison) {
+        if (!cap_perm_poison) {
             void *host = probe_read(env, addr & mask, CHERI_CAP_SIZE,
                 cpu_mmu_index(env, false), _host_return_address);
             cap_register_t poison_cap;
