@@ -541,8 +541,8 @@ static inline bool trans_sc_c_cap(DisasContext *ctx, arg_sc_c_cap *a)
     a->rd = a->rs2; /* Not enough encoding space for explicit rd */
     return trans_sc_c_impl(ctx, a, &gen_helper_sc_c_cap);
 }
-#endif /* TARGET_CHERI_RISCV_V9 */
 
+#ifdef TARGET_RISCV64
 static inline bool trans_cpoison(DisasContext *ctx, arg_cpoison *a)
 {
     return gen_cheri_cap_loadstore(ctx, a->rs1, a->rs1,0,
@@ -559,6 +559,9 @@ static inline bool trans_cclearpoison(DisasContext *ctx, arg_cpoison *a)
     tcg_temp_free(gpr_value);
     return true;
 }
+#endif
+
+#endif /* TARGET_CHERI_RISCV_V9 */
 
 static inline bool trans_amoswap_c(DisasContext *ctx, arg_amoswap_c *a)
 {

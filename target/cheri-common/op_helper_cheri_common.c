@@ -1295,20 +1295,6 @@ void CHERI_HELPER_IMPL(load_cap_via_cap(CPUArchState *env, uint32_t dstreg,
                          _host_return_address, /*physaddr_out=*/NULL);
 }
 
-void CHERI_HELPER_IMPL(check_poison(CPUArchState *env, uint32_t dstreg,
-                                        target_ulong addr, uint32_t authreg))
-{
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
-    const target_ulong checked_addr =
-        cap_check_common_reg(perms_for_load(), env, authreg, addr,
-                             CHERI_CAP_SIZE, _host_return_address, cbp,
-                             CHERI_CAP_SIZE, raise_unaligned_load_exception);
-
-    load_cap_from_memory(env, dstreg, authreg, cbp, checked_addr,
-                         _host_return_address, /*physaddr_out=*/NULL);
-}
-
 void CHERI_HELPER_IMPL(load_cap_via_ddc(CPUArchState *env, uint32_t dstreg,
                                         target_ulong intaddr))
 {
@@ -1335,94 +1321,6 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t valreg,
                              CHERI_CAP_SIZE, raise_unaligned_store_exception);
 
     store_cap_to_memory(env, valreg, checked_addr, _host_return_address, false);
-}
-
-void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t valreg,
-                                         target_ulong addr, uint32_t authreg))
-{   
-    /*
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
-
-    const target_ulong checked_addr =
-        cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
-                             CHERI_CAP_SIZE, _host_return_address, cbp,
-                             CHERI_CAP_SIZE, raise_unaligned_store_exception);
-
-    store_cap_to_memory(env, valreg, checked_addr, _host_return_address, true);
-    */
-    
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
-    //printf("cpoison addr begin %lx\n", (long) cap_get_cursor(cbp));
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, authreg);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, authreg);
-    } else if (!(cap_get_all_perms(cbp) & CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, authreg);
-    }
-    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        /*
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: cursor=" TARGET_FMT_plx "\n", addr);*/
-        raise_cheri_exception(env, CapEx_LengthViolation, authreg);
-    }
-    if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
-        raise_unaligned_load_exception(env, addr, _host_return_address);
-    }
-    //printf("cpoison addr end %lx\n", (long) addr);
-    store_cap_to_memory(env, valreg, addr, _host_return_address, true);
-
-    //const target_ulong checked_addr =
-    //    cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
-    //                         CHERI_CAP_SIZE, _host_return_address, cbp,
-    //                         CHERI_CAP_SIZE, raise_unaligned_store_exception);
-    
-    cheri_poison_set_aligned(env, addr, authreg, NULL, _host_return_address, true);
-
-    //if((long)addr >= 0x40cda000 && (long)addr <= 0x40cda040){
-	//printf("qemu poison addr %lx\n", (long) addr);
-	//}
-}
-
-void CHERI_HELPER_IMPL(cclearpoison(CPUArchState *env, uint32_t cb,
-                               target_ulong version))
-{   
-    /*
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
-
-    const target_ulong checked_addr =
-        cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
-                             CHERI_CAP_SIZE, _host_return_address, cbp,
-                             CHERI_CAP_SIZE, raise_unaligned_store_exception);
-
-    store_cap_to_memory(env, valreg, checked_addr, _host_return_address, true);
-    */
-    
-    GET_HOST_RETPC();
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    //printf("cclearpoison addr begin%lx\n", (long) cap_get_cursor(cbp));
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (is_cap_sealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (!(cap_get_perms(cbp) & CAP_PERM_STORE)) {
-        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
-    }
-    const target_ulong addr = cap_get_cursor(cbp);
-    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
-        /*
-        qemu_log_instr_or_mask_msg(env, CPU_LOG_INT,
-            "Failed capability bounds check: cursor=" TARGET_FMT_plx "\n", addr);*/
-        raise_cheri_exception(env, CapEx_LengthViolation, cb);
-    }
-    if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
-        raise_unaligned_load_exception(env, addr, _host_return_address);
-    }
-    //printf("cclearpoison addr end%lx\n", (long) addr);
-    cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, false);
 }
 
 void CHERI_HELPER_IMPL(store_cap_via_ddc(CPUArchState *env, uint32_t valreg,
@@ -1470,15 +1368,6 @@ void squash_mutable_permissions(CPUArchState *env, target_ulong *pesbt,
                               CAP_PERM_STORE_CAP | CAP_PERM_STORE);
     }
 #endif
-}
-
-bool check_poison_from_memory_raw_tag_mmu_idx(
-    CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
-    const cap_register_t *source, target_ulong vaddr, uintptr_t retpc,
-    hwaddr *physaddr, bool *raw_tag, int mmu_idx)
-{
-    cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
-    void *host = probe_read(env, vaddr, CHERI_CAP_SIZE, mmu_idx, retpc);
 }
 
 bool load_cap_from_memory_raw_tag_mmu_idx(
@@ -1571,16 +1460,6 @@ bool load_cap_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
                                                 cpu_mmu_index(env, false));
 }
 
-bool check_poison_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
-                                  target_ulong *cursor, uint32_t cb,
-                                  const cap_register_t *source,
-                                  target_ulong vaddr, uintptr_t retpc,
-                                  hwaddr *physaddr, bool *raw_tag)
-{
-    return check_poison_from_memory_raw_tag_mmu_idx(env, pesbt, cursor, cb, source,
-                                                vaddr, retpc, physaddr, raw_tag,
-                                                cpu_mmu_index(env, false));
-}
 bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                               target_ulong *cursor, uint32_t cb,
                               const cap_register_t *source, target_ulong vaddr,
@@ -1590,14 +1469,6 @@ bool load_cap_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
                                         retpc, physaddr, NULL);
 }
 
-bool check_poison_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
-                              target_ulong *cursor, uint32_t cb,
-                              const cap_register_t *source, target_ulong vaddr,
-                              uintptr_t retpc, hwaddr *physaddr)
-{
-    return check_poison_from_memory_raw_tag(env, pesbt, cursor, cb, source, vaddr,
-                                        retpc, physaddr, NULL);
-}
 cap_register_t load_and_decompress_cap_from_memory_raw(
     CPUArchState *env, uint32_t cb, const cap_register_t *source,
     target_ulong vaddr, uintptr_t retpc, hwaddr *physaddr)
@@ -1620,16 +1491,6 @@ void load_cap_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
     bool tag = load_cap_from_memory_raw(env, &pesbt, &cursor, cb, source, vaddr,
                                         retpc, physaddr);
     update_compressed_capreg(env, cd, pesbt, tag, cursor);
-}
-
-void check_poison_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
-                          const cap_register_t *source, target_ulong vaddr,
-                          uintptr_t retpc, hwaddr *physaddr)
-{
-    target_ulong pesbt;
-    target_ulong cursor;
-    bool tag = check_poison_from_memory_raw(env, &pesbt, &cursor, cb, source, vaddr,
-                                        retpc, physaddr);
 }
 
 void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
@@ -1676,7 +1537,7 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
 #error "Unhandled target long width"
 #endif
         // Fast path, host address in TLB
-        
+
         if(poison){
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, ((long) pesbt_for_mem) | ((long)1 << 47));
@@ -1896,3 +1757,132 @@ cap_register_t cap_scaddr(target_ulong addr, cap_register_t dest)
     cap_set_cursor(&dest, addr);
     return dest;
 }
+
+#if defined(TARGET_RISCV64) && defined(TARGET_CHERI_RISCV_V9)
+/*
+ * Poison capabilities are only supported on V9 RV64 CHERI
+ */
+
+void CHERI_HELPER_IMPL(check_poison(CPUArchState *env, uint32_t dstreg,
+    target_ulong addr, uint32_t authreg))
+{
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
+    const target_ulong checked_addr =
+        cap_check_common_reg(perms_for_load(), env, authreg, addr,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_load_exception);
+
+    load_cap_from_memory(env, dstreg, authreg, cbp, checked_addr,
+                         _host_return_address, /*physaddr_out=*/NULL);
+}
+
+void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t valreg,
+    target_ulong addr, uint32_t authreg))
+{
+    /*
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
+
+    const target_ulong checked_addr =
+        cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_store_exception);
+
+    store_cap_to_memory(env, valreg, checked_addr, _host_return_address, true);
+    */
+
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, authreg);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, authreg);
+    } else if (!(cap_get_all_perms(cbp) & CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, authreg);
+    }
+    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
+        raise_cheri_exception(env, CapEx_LengthViolation, authreg);
+    }
+    if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
+        raise_unaligned_load_exception(env, addr, _host_return_address);
+    }
+    store_cap_to_memory(env, valreg, addr, _host_return_address, true);
+    cheri_poison_set_aligned(env, addr, authreg, NULL, _host_return_address, true);
+}
+
+void CHERI_HELPER_IMPL(cclearpoison(CPUArchState *env, uint32_t cb,
+    target_ulong version))
+{
+    /*
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_capreg_or_special(env, authreg);
+
+    const target_ulong checked_addr =
+        cap_check_common_reg(perms_for_store(env, valreg), env, authreg, addr,
+                             CHERI_CAP_SIZE, _host_return_address, cbp,
+                             CHERI_CAP_SIZE, raise_unaligned_store_exception);
+
+    store_cap_to_memory(env, valreg, checked_addr, _host_return_address, true);
+    */
+
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_readonly_capreg(env, cb);
+    //printf("cclearpoison addr begin%lx\n", (long) cap_get_cursor(cbp));
+    if (!cbp->cr_tag) {
+        raise_cheri_exception(env, CapEx_TagViolation, cb);
+    } else if (is_cap_sealed(cbp)) {
+        raise_cheri_exception(env, CapEx_SealViolation, cb);
+    } else if (!(cap_get_all_perms(cbp) & CAP_PERM_STORE)) {
+        raise_cheri_exception(env, CapEx_PermitStoreViolation, cb);
+    }
+    const target_ulong addr = cap_get_cursor(cbp);
+    if (!cap_is_in_bounds(cbp, addr, CHERI_CAP_SIZE)) {
+        raise_cheri_exception(env, CapEx_LengthViolation, cb);
+    }
+    if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
+        raise_unaligned_load_exception(env, addr, _host_return_address);
+    }
+    cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, false);
+}
+
+bool check_poison_from_memory_raw_tag_mmu_idx(
+    CPUArchState *env, target_ulong *pesbt, target_ulong *cursor, uint32_t cb,
+    const cap_register_t *source, target_ulong vaddr, uintptr_t retpc,
+    hwaddr *physaddr, bool *raw_tag, int mmu_idx)
+{
+    cheri_debug_assert(QEMU_IS_ALIGNED(vaddr, CHERI_CAP_SIZE));
+    void *host = probe_read(env, vaddr, CHERI_CAP_SIZE, mmu_idx, retpc);
+
+    return false;
+}
+
+bool check_poison_from_memory_raw_tag(CPUArchState *env, target_ulong *pesbt,
+                                      target_ulong *cursor, uint32_t cb,
+                                      const cap_register_t *source,
+                                      target_ulong vaddr, uintptr_t retpc,
+                                      hwaddr *physaddr, bool *raw_tag)
+{
+    return check_poison_from_memory_raw_tag_mmu_idx(env, pesbt, cursor, cb,
+        source, vaddr, retpc, physaddr, raw_tag, cpu_mmu_index(env, false));
+}
+bool check_poison_from_memory_raw(CPUArchState *env, target_ulong *pesbt,
+                              target_ulong *cursor, uint32_t cb,
+                              const cap_register_t *source, target_ulong vaddr,
+                              uintptr_t retpc, hwaddr *physaddr)
+{
+    return check_poison_from_memory_raw_tag(env, pesbt, cursor, cb, source,
+        vaddr, retpc, physaddr, NULL);
+}
+
+void check_poison_from_memory(CPUArchState *env, uint32_t cd, uint32_t cb,
+                          const cap_register_t *source, target_ulong vaddr,
+                          uintptr_t retpc, hwaddr *physaddr)
+{
+    target_ulong pesbt;
+    target_ulong cursor;
+
+    check_poison_from_memory_raw(env, &pesbt, &cursor, cb, source, vaddr,
+        retpc, physaddr);
+}
+#endif

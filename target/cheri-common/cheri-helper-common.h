@@ -143,10 +143,12 @@ DEF_HELPER_4(cap_store_check, cap_checked_ptr, env, i32, tl, i32)
 DEF_HELPER_4(cap_rmw_check, cap_checked_ptr, env, i32, tl, i32)
 DEF_HELPER_5(cap_check_addr, cap_checked_ptr, env, i32, tl, i32, i32)
 DEF_HELPER_4(load_cap_via_cap, void, env, i32, tl, i32)
-DEF_HELPER_4(check_poison, void, env, i32, tl, i32)
 DEF_HELPER_3(load_cap_via_ddc, void, env, i32, tl)
+#if defined(TARGET_CHERI_RISCV_V9) && defined(TARGET_RISCV64)
+DEF_HELPER_4(check_poison, void, env, i32, tl, i32)
 DEF_HELPER_4(cpoison, void, env, i32, tl, i32)
 DEF_HELPER_3(cclearpoison, void, env, i32, tl)
+#endif
 
 DEF_HELPER_4(store_cap_via_cap, void, env, i32, tl, i32)
 DEF_HELPER_3(store_cap_via_ddc, void, env, i32, tl)

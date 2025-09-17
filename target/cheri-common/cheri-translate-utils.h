@@ -1130,10 +1130,12 @@ static inline void gen_cap_load_pesbt(DisasContext *ctx, int regnum, TCGv pesbt)
 
 WRAP_PESBT_ALL(OTYPE)
 #ifndef TARGET_CHERI_RISCV_STD
-WRAP_PESBT_ALL(POISON)
 WRAP_PESBT_ALL(HWPERMS)
 #ifndef TARGET_AARCH64
 WRAP_PESBT_ALL(FLAGS)
+#endif
+#ifdef TARGET_RISCV64
+WRAP_PESBT_ALL(POISON)
 #endif
 #endif
 
