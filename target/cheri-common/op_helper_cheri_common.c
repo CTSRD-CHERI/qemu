@@ -1337,29 +1337,6 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t valreg,
     store_cap_to_memory(env, valreg, checked_addr, _host_return_address, false);
 }
 
-void CHERI_HELPER_IMPL(csetcappermpoison(CPUArchState *env, uint32_t cd, uint32_t cb))
-{
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    GET_HOST_RETPC();
-    /*
-     * CSetVersion: Set capability version
-     */
-    if (!cbp->cr_tag) {
-        raise_cheri_exception(env, CapEx_TagViolation, cb);
-    } else if (!cap_is_unsealed(cbp)) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    } else if (cap_get_poison(cbp) != CAP_POISON_UNPOISONED) {
-        raise_cheri_exception(env, CapEx_SealViolation, cb);
-    }
-    cap_register_t result = *cbp;
-    //_Static_assert(((CAP_MAX_POISON + 1) & CAP_MAX_POISON) == 0, "Expected power of two CAP_MAX_POISON");
-    CAP_cc(update_perm_poison)(&result, CC128_PERM_POISON_PERMED);
-    //printf("csetcapoison %llx\n", (long long) &result);
-    //printf("csetcappoison get poison cbp%x\n", (int)cap_get_poison(cbp));
-    update_capreg(env, cd, &result);
-    //printf("csetcappoison get poison cd %x\n", (int)cap_get_poison( get_readonly_capreg(env, cd)));
-}
-
 void CHERI_HELPER_IMPL(cpoison(CPUArchState *env, uint32_t valreg,
                                          target_ulong addr, uint32_t authreg))
 {   
