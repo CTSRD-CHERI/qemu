@@ -23,8 +23,6 @@ static inline bool _cc_N(set_execution_mode)(_cc_cap_t* cap, _cc_mode new_mode) 
     return true;
 }
 
-static inline _cc_addr_t _cc_N(get_reserved)(const _cc_cap_t* cap) {
-    return cap->cr_pesbt & _CC_N(FIELD_RESERVED_MASK64);
-}
+static inline _cc_addr_t _cc_N(get_reserved)(__attribute__((unused)) const _cc_cap_t* cap) { return 0; }
 
 enum { _CC_N(PERMS_RESERVED_ONES) = 0 };

@@ -12,14 +12,15 @@ TEST_CASE("QEMU representability regression tests", "[representable]") {
     CHECK(check_repr(false, 0x00000000401ffff8, 0x0000000000000008, 0x8));
 }
 
-TEST_CASE("Reprentability with TOP>MAX_TOP", "[representable]") {
+TEST_CASE("Representability with TOP>MAX_TOP", "[representable]") {
     auto cap = TestAPICC::make_max_perms_cap(0xffff002d01ffc000, 0xffff002d02013ff6, 0xffff002d027fc000);
-    CHECK(cap.cr_pesbt == 0xffff1ffffffe7ffb);
+    CHECK(cap.cr_pesbt == 0xffff9ffffffe7ffb);
     CHECK(!TestAPICC::sail_fast_is_representable(cap, 0));
     CHECK(!TestAPICC::sail_precise_is_representable(cap, 0));
     CHECK(!_cc_N(_fast_is_representable_new_addr)(&cap, 0));
     // The following line used to assert with cdp->_cr_top <= ((cc128_length_t)1u << 64)
     CHECK(!_cc_N(_precise_is_representable_new_addr)(&cap, 0));
+    CHECK(!_cc_N(get_poison)(&cap));
     // Decode a new capability with the same pesbt value and check that the bounds differ (and are > MAX_TOP)
     const _cc_cap_t cap2 = TestAPICC::decompress_raw(cap.cr_pesbt, 0, false);
     CHECK(cap2.base() != cap.base());
