@@ -539,6 +539,14 @@ static inline bool trans_sc_c_cap(DisasContext *ctx, arg_sc_c_cap *a)
     a->rd = a->rs2; /* Not enough encoding space for explicit rd */
     return trans_sc_c_impl(ctx, a, &gen_helper_sc_c_cap);
 }
+
+static inline bool trans_dczero(DisasContext *ctx, arg_sc_c_cap *a)
+{
+    //a->rd = a->rs2; /* Not enough encoding space for explicit rd */
+    printf("dczero \n");
+    return gen_cheri_cap_loadstore(ctx, a->rs1, a->rs1,0,
+                                   &gen_helper_dczero);
+}
 #endif /* TARGET_CHERI_RISCV_V9 */
 
 static inline bool trans_amoswap_c(DisasContext *ctx, arg_amoswap_c *a)

@@ -561,6 +561,7 @@ typedef enum {
     rv_op_cram,
     rv_op_cmove,
     rv_op_ccleartag,
+    rv_op_dczero,
     rv_op_cjalr,
     rv_op_cgethigh,
     rv_op_cgetaddr,
@@ -1376,6 +1377,7 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_cram] = { "cram", rv_codec_r, rv_fmt_rd_rs1, NULL, 0, 0, 0 },
     [rv_op_cmove] = { "cmove", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_ccleartag] = { "ccleartag", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
+    [rv_op_dczero] = { "dczero", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_cjalr] = { "cjalr", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_cgetaddr] = { "cgetaddr", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
     [rv_op_cgethigh] = { "cgetaddr", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
@@ -1714,6 +1716,7 @@ static rv_opcode decode_cheri_two_op(unsigned func) {
     case 0b01001: return rv_op_cram;
     case 0b01010: return rv_op_cmove;
     case 0b01011: return rv_op_ccleartag;
+    case 0b01101: return rv_op_dczero;
     case 0b01100: return rv_op_cjalr;
     case 0b01111: return rv_op_cgetaddr;
     case 0b10001: return rv_op_csealentry;

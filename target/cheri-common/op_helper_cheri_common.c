@@ -1322,6 +1322,41 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t valreg,
     store_cap_to_memory(env, valreg, checked_addr, _host_return_address);
 }
 
+void CHERI_HELPER_IMPL(dczero(CPUArchState *env, uint32_t valreg,
+                                         target_ulong vaddr_in, uint32_t authreg))
+{
+
+    int blocklen = 64; // assuming 64 bytes cache line
+    uint64_t vaddr = vaddr_in & ~(blocklen - 1);
+    int mmu_idx = cpu_mmu_index(env, false);
+    void *mem;
+
+    mem = tlb_vaddr_to_host(env, vaddr, MMU_DATA_STORE, mmu_idx);
+
+#ifndef CONFIG_USER_ONLY
+    if (unlikely(!mem)) {
+        uintptr_t ra = GETPC();
+
+        (void) probe_write(env, vaddr_in, 1, mmu_idx, ra);
+        mem = probe_write(env, vaddr, blocklen, mmu_idx, ra);
+
+        if (unlikely(!mem)) {
+            for (int i = 0; i < blocklen; i++) {
+                cpu_stb_mmuidx_ra(env, vaddr + i, 0, mmu_idx, ra);
+            }
+            return;
+        }
+    }
+#endif
+
+#ifdef TARGET_CHERI
+    assert(blocklen == ((1 << CAP_TAG_GET_MANY_SHFT) * CHERI_CAP_SIZE));
+    cheri_tag_set_many(env, 0, vaddr, -1, NULL, GETPC());
+#endif
+
+    memset(mem, 0, blocklen);
+}
+
 void CHERI_HELPER_IMPL(store_cap_via_ddc(CPUArchState *env, uint32_t valreg,
                                          target_ulong intaddr))
 {
