@@ -216,7 +216,7 @@ TRANSLATE_INT_CAP(cgettype)
 TRANSLATE_INT_CAP(cgetsealed)
 
 TRANSLATE_INT_CAP(cloadtags)
-
+TRANSLATE_INT_CAP(cgetpoison)
 
 // Two operand (int int)
 static inline bool trans_crrl(DisasContext *ctx, arg_crrl *a)

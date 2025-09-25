@@ -1697,8 +1697,8 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         if(poison){
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, ((long) pesbt_for_mem) | ((long)1 << 47));
-            printf("pesbt before poison %lx\n", (long) pesbt_for_mem);
-            printf("pesbt after  poison %lx\n", ((long) pesbt_for_mem) | ((long)1 << 47));
+            //printf("pesbt before poison %lx\n", (long) pesbt_for_mem);
+            //printf("pesbt after  poison %lx\n", ((long) pesbt_for_mem) | ((long)1 << 47));
         }else{
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, pesbt_for_mem);
@@ -1773,6 +1773,41 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
                                    addr + sizealign - CHERI_CAP_SIZE,
                                    _host_return_address, NULL);
 #endif
+    return result;
+}
+
+target_ulong CHERI_HELPER_IMPL(cgetpoison(CPUArchState *env, uint32_t cb))
+{
+    static const uint32_t perms = CAP_PERM_LOAD | CAP_PERM_LOAD_CAP;
+    static const size_t ncaps = 1 ;
+    static const uint32_t sizealign = ncaps * CHERI_CAP_SIZE;
+
+    GET_HOST_RETPC();
+    const cap_register_t *cbp = get_load_store_base_cap(env, cb);
+    const target_ulong addr = cap_get_cursor(cbp);
+    //checking poison does not require checking permission
+    //const target_ulong addr = cap_check_common_reg(
+    //    perms, env, cb, cap_get_cursor(cbp), sizealign, _host_return_address,
+    //    cbp, sizealign, raise_unaligned_load_exception, false);
+    MMUAccessType rw = MMU_DATA_LOAD;
+    target_ulong result = 0;
+    unsigned int mask = ~((1 << 0) | (1 << 2) | (1 << 3)| (1 << 4));
+    bool ptag = cheri_poison_check_one(env, addr, rw, GETPC());
+    if(ptag ){
+        void *host = probe_read(env, addr&mask, CHERI_CAP_SIZE, cpu_mmu_index(env, false), _host_return_address);
+        target_ulong cursor =0;
+        target_ulong pesbt =0;
+        if (likely(host)) {
+            pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
+                    CC128_NULL_XOR_MASK;
+            //printf("qemu poison check pesbt %lx\n", (long) pesbt);
+            cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
+            //printf("qemu poison check cursor %lx\n", (long) cursor);
+        }
+        if(pesbt>>(111-64) & 0x1){
+            result=1;
+        }
+    }
     return result;
 }
 

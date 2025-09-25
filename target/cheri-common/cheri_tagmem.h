@@ -87,6 +87,8 @@ void *cheri_tagmem_for_addr(CPUArchState *env, target_ulong vaddr,
 void cheri_poison_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hwaddr* ret_paddr, uintptr_t pc, bool poison);
 bool cheri_poison_check(CPUArchState *env, target_ulong vaddr, int32_t size,
                          MMUAccessType rw, uintptr_t pc);
+bool cheri_poison_check_one(CPUArchState *env, target_ulong vaddr, 
+        MMUAccessType rw, uintptr_t pc);
 /**
  * Fetch a single tag for use by the debug stub.
  */

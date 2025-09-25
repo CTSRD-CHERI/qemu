@@ -817,7 +817,7 @@ void cheri_poison_set_aligned(CPUArchState *env, target_ulong vaddr, int reg, hw
     pmem_set_poison(pmem, tag_offset, poison);
 }
 
-static bool cheri_poison_check_one(CPUArchState *env, target_ulong vaddr, 
+bool cheri_poison_check_one(CPUArchState *env, target_ulong vaddr, 
         MMUAccessType rw, uintptr_t pc)
 {
     const int mmu_idx = cpu_mmu_index(env, false);

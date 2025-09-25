@@ -389,8 +389,8 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
     if (cheri_poison_check(env, addr, size, rw, _host_return_address)) {
         if(cap_perm_poison ){
             void *host = probe_read(env, addr&mask, CHERI_CAP_SIZE, cpu_mmu_index(env, false), _host_return_address);
-            target_ulong cursor;
-            target_ulong pesbt;
+            target_ulong cursor =0;
+            target_ulong pesbt =0;
             if (likely(host)) {
                 pesbt = ldq_p((char *)host + CHERI_MEM_OFFSET_METADATA) ^
                         CC128_NULL_XOR_MASK;
