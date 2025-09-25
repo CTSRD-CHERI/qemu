@@ -877,7 +877,7 @@ static char *custom_riscv_isa_string(RISCVCPU *cpu, bool is_32_bit)
         bool *flag;
         const char *ext;
     } ext_map_t;
-
+    bool enable = true;
     ext_map_t base_exts[] = {
         { &cpu->cfg.ext_i, "i" }, { &cpu->cfg.ext_m, "m" },
         { &cpu->cfg.ext_a, "a" }, { &cpu->cfg.ext_f, "f" },
@@ -887,14 +887,27 @@ static char *custom_riscv_isa_string(RISCVCPU *cpu, bool is_32_bit)
     };
 
     ext_map_t multi_exts[] = {
-                               { &cpu->cfg.ext_icbom, "_zicbom" },
-                               { &cpu->cfg.ext_icboz, "_zicboz" },
-                               { &cpu->cfg.ext_zca, "_zca" },
-                               { &cpu->cfg.ext_zcb, "_zcb" },
-                               { &cpu->cfg.ext_zcd, "_zcd" },
-                               { &cpu->cfg.ext_zcf, "_zcf" },
+        { &cpu->cfg.ext_icbom, "_zicbom" },
+        { &enable, "_zicbop" },
+        { &cpu->cfg.ext_icboz, "_zicboz" },
+#if defined(TARGET_CHERI_RISCV_STD_093)
+        { &cpu->cfg.ext_zish4add, "_zish4add" },
+#endif
+        { &cpu->cfg.ext_zihintpause, "_zihintpause" },
+        { &cpu->cfg.ext_zba, "_zba" },
+        { &cpu->cfg.ext_zbb, "_zbb" },
+        { &cpu->cfg.ext_zbc, "_zbc" },
+        { &cpu->cfg.ext_zbs, "_zbs" },
+        { &cpu->cfg.ext_zbkb, "_zbkb" },
+        { &cpu->cfg.ext_zca, "_zca" },
+        { &cpu->cfg.ext_zcb, "_zcb" },
+        { &cpu->cfg.ext_zcd, "_zcd" },
+        { &cpu->cfg.ext_zcf, "_zcf" },
+        { &cpu->cfg.ext_zfhmin, "_zfhmin" },
+        { &cpu->cfg.ext_svinval, "_svinval" },
 #if !defined(TARGET_CHERI_RISCV_V9)
-                               { &cpu->cfg.ext_svpbmt, "_svpbmt" }
+        { &cpu->cfg.ext_svnapot, "_svnapot" },
+        { &cpu->cfg.ext_svpbmt, "_svpbmt" },
 #endif
     };
 
