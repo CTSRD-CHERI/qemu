@@ -1721,8 +1721,8 @@ static rv_opcode decode_cheri_two_op(unsigned func) {
     case 0b01010: return rv_op_cmove;
     case 0b01011: return rv_op_ccleartag;
     case 0b01100: return rv_op_cjalr;
-    case 0b01101: return rv_op_cpoison;
-    case 0b01110: return rv_op_cclearpoison;
+    case 0b01101: return rv_op_cclearpoison;
+    case 0b01110: return rv_op_cpoison;
     case 0b01111: return rv_op_cgetaddr;
     case 0b10001: return rv_op_csealentry;
     case 0b10010: return rv_op_cloadtags;
