@@ -323,9 +323,11 @@ DEF_HELPER_FLAGS_4(qemu_log_instr_load32, TCG_CALL_NO_WG, void, env,
                    cap_checked_ptr, i32, memop_idx)
 DEF_HELPER_FLAGS_4(qemu_log_instr_store32, TCG_CALL_NO_WG, void, env,
                    cap_checked_ptr, i32, memop_idx)
-DEF_HELPER_FLAGS_3(qemu_log_instr_reg, TCG_CALL_NO_WG, void, env, cptr, tl)
+DEF_HELPER_FLAGS_5(qemu_log_instr_reg, TCG_CALL_NO_WG, void, env, cptr, tl, i32,
+                   i32)
 #ifdef TARGET_CHERI
-DEF_HELPER_FLAGS_3(qemu_log_instr_cap, TCG_CALL_NO_WG, void, env, cptr, cptr)
+DEF_HELPER_FLAGS_5(qemu_log_instr_cap, TCG_CALL_NO_WG, void, env, cptr, cptr,
+                   i32, i32)
 #endif
 DEF_HELPER_FLAGS_3(log_value, TCG_CALL_NO_WG, void, env, cptr, i64)
 #endif

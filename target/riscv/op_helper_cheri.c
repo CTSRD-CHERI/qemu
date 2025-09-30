@@ -367,10 +367,11 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t auth_reg,
     env->load_val = cursor;
     env->load_pesbt = pesbt;
     env->load_tag = tag;
-    log_changed_special_reg(env, "load_res", env->load_res);
-    log_changed_special_reg(env, "load_val", env->load_val);
-    log_changed_special_reg(env, "load_pesbt", env->load_pesbt);
-    log_changed_special_reg(env, "load_tag", (target_ulong)env->load_tag);
+    log_changed_special_reg(env, "load_res", env->load_res, ~0u, 0);
+    log_changed_special_reg(env, "load_val", env->load_val, ~0u, 0);
+    log_changed_special_reg(env, "load_pesbt", env->load_pesbt, ~0u, 0);
+    log_changed_special_reg(env, "load_tag", (target_ulong)env->load_tag, ~0u,
+                            0);
     update_compressed_capreg(env, dest_reg, pesbt, tag, cursor);
 }
 
@@ -438,7 +439,7 @@ static target_ulong sc_c_impl(CPUArchState *env, uint32_t addr_reg,
     // an SC to any address, in between an LR and SC pair.
     // We do this regardless of success/failure.
     env->load_res = -1;
-    log_changed_special_reg(env, "load_res", env->load_res);
+    log_changed_special_reg(env, "load_res", env->load_res, ~0u, 0);
     if (addr != expected_addr) {
         goto sc_failed;
     }

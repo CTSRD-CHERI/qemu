@@ -602,11 +602,12 @@ target_ulong helper_dmfc0_saar(CPUMIPSState *env)
 /*
  * Log Cop0 register updates.
  */
-#define log_instr_cop0_update(env, cp0_reg, cp0_sel, value) do {        \
-        if (qemu_log_instr_enabled(env)) {                              \
+#define log_instr_cop0_update(env, cp0_reg, cp0_sel, value)                    \
+    do {                                                                       \
+        if (qemu_log_instr_enabled(env)) {                                     \
             qemu_log_instr_reg(env, mips_cop0_regnames[cp0_reg * 8 + cp0_sel], \
-                               value);                                  \
-        }                                                               \
+                               value, cp0_reg * 8 + cp0_sel, LRI_CSR_ACCESS);  \
+        }                                                                      \
     } while (0)
 
 #define log_instr_cop0_unsupported(env, msg) do {               \

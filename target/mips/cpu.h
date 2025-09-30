@@ -1474,8 +1474,9 @@ mips_cpu_get_tb_cpu_state(CPUMIPSState *env, target_ulong *pc,
     *flags = env->hflags &
              (MIPS_HFLAG_TMASK | MIPS_HFLAG_BMASK | MIPS_HFLAG_HWRENA_ULR);
 #ifdef TARGET_CHERI
-    cheri_cpu_get_tb_cpu_state(&env->active_tc.PCC, &env->active_tc.CHWR.DDC,
-                               pcc_base, pcc_top, cheri_flags);
+    cheri_cpu_get_tb_cpu_state(env, &env->active_tc.PCC,
+                               &env->active_tc.CHWR.DDC, pcc_base, pcc_top,
+                               cheri_flags);
 #endif
 }
 // Ugly macro hack to avoid having to modify cpu_get_tb_cpu_state in all targets

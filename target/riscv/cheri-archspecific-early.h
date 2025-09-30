@@ -153,8 +153,8 @@ enum CheriSCR {
 #define CHERI_TAG_CLEAR_ON_INVALID(env) (env_archcpu(env)->cfg.ext_cheri_v9)
 #define CHERI_NO_RELOCATION(env)        (env_archcpu(env)->cfg.ext_cheri_v9)
 #else
-#define CHERI_TAG_CLEAR_ON_INVALID(env) false
-#define CHERI_NO_RELOCATION(env)        false
+#define CHERI_TAG_CLEAR_ON_INVALID(env) true
+#define CHERI_NO_RELOCATION(env)        true
 #endif
 #define CINVOKE_DATA_REGNUM 31
 

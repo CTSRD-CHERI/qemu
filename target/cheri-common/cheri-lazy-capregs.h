@@ -249,30 +249,34 @@ get_load_store_base_cap(CPUArchState *env, uint32_t cb)
 /*
  * Log instruction update to the given capability register.
  */
-#define cheri_log_instr_changed_capreg(env, name, newval) do {          \
-        if (qemu_log_instr_enabled(env)) {                              \
-            qemu_log_instr_cap(env, name, newval);                      \
-        }                                                               \
+#define cheri_log_instr_changed_capreg(env, name, newval, index, type)         \
+    do {                                                                       \
+        if (qemu_log_instr_enabled(env)) {                                     \
+            qemu_log_instr_cap(env, name, newval, index, type);                \
+        }                                                                      \
     } while (0)
 
 /*
  * Log instruction update to the given capability register with
  * integer value.
  */
-#define cheri_log_instr_changed_capreg_int(env, name, newval) do {      \
-        if (qemu_log_instr_enabled(env)) {                              \
-            qemu_log_instr_cap_int(env, name, newval);                  \
-        }                                                               \
+#define cheri_log_instr_changed_capreg_int(env, name, newval, index, type)     \
+    do {                                                                       \
+        if (qemu_log_instr_enabled(env)) {                                     \
+            qemu_log_instr_cap_int(env, name, newval, index, type);            \
+        }                                                                      \
     } while (0)
 
 #else
-#define cheri_log_instr_changed_capreg(env, name, newval) ((void)0)
-#define cheri_log_instr_changed_capreg_int(env, name, newval) ((void)0)
+#define cheri_log_instr_changed_capreg(env, name, newval, index, type) ((void)0)
+#define cheri_log_instr_changed_capreg_int(env, name, newval, index, type)     \
+    ((void)0)
 #endif
 
 /* Note: cheri_gp_regnames should be declared in cpu.h or cheri-archspecific.h */
-#define cheri_log_instr_changed_gp_capreg(env, regnum, newval)          \
-    cheri_log_instr_changed_capreg(env, cheri_gp_regnames[regnum], newval)
+#define cheri_log_instr_changed_gp_capreg(env, regnum, newval, type)           \
+    cheri_log_instr_changed_capreg(env, cheri_gp_regnames[regnum], newval,     \
+                                   regnum, type)
 
 static inline void rvfi_changed_capreg(CPUArchState *env, unsigned regnum,
                                        target_ulong cursor)
@@ -305,7 +309,7 @@ static inline void update_capreg(CPUArchState *env, unsigned regnum,
                        CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, newval->_cr_cursor);
-    cheri_log_instr_changed_gp_capreg(env, regnum, target);
+    cheri_log_instr_changed_gp_capreg(env, regnum, target, LRI_GPR_ACCESS);
 }
 
 
@@ -342,7 +346,7 @@ static inline void update_capreg_cursor_from(CPUArchState *env, unsigned regnum,
                        CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, target->_cr_cursor);
-    cheri_log_instr_changed_gp_capreg(env, regnum, target);
+    cheri_log_instr_changed_gp_capreg(env, regnum, target, LRI_GPR_ACCESS);
 }
 
 static inline void update_compressed_capreg(CPUArchState *env, unsigned regnum,
@@ -364,7 +368,8 @@ static inline void update_compressed_capreg(CPUArchState *env, unsigned regnum,
     if (qemu_log_instr_enabled(env)) {
         // Decompress and log value if instruction logging is on
         const cap_register_t *decompressed = get_readonly_capreg(env, regnum);
-        cheri_log_instr_changed_gp_capreg(env, regnum, decompressed);
+        cheri_log_instr_changed_gp_capreg(env, regnum, decompressed,
+                                          LRI_GPR_ACCESS);
     }
 }
 
@@ -393,7 +398,8 @@ static inline void update_capreg_to_intval(CPUArchState *env, unsigned regnum,
     set_capreg_state(gpcrs, regnum, CREG_INTEGER);
     sanity_check_capreg(gpcrs, regnum);
     rvfi_changed_capreg(env, regnum, newval);
-    cheri_log_instr_changed_capreg_int(env, cheri_gp_regnames[regnum], newval);
+    cheri_log_instr_changed_capreg_int(env, cheri_gp_regnames[regnum], newval,
+                                       regnum, LRI_GPR_ACCESS);
 }
 
 static inline target_ulong get_capreg_cursor(CPUArchState *env, unsigned regnum)
@@ -470,7 +476,7 @@ static inline void nullify_capreg(CPUArchState *env, unsigned regnum)
     cheri_debug_assert(get_capreg_state(gpcrs, regnum) ==
                        CREG_FULLY_DECOMPRESSED);
     sanity_check_capreg(gpcrs, regnum);
-    cheri_log_instr_changed_gp_capreg(env, regnum, newval);
+    cheri_log_instr_changed_gp_capreg(env, regnum, newval, LRI_GPR_ACCESS);
 }
 
 static inline void reset_capregs(CPUArchState *env)
@@ -484,7 +490,7 @@ static inline void reset_capregs(CPUArchState *env)
         cheri_debug_assert(get_capreg_state(gpcrs, i) ==
                            CREG_FULLY_DECOMPRESSED);
         sanity_check_capreg(gpcrs, i);
-        cheri_log_instr_changed_gp_capreg(env, i, newval);
+        cheri_log_instr_changed_gp_capreg(env, i, newval, LRI_GPR_ACCESS);
     }
 }
 
@@ -503,7 +509,8 @@ static inline void set_max_perms_capregs(CPUArchState *env)
         cheri_debug_assert(get_capreg_state(gpcrs, i) ==
                            CREG_FULLY_DECOMPRESSED);
         sanity_check_capreg(gpcrs, i);
-        cheri_log_instr_changed_gp_capreg(env, i, get_cap_in_gpregs(gpcrs, i));
+        cheri_log_instr_changed_gp_capreg(env, i, get_cap_in_gpregs(gpcrs, i),
+                                          LRI_GPR_ACCESS);
     }
 }
 

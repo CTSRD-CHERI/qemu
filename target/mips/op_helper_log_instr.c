@@ -53,7 +53,7 @@ void helper_mips_log_instr_gpr(CPUArchState *env, uint32_t reg,
                                target_ulong value)
 {
     if (qemu_log_instr_enabled(env))
-        qemu_log_instr_reg(env, regnames[reg], value);
+        qemu_log_instr_reg(env, regnames[reg], value, reg, LRI_GPR_ACCESS);
 }
 
 /*
@@ -65,7 +65,8 @@ void helper_mips_log_instr_cop0(CPUArchState *env, uint32_t reg, uint32_t sel,
                                 target_ulong value)
 {
     if (qemu_log_instr_enabled(env))
-        qemu_log_instr_reg(env, mips_cop0_regnames[reg * 8 + sel], value);
+        qemu_log_instr_reg(env, mips_cop0_regnames[reg * 8 + sel], value, reg,
+                           LRI_CSR_ACCESS);
 }
 
 /*
@@ -79,9 +80,11 @@ void helper_mips_log_instr_hilo(CPUArchState *env, uint32_t sel, uint32_t index,
         return;
 
     if (sel) {
-        qemu_log_instr_reg(env, regnames_LO[index], value);
+        qemu_log_instr_reg(env, regnames_LO[index], value, index,
+                           LRI_GPR_ACCESS);
     } else {
-        qemu_log_instr_reg(env, regnames_HI[index], value);
+        qemu_log_instr_reg(env, regnames_HI[index], value, index,
+                           LRI_GPR_ACCESS);
     }
 }
 

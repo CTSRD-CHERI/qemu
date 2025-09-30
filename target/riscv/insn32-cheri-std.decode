@@ -52,50 +52,50 @@
 
 ### Three operand instructions
 {
-  cmv   0000110  00000 ..... 000 ..... 0110011 @cc
-  cadd  0000110  ..... ..... 000 ..... 0110011 @ccr
+  cmv   0000110  00000 ..... 000 ..... 0110011 @cc  ?pred_cre
+  cadd  0000110  ..... ..... 000 ..... 0110011 @ccr ?pred_cre
 }
-scaddr  0000110  ..... ..... 001 ..... 0110011 @ccr
-acperm  0000110  ..... ..... 010 ..... 0110011 @ccr
-schi    0000110  ..... ..... 011 ..... 0110011 @ccr
-sceq    0000110  ..... ..... 100 ..... 0110011 @rcc
-cbld    0000110  ..... ..... 101 ..... 0110011 @ccc
-scss    0000110  ..... ..... 110 ..... 0110011 @rcc
-scbnds  0000111  ..... ..... 000 ..... 0110011 @ccr
-scbndsr 0000111  ..... ..... 001 ..... 0110011 @ccr
-scmode  0000110  ..... ..... 111 ..... 0110011 @ccr
+scaddr  0000110  ..... ..... 001 ..... 0110011 @ccr ?pred_cre
+acperm  0000110  ..... ..... 010 ..... 0110011 @ccr ?pred_cre
+schi    0000110  ..... ..... 011 ..... 0110011 @ccr ?pred_cre
+sceq    0000110  ..... ..... 100 ..... 0110011 @rcc ?pred_cre
+cbld    0000110  ..... ..... 101 ..... 0110011 @ccc ?pred_cre
+scss    0000110  ..... ..... 110 ..... 0110011 @rcc ?pred_cre
+scbnds  0000111  ..... ..... 000 ..... 0110011 @ccr ?pred_cre
+scbndsr 0000111  ..... ..... 001 ..... 0110011 @ccr ?pred_cre
+scmode  0000110  ..... ..... 111 ..... 0110011 @ccr ?pred_hybrid ?pred_cre
 
 ### Two operand instructions
-gctag       0001000  00000 ..... 000 ..... 0110011 @rc
-gcperm      0001000  00001 ..... 000 ..... 0110011 @rc
-gctype      0001000  00010 ..... 000 ..... 0110011 @rc
-gcmode      0001000  00011 ..... 000 ..... 0110011 @rc
-gchi        0001000  00100 ..... 000 ..... 0110011 @rc
-gcbase      0001000  00101 ..... 000 ..... 0110011 @rc
-gclen       0001000  00110 ..... 000 ..... 0110011 @rc
-cram        0001000  00111 ..... 000 ..... 0110011 @r2
-sentry      0001000  01000 ..... 000 ..... 0110011 @cc
+gctag       0001000  00000 ..... 000 ..... 0110011 @rc ?pred_cre
+gcperm      0001000  00001 ..... 000 ..... 0110011 @rc ?pred_cre
+gctype      0001000  00010 ..... 000 ..... 0110011 @rc ?pred_cre
+gcmode      0001000  00011 ..... 000 ..... 0110011 @rc ?pred_hybrid ?pred_cre
+gchi        0001000  00100 ..... 000 ..... 0110011 @rc ?pred_cre
+gcbase      0001000  00101 ..... 000 ..... 0110011 @rc ?pred_cre
+gclen       0001000  00110 ..... 000 ..... 0110011 @rc ?pred_cre
+cram        0001000  00111 ..... 000 ..... 0110011 @r2 ?pred_cre
+sentry      0001000  01000 ..... 000 ..... 0110011 @cc ?pred_cre
 
 ### Zero operand instructions
-modesw_cap 0001001 00000 00000 001 00000 0110011
-modesw_int 0001010 00000 00000 001 00000 0110011
+modesw_cap 0001001 00000 00000 001 00000 0110011 ?pred_hybrid ?pred_cre
+modesw_int 0001010 00000 00000 001 00000 0110011 ?pred_hybrid ?pred_cre
 
 ### Instructions with immediate operands
 @cci ............    ..... ... ..... ....... &cci %cd %cs1 imm=%imm_i
-caddi         ............   ..... 010 ..... 0011011 @cci
+caddi         ............   ..... 010 ..... 0011011 @cci ?pred_cre
 
 # The RISC-V CHERI spec adds a new R format with a scaled unsigned immediate for scbndsi
 %imm5_unsigned 20:5
 %imm_scale     25:1
 @is_unsigned  ...... . ..... ..... ... ..... ....... scale=%imm_scale imm=%imm5_unsigned %cs1 %cd
-scbndsi       000001 . ..... ..... 101 ..... 0010011 @is_unsigned
+scbndsi       000001 . ..... ..... 101 ..... 0010011 @is_unsigned ?pred_cre
 
 
 # Loads and stores
-lc       ............   ..... 100 ..... 0001111 @i
-sc       ....... .....  ..... 100 ..... 0100011 @s
+lc       ............   ..... 100 ..... 0001111 @i ?pred_cre
+sc       ....... .....  ..... 100 ..... 0100011 @s ?pred_cre
 
 # Atomic instructions
-amoswap_c 00001 . . ..... ..... 100 ..... 0101111 @atom_st
-lr_c      00010 . . 00000 ..... 100 ..... 0101111 @atom_ld
-sc_c      00011 . . ..... ..... 100 ..... 0101111 @atom_st
+amoswap_c 00001 . . ..... ..... 100 ..... 0101111 @atom_st ?pred_cre
+lr_c      00010 . . 00000 ..... 100 ..... 0101111 @atom_ld ?pred_cre
+sc_c      00011 . . ..... ..... 100 ..... 0101111 @atom_st ?pred_cre

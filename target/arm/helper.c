@@ -13963,7 +13963,7 @@ void aarch_cpu_get_tb_cpu_state(CPUARMState *env, target_ulong *pc,
     if (EX_TBFLAG_ANY(flags, AARCH64_STATE)) {
         *pc = get_aarch_reg_as_x(&env->pc);
 #ifdef TARGET_CHERI
-        cheri_cpu_get_tb_cpu_state(_cheri_get_pcc_unchecked(env),
+        cheri_cpu_get_tb_cpu_state(env, _cheri_get_pcc_unchecked(env),
                                    cheri_get_ddc(env), pcc_base, pcc_top,
                                    cheri_flags);
         *cheri_flags |= (env->chflags << TB_FLAG_CHERI_SPARE_INDEX_START);

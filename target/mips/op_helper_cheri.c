@@ -92,10 +92,11 @@ is_cap_sealed(const cap_register_t *cp)
 }
 
 #ifdef CONFIG_TCG_LOG_INSTR
-#define log_instr_hwreg_update(env, name, newval) do {          \
-        if (qemu_log_instr_enabled(env)) {                      \
-            qemu_log_instr_reg(env, name, newval);              \
-        }                                                       \
+#define log_instr_hwreg_update(env, name, newval, index, type)                 \
+    do {                                                                       \
+        if (qemu_log_instr_enabled(env)) {                                     \
+            qemu_log_instr_reg(env, name, newval, index, type);                \
+        }                                                                      \
     } while (0)
 
 #else
@@ -145,7 +146,8 @@ static inline void update_ddc(CPUArchState *env, const cap_register_t* new_ddc) 
             "Installing same $ddc again, not flushing TCG TLB: "
             PRINT_CAP_FMTSTR "\n", PRINT_CAP_ARGS(new_ddc));
     }
-    cheri_log_instr_changed_capreg(env, mips_cheri_hw_regnames[0], new_ddc);
+    cheri_log_instr_changed_capreg(env, mips_cheri_hw_regnames[0], new_ddc, 0,
+                                   LRI_CSR_ACCESS);
 }
 
 target_ulong CHERI_HELPER_IMPL(cbez(CPUArchState *env, uint32_t cb, uint32_t offset))
@@ -447,7 +449,7 @@ void CHERI_HELPER_IMPL(mtc0_epc(CPUArchState *env, target_ulong arg))
     }
     set_CP0_EPC(env, arg + cap_get_base(&env->active_tc.CHWR.EPCC));
     log_instr_hwreg_update(env, mips_cop0_regnames[14],
-                           env->active_tc.CHWR.EPCC._cr_cursor);
+                           env->active_tc.CHWR.EPCC._cr_cursor, 14, 0);
 }
 
 void CHERI_HELPER_IMPL(mtc0_error_epc(CPUArchState *env, target_ulong arg))
@@ -461,7 +463,7 @@ void CHERI_HELPER_IMPL(mtc0_error_epc(CPUArchState *env, target_ulong arg))
     }
     set_CP0_ErrorEPC(env, arg + cap_get_base(&env->active_tc.CHWR.ErrorEPCC));
     log_instr_hwreg_update(env, mips_cop0_regnames[30],
-                           env->active_tc.CHWR.ErrorEPCC._cr_cursor);
+                           env->active_tc.CHWR.ErrorEPCC._cr_cursor, 30, 0);
 }
 
 void CHERI_HELPER_IMPL(creadhwr(CPUArchState *env, uint32_t cd, uint32_t hwr))
@@ -483,7 +485,8 @@ void CHERI_HELPER_IMPL(cwritehwr(CPUArchState *env, uint32_t cs, uint32_t hwr))
         env, CP2HWR_BASE_INDEX + hwr, GETPC());
     *cdp = *csp;
     /* Note: DDC updates are logged in update_ddc. */
-    cheri_log_instr_changed_capreg(env, mips_cheri_hw_regnames[hwr], csp);
+    cheri_log_instr_changed_capreg(env, mips_cheri_hw_regnames[hwr], csp, hwr,
+                                   LRI_CSR_ACCESS);
 }
 
 void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
@@ -496,7 +499,7 @@ void CHERI_HELPER_IMPL(csetcause(CPUArchState *env, target_ulong rt))
     } else {
         env->CP2_CapCause = (uint16_t)(rt & 0xffffUL);
     }
-    log_instr_hwreg_update(env, "CapCause", env->CP2_CapCause);
+    log_instr_hwreg_update(env, "CapCause", env->CP2_CapCause, rt, 0);
 }
 
 /*

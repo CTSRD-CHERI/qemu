@@ -40,7 +40,8 @@ void HELPER(riscv_log_gpr_write)(CPURISCVState *env, uint32_t regnum,
 {
     if (qemu_log_instr_enabled(env)) {
         // TODO(am2419): should be using qemu_log_isntr_cap_int() when TARGET_CHERI?
-        qemu_log_instr_reg(env, riscv_int_regnames[regnum], value);
+        qemu_log_instr_reg(env, riscv_int_regnames[regnum], value, regnum,
+                           LRI_GPR_ACCESS);
     }
 }
 

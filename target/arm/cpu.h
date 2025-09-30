@@ -3642,12 +3642,14 @@ static inline void arm_set_xreg(CPUARMState *env, int regnum,
 #ifdef TARGET_AARCH64
     if (is_a64(env)) {
         env->xregs[regnum] = value;
-        qemu_log_instr_reg(env, arm64_regnames[regnum], value);
+        qemu_log_instr_reg(env, arm64_regnames[regnum], value, regnum,
+                           LRI_GPR_ACCESS);
         return;
     }
 #endif
     env->regs[regnum] = value;
-    qemu_log_instr_reg(env, arm32_regnames[regnum], value);
+    qemu_log_instr_reg(env, arm32_regnames[regnum], value, regnum,
+                       LRI_GPR_ACCESS);
 #endif
 }
 

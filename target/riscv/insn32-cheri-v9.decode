@@ -203,5 +203,5 @@ sc_c      00011 . . ..... ..... 100 ..... 0101111 @atom_st
 
 ### Zero operands
 # These are CHERI standard only instruction but we expose them to v9
-modesw_cap 0001001 00000 00000 001 00000 0110011
-modesw_int 0001010 00000 00000 001 00000 0110011
+modesw_cap 0001001 00000 00000 001 00000 0110011 ?pred_hybrid
+modesw_int 0001010 00000 00000 001 00000 0110011 ?pred_hybrid

@@ -39,7 +39,8 @@ void riscv_log_instr_csr_changed(CPURISCVState *env, int csrno)
         riscv_csr_cap_ops *cap_ops = get_csr_cap_info(csrno);
         if (cap_ops) {
             cap_register_t cap_value = cap_ops->read(env, cap_ops);
-            qemu_log_instr_cap(env, cap_ops->name, &cap_value);
+            qemu_log_instr_cap(env, cap_ops->name, &cap_value, csrno,
+                               LRI_CSR_ACCESS);
             return;
         }
 #endif
@@ -317,6 +318,8 @@ static RISCVException write_fcsr(CPURISCVState *env, int csrno,
 {
 #if !defined(CONFIG_USER_ONLY)
     env->mstatus |= MSTATUS_FS;
+    log_changed_special_reg(env, "mstatus", env->mstatus, CSR_MSTATUS,
+                            LRI_CSR_ACCESS);
 #endif
     env->frm = (val & FSR_RD) >> FSR_RD_SHIFT;
     if (vs(env, csrno) >= 0) {
@@ -1526,6 +1529,13 @@ static RISCVException write_pmpcfg(CPURISCVState *env, int csrno,
                                    target_ulong val)
 {
     pmpcfg_csr_write(env, csrno - CSR_PMPCFG0, val);
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (qemu_log_instr_enabled(env)) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "pmpcfg%d", csrno - CSR_PMPCFG0);
+        qemu_log_instr_reg(env, buf, val, csrno, LRI_CSR_ACCESS);
+    }
+#endif
     return RISCV_EXCP_NONE;
 }
 
@@ -1540,6 +1550,13 @@ static RISCVException write_pmpaddr(CPURISCVState *env, int csrno,
                                     target_ulong val)
 {
     pmpaddr_csr_write(env, csrno - CSR_PMPADDR0, val);
+#ifdef CONFIG_TCG_LOG_INSTR
+    if (qemu_log_instr_enabled(env)) {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "pmpaddr%d", csrno - CSR_PMPADDR0);
+        qemu_log_instr_reg(env, buf, val, csrno, LRI_CSR_ACCESS);
+    }
+#endif
     return RISCV_EXCP_NONE;
 }
 
@@ -2067,7 +2084,8 @@ static void write_cap_csr_reg(CPURISCVState *env,
     }
     /* Log the value and write it. */
     *get_cap_csr(env, csr_cap_info->reg_num) = src;
-    cheri_log_instr_changed_capreg(env, csr_cap_info->name, &src);
+    cheri_log_instr_changed_capreg(env, csr_cap_info->name, &src,
+                                   csr_cap_info->reg_num, LRI_CSR_ACCESS);
 }
 
 static void write_xtvecc(CPURISCVState *env, riscv_csr_cap_ops *csr_cap_info,
@@ -2136,16 +2154,17 @@ static cap_register_t read_xepcc(CPURISCVState *env,
         warn_report("Clearing low bit(s) of %s (contained an unaligned "
                     "capability): " PRINT_CAP_FMTSTR, csr_cap_info->name,
                     PRINT_CAP_ARGS(&retval));
+
+        if (!cap_is_unsealed(&retval)) {
+            warn_report("Invalidating sealed %s (contained an unaligned "
+                        "capability): " PRINT_CAP_FMTSTR,
+                        csr_cap_info->name, PRINT_CAP_ARGS(&retval));
+            retval.cr_tag = false;
+        }
+
         cap_set_cursor(&retval, val);
     }
-    if (!cap_is_unsealed(&retval)) {
-        warn_report("Invalidating sealed %s (contained an unaligned "
-                    "capability): " PRINT_CAP_FMTSTR, csr_cap_info->name,
-                    PRINT_CAP_ARGS(&retval));
-        retval.cr_tag = false;
-    }
 
-    cap_set_cursor(&retval, val);
     return retval;
 }
 
@@ -2387,8 +2406,10 @@ RISCVException riscv_csrrw(CPURISCVState *env, int csrno,
                 return ret;
             }
 #ifdef CONFIG_TCG_LOG_INSTR
-            if (csr_ops[csrno].log_update)
+            if (csr_ops[csrno].log_update) {
+                csr_ops[csrno].read(env, csrno, &new_value);
                 csr_ops[csrno].log_update(env, csrno, new_value);
+            }
 #endif
         }
     }
@@ -2427,7 +2448,8 @@ static void log_changed_csr_fn(CPURISCVState *env, int csrno,
                                target_ulong value)
 {
     if (qemu_log_instr_enabled(env)) {
-        qemu_log_instr_reg(env, csr_ops[csrno].name, value);
+        qemu_log_instr_reg(env, csr_ops[csrno].name, value, csrno,
+                           LRI_CSR_ACCESS);
     }
 }
 #else

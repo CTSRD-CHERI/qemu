@@ -78,6 +78,8 @@ enum {
     RISCV_FEATURE_PMP,
     RISCV_FEATURE_EPMP,
     RISCV_FEATURE_MISA,
+    RISCV_FEATURE_CHERI,
+    RISCV_FEATURE_CHERI_HYBRID,
     RISCV_FEATURE_STID,
 };
 
@@ -457,8 +459,10 @@ struct RISCVCPU {
 #ifdef TARGET_CHERI_RISCV_V9
         bool ext_cheri;
         bool ext_cheri_v9; /* Temporary flag to support new semantics. */
+#elif defined(TARGET_CHERI_RISCV_STD)
+        bool ext_cheri;
+        bool ext_zyhybrid;
 #endif
-
         char *priv_spec;
         char *user_spec;
         char *bext_spec;
@@ -494,10 +498,11 @@ extern const char * const cheri_gp_regnames[];
 #ifdef CONFIG_TCG_LOG_INSTR
 void riscv_log_instr_csr_changed(CPURISCVState *env, int csrno);
 
-#define log_changed_special_reg(env, name, newval) do { \
-        if (qemu_log_instr_enabled(env))                \
-            qemu_log_instr_reg(env, name, newval);      \
-    } while(0)
+#define log_changed_special_reg(env, name, newval, index, type)                \
+    do {                                                                       \
+        if (qemu_log_instr_enabled(env))                                       \
+            qemu_log_instr_reg(env, name, newval, index, type);                \
+    } while (0)
 #else /* !CONFIG_TCG_LOG_INSTR */
 #define log_changed_special_reg(env, name, newval) ((void)0)
 #define riscv_log_instr_csr_changed(env, csrno) ((void)0)
@@ -539,7 +544,7 @@ void update_special_register(CPURISCVState *env, cap_register_t *scr,
 #define SET_SPECIAL_REG(env, name, cheri_name, value)                          \
     do {                                                                       \
         env->name = value;                                                     \
-        log_changed_special_reg(env, #name, value);                            \
+        log_changed_special_reg(env, #name, value, 0, LRI_CSR_ACCESS);         \
     } while (false)
 #endif /* ! TARGET_CHERI */
 

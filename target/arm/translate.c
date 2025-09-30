@@ -332,7 +332,9 @@ void store_reg(DisasContext *s, int reg, TCGv_i32 var)
         TCGv_ptr name = tcg_const_ptr(arm32_regnames[reg]);
         TCGv new_val = tcg_temp_new();
         tcg_gen_extu_i32_tl(new_val, var);
-        gen_helper_qemu_log_instr_reg(cpu_env, name, new_val);
+        gen_helper_qemu_log_instr_reg(cpu_env, name, new_val,
+                                      tcg_constant_i32(reg),
+                                      tcg_constant_i32(LRI_GPR_ACCESS));
         tcg_temp_free(new_val);
         tcg_temp_free_ptr(name);
     }

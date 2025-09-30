@@ -62,9 +62,11 @@ static void debug_pre_eret(CPUMIPSState *env)
     if (qemu_log_instr_enabled(env)) {
         // Print the new PCC value for debugging traces (compare to null
         // so that we always print it)
-        qemu_log_instr_cap(env, "PCC", &env->active_tc.PCC);
-        qemu_log_instr_cap(env, "EPCC", &env->active_tc.CHWR.EPCC);
-        qemu_log_instr_cap(env, "ErrorEPCC", &env->active_tc.CHWR.ErrorEPCC);
+        qemu_log_instr_cap(env, "PCC", &env->active_tc.PCC, 14, LRI_CSR_ACCESS);
+        qemu_log_instr_cap(env, "EPCC", &env->active_tc.CHWR.EPCC, 14,
+                           LRI_CSR_ACCESS);
+        qemu_log_instr_cap(env, "ErrorEPCC", &env->active_tc.CHWR.ErrorEPCC, 30,
+                           LRI_CSR_ACCESS);
     }
 #endif /* defined(CONFIG_TCG_LOG_INSTR) && defined(TARGET_CHERI) */
 }

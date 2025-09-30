@@ -283,9 +283,6 @@ static void riscv_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     }
 #endif
     qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc      ", PC_ADDR(env));
-#ifdef TARGET_CHERI
-    qemu_fprintf(f, " %s " TARGET_FMT_lx "\n", "pc (offset) ", GET_SPECIAL_REG_ARCH(env, pc, pcc));
-#endif
 #ifndef CONFIG_USER_ONLY
     {
         static const int dump_csrs[] = {
@@ -729,7 +726,6 @@ static void riscv_cpu_reset(DeviceState *dev)
     /* mmte is supposed to have pm.current hardwired to 1 */
     env->mmte |= (PM_EXT_INITIAL | MMTE_M_PM_CURRENT);
 #endif
-
     cs->exception_index = RISCV_EXCP_NONE;
     env->load_res = -1;
     set_default_nan_mode(1, &env->fp_status);
@@ -740,12 +736,10 @@ static void riscv_cpu_reset(DeviceState *dev)
     env->mepc = 0;
     env->sepc = 0;
 #else
-#ifdef TARGET_CHERI_RISCV_V9
     if (!cpu->cfg.ext_cheri) {
         error_report("CHERI extension can't be disabled yet!");
         exit(EXIT_FAILURE);
     }
-#endif
     env->mseccfg = 0;
     env->menvcfg = 0;
     env->senvcfg = 0;
@@ -773,6 +767,9 @@ static void riscv_cpu_reset(DeviceState *dev)
     null_capability(&env->mtdc);
     null_capability(&env->stdc);
     null_capability(&env->vstdc);
+#elif defined(TARGET_CHERI_RISCV_STD_093)
+    /* Need to initialize this since Type_None has a non-zero value. */
+    env->last_cap_type = CapEx093_Type_None;
 #endif
 
 #endif /* TARGET_CHERI */
@@ -970,23 +967,28 @@ static void riscv_cpu_realize(DeviceState *dev, Error **errp)
             }
             set_vext_version(env, vext_version);
         }
-
         if (cpu->cfg.ext_j) {
             ext |= RVJ;
         }
 
-#ifdef TARGET_CHERI
-#ifdef TARGET_CHERI_RISCV_V9
-        if (cpu->cfg.ext_cheri) {
-            // Non-standard extensions present
-            ext |= RV('X');
-        }
-#endif
-        set_feature(env, RISCV_FEATURE_STID);
-#endif
-
         set_misa(env, env->misa_mxl, ext);
     }
+
+#ifdef TARGET_CHERI
+    if (cpu->cfg.ext_cheri) {
+        set_feature(env, RISCV_FEATURE_CHERI_HYBRID);
+#ifdef TARGET_CHERI_RISCV_V9
+        /* Non-standard extensions present */
+        set_misa(env, env->misa_mxl, env->misa_ext | RV('X'));
+        set_feature(env, RISCV_FEATURE_CHERI_HYBRID);
+#elif defined(TARGET_CHERI_RISCV_STD)
+        if (cpu->cfg.ext_zyhybrid) {
+            set_feature(env, RISCV_FEATURE_CHERI_HYBRID);
+        }
+#endif
+    }
+    set_feature(env, RISCV_FEATURE_STID);
+#endif
 
     riscv_cpu_register_gdb_regs_for_features(cs);
 
@@ -1074,6 +1076,9 @@ static Property riscv_cpu_properties[] = {
 #ifdef TARGET_CHERI_RISCV_V9
     DEFINE_PROP_BOOL("Xcheri", RISCVCPU, cfg.ext_cheri, true),
     DEFINE_PROP_BOOL("Xcheri_v9", RISCVCPU, cfg.ext_cheri_v9, true),
+#elif defined(TARGET_CHERI_RISCV_STD)
+    DEFINE_PROP_BOOL("y", RISCVCPU, cfg.ext_cheri, true),
+    DEFINE_PROP_BOOL("Zyhybrid", RISCVCPU, cfg.ext_zyhybrid, true),
 #endif
     DEFINE_PROP_STRING("vext_spec", RISCVCPU, cfg.vext_spec),
     DEFINE_PROP_UINT16("vlen", RISCVCPU, cfg.vlen, 128),

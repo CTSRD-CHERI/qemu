@@ -144,10 +144,9 @@ typedef struct cpu_log_instr_info {
  */
 typedef struct {
     uint16_t flags;
-#define LRI_CAP_REG    1
-#define LRI_HOLDS_CAP  2
 
     const char *name;
+    uint16_t index;
     union {
         target_ulong gpr;
 #ifdef TARGET_CHERI
@@ -682,9 +681,6 @@ static void do_cpu_loglevel_switch(CPUState *cpu, run_on_cpu_data data)
     if (next_level == prev_level && prev_level_active == next_level_active)
         return;
 
-    /* Flushing all translations makes things incredibly slow. Instead,
-     * we put whether tracing is currently enabled into cflags */
-
     /* Emit start/stop events */
     if (prev_level_active) {
         if (cpulog->starting) {
@@ -697,9 +693,24 @@ static void do_cpu_loglevel_switch(CPUState *cpu, run_on_cpu_data data)
         iinfo = get_cpu_log_instr_info(env);
         reset_log_buffer(cpulog, iinfo);
     }
+    /*
+     * This function is called when tcg generates code for a dummy slti
+     * instruction that changes the log level (or when qemu is started).
+     * The generated code terminates the current TB.
+     * We have to propagate the updated logging status to the next TB.
+     */
     if (next_level_active) {
         cpulog->starting = true;
+        cpu->cflags_next_tb = curr_cflags(cpu) | CF_LOG_INSTR;
+    } else {
+        cpu->cflags_next_tb = curr_cflags(cpu) & ~CF_LOG_INSTR;
     }
+    /*
+     * It seems that cpu->cflags_next_tb affect only the next block, not the
+     * ones after this. Update cpu->tcg_cflags to set the updated flags for
+     * all following blocks.
+     */
+    cpu->tcg_cflags = cpu->cflags_next_tb;
 }
 
 static void cpu_loglevel_switch(CPUArchState *env,
@@ -943,51 +954,56 @@ void qemu_log_instr_commit(CPUArchState *env)
     reset_log_buffer(cpulog, iinfo);
 }
 
-void qemu_log_instr_reg(CPUArchState *env, const char *reg_name, target_ulong value)
+void qemu_log_instr_reg(CPUArchState *env, const char *reg_name,
+                        target_ulong value, uint32_t index, uint32_t type)
 {
     cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
     log_reginfo_t r;
 
-    r.flags = 0;
+    r.flags = type;
+    r.index = index;
     r.name = reg_name;
     r.gpr = value;
     g_array_append_val(iinfo->regs, r);
 }
 
 void helper_qemu_log_instr_reg(CPUArchState *env, const void *reg_name,
-                               target_ulong value)
+                               target_ulong value, uint32_t index,
+                               uint32_t type)
 {
     if (qemu_log_instr_check_enabled(env))
-        qemu_log_instr_reg(env, (const char *)reg_name, value);
+        qemu_log_instr_reg(env, (const char *)reg_name, value, index, type);
 }
 
 #ifdef TARGET_CHERI
 void qemu_log_instr_cap(CPUArchState *env, const char *reg_name,
-                         const cap_register_t *cr)
+                        const cap_register_t *cr, uint32_t index, uint32_t type)
 {
     cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
     log_reginfo_t r;
 
-    r.flags = LRI_CAP_REG | LRI_HOLDS_CAP;
+    r.flags = type | LRI_CAP_REG | LRI_HOLDS_CAP;
+    r.index = index;
     r.name = reg_name;
     r.cap = *cr;
     g_array_append_val(iinfo->regs, r);
 }
 
 void helper_qemu_log_instr_cap(CPUArchState *env, const void *reg_name,
-                               const void *cr)
+                               const void *cr, uint32_t index, uint32_t type)
 {
     if (qemu_log_instr_check_enabled(env))
-        qemu_log_instr_cap(env, reg_name, cr);
+        qemu_log_instr_cap(env, reg_name, cr, index, type);
 }
 
 void qemu_log_instr_cap_int(CPUArchState *env, const char *reg_name,
-                             target_ulong value)
+                            target_ulong value, uint32_t index, uint32_t type)
 {
     cpu_log_instr_info_t *iinfo = get_cpu_log_instr_info(env);
     log_reginfo_t r;
 
-    r.flags = LRI_CAP_REG;
+    r.flags = LRI_CAP_REG | type;
+    r.index = index;
     r.name = reg_name;
     r.gpr = value;
     g_array_append_val(iinfo->regs, r);
@@ -1122,7 +1138,7 @@ static void g_string_append_printf_union_args(GString *string, const char *fmt,
     size_t i = 0;
     bool format = false;
     char c;
-    bool is_short, is_long, is_long_long;
+    bool is_short = false, is_long = false, is_long_long = false;
     while ((c = bounce_buf[i++] = *fmt++)) {
         assert(i != sizeof(bounce_buf));
         if (!format) {

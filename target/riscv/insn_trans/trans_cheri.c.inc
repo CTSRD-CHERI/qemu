@@ -36,7 +36,7 @@
 #define DO_TRANSLATE_HELPER(name, gen_helper, helper_name, ...)                \
     static bool trans_##name(DisasContext *ctx, arg_##name *a)                 \
     {                                                                          \
-        return gen_helper(__VA_ARGS__, &gen_helper_##helper_name);             \
+        return gen_helper(ctx, __VA_ARGS__, &gen_helper_##helper_name);        \
     }
 
 #define DO_TRANSLATE(name, gen_helper, ...)                                    \
@@ -54,11 +54,12 @@ static inline bool gen_cheri_int_cap(DisasContext *ctx, arg_rc *a,
 }
 
 #define TRANSLATE_INT_CAP_HELPER(name, helper)                                 \
-    DO_TRANSLATE_HELPER(name, gen_cheri_int_cap, helper, ctx, a)
+    DO_TRANSLATE_HELPER(name, gen_cheri_int_cap, helper, a)
 #define TRANSLATE_INT_CAP(name) TRANSLATE_INT_CAP_HELPER(name, name)
 
 typedef void(cheri_cap_cap_helper)(TCGv_env, TCGv_i32, TCGv_i32);
-static inline bool gen_cheri_cap_cap(arg_cc *a, cheri_cap_cap_helper *gen_func)
+static inline bool gen_cheri_cap_cap(DisasContext *ctx G_GNUC_UNUSED, arg_cc *a,
+                                     cheri_cap_cap_helper *gen_func)
 {
     gen_func(cpu_env, tcg_constant_i32(a->cd), tcg_constant_i32(a->cs1));
     return true;
@@ -95,7 +96,8 @@ static inline bool gen_cheri_int_int(DisasContext *ctx, arg_r2 *a,
 }
 
 typedef void(cheri_cap_cap_cap_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv_i32);
-static inline bool gen_cheri_cap_cap_cap(DisasContext *ctx, arg_ccc *arg,
+static inline bool gen_cheri_cap_cap_cap(DisasContext *ctx G_GNUC_UNUSED,
+                                         arg_ccc *arg,
                                          cheri_cap_cap_cap_helper *gen_func)
 {
     gen_func(cpu_env, tcg_constant_i32(arg->cd), tcg_constant_i32(arg->cs1),
@@ -104,7 +106,7 @@ static inline bool gen_cheri_cap_cap_cap(DisasContext *ctx, arg_ccc *arg,
 }
 // We assume that all these instructions can trap (e.g. seal violation)
 #define TRANSLATE_CAP_CAP_CAP_HELPER(name, helper)                             \
-    DO_TRANSLATE_HELPER(name, gen_cheri_cap_cap_cap, helper, ctx, a)
+    DO_TRANSLATE_HELPER(name, gen_cheri_cap_cap_cap, helper, a)
 #define TRANSLATE_CAP_CAP_CAP(name) TRANSLATE_CAP_CAP_CAP_HELPER(name, name)
 
 typedef void(cheri_cap_cap_int_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv);
@@ -119,7 +121,7 @@ static inline bool gen_cheri_cap_cap_int(DisasContext *ctx, arg_ccr *a,
     return true;
 }
 #define TRANSLATE_CAP_CAP_INT_HELPER(name, helper)                             \
-    DO_TRANSLATE_HELPER(name, gen_cheri_cap_cap_int, helper, ctx, a)
+    DO_TRANSLATE_HELPER(name, gen_cheri_cap_cap_int, helper, a)
 #define TRANSLATE_CAP_CAP_INT(name) TRANSLATE_CAP_CAP_INT_HELPER(name, name)
 
 typedef void(cheri_cap_loadstore_helper)(TCGv_env, TCGv_i32, TCGv, TCGv_i32);
@@ -149,7 +151,7 @@ static inline bool gen_cheri_int_cap_cap(DisasContext *ctx, arg_rcc *a,
     return true;
 }
 #define TRANSLATE_INT_CAP_CAP_HELPER(name, helper)                             \
-    DO_TRANSLATE_HELPER(name, gen_cheri_int_cap_cap, helper, ctx, a)
+    DO_TRANSLATE_HELPER(name, gen_cheri_int_cap_cap, helper, a)
 #define TRANSLATE_INT_CAP_CAP(name) TRANSLATE_INT_CAP_CAP_HELPER(name, name)
 
 typedef void(cheri_cap_cap_imm_helper)(TCGv_env, TCGv_i32, TCGv_i32, TCGv);
@@ -479,7 +481,7 @@ static inline bool trans_lr_c_impl(DisasContext *ctx, arg_atomic *a,
         // helper_exit_atomic forces exlusive execution so we get SC semantics.
         tcg_debug_assert(a->rs2 == 0);
         arg_cc cc = { .cd = a->rd, .cs1 = a->rs1 };
-        gen_cheri_cap_cap(&cc, helper);
+        gen_cheri_cap_cap(ctx, &cc, helper);
     }
     return true;
 }
