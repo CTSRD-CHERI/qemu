@@ -274,8 +274,12 @@ static inline bool
 cap_has_invalid_perms_encoding(G_GNUC_UNUSED CPUArchState *env,
                                const cap_register_t *c)
 {
-    /* TODO: implement this for the RISC-V standard. */
+#ifdef TARGET_CHERI_RISCV_STD
+    target_ulong perms = cap_get_all_perms(c);
+    return fix_up_ap(env, &perms) == true;
+#else
     return false;
+#endif
 }
 
 // The top of the capability (exclusive -- i.e., one past the end)
