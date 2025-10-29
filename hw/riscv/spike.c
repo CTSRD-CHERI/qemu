@@ -39,9 +39,6 @@
 #include "chardev/char.h"
 #include "sysemu/device_tree.h"
 #include "sysemu/sysemu.h"
-#ifdef TARGET_CHERI
-#include "cheri_tagmem.h"
-#endif
 
 static const MemMapEntry spike_memmap[] = {
     [SPIKE_MROM] =     {     0x1000,     0xf000 },

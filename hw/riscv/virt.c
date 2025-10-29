@@ -41,9 +41,6 @@
 #include "hw/pci/pci.h"
 #include "hw/pci-host/gpex.h"
 #include "hw/display/ramfb.h"
-#ifdef TARGET_CHERI
-#include "cheri_tagmem.h"
-#endif
 
 static const MemMapEntry virt_memmap[] = {
     [VIRT_DEBUG] =       {        0x0,         0x100 },
