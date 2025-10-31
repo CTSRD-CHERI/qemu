@@ -42,6 +42,13 @@
     }                                            \
 } while (0)
 
+#define REQUIRE_ZISH4ADD(ctx)                                                  \
+    do {                                                                       \
+        if (!RISCV_CPU(ctx->cs)->cfg.ext_zish4add) {                           \
+            return false;                                                      \
+        }                                                                      \
+    } while (0)
+
 static void gen_clz(TCGv ret, TCGv arg1)
 {
     tcg_gen_clzi_tl(ret, arg1, TARGET_LONG_BITS);
@@ -359,6 +366,10 @@ GEN_SHADD(3)
     static bool trans_sh##SHAMT##add(DisasContext *ctx, arg_sh##SHAMT##add *a) \
     {                                                                          \
         REQUIRE_ZBA(ctx);                                                      \
+        if (SHAMT == 4) {                                                      \
+            REQUIRE_ZISH4ADD(ctx);                                             \
+            REQUIRE_64BIT(ctx);                                                \
+        }                                                                      \
         if (ctx->capmode) {                                                    \
             TCGv offset = tcg_temp_new();                                      \
             gen_get_gpr(ctx, offset, a->rs1);                                  \
@@ -370,6 +381,9 @@ GEN_SHADD(3)
         }                                                                      \
         return gen_arith(ctx, a, EXT_NONE, gen_sh##SHAMT##add);                \
     }
+
+GEN_SHADD(4)
+GEN_TRANS_SHADD(4)
 #else
 #define GEN_TRANS_SHADD(SHAMT)                                             \
 static bool trans_sh##SHAMT##add(DisasContext *ctx, arg_sh##SHAMT##add *a) \
@@ -467,6 +481,9 @@ GEN_SHADD_UW(3)
     {                                                                          \
         REQUIRE_ZBA(ctx);                                                      \
         REQUIRE_64BIT(ctx);                                                    \
+        if (SHAMT == 4) {                                                      \
+            REQUIRE_ZISH4ADD(ctx);                                             \
+        }                                                                      \
         if (ctx->capmode) {                                                    \
             TCGv offset = tcg_temp_new();                                      \
             gen_get_gpr(ctx, offset, a->rs1);                                  \
@@ -479,6 +496,9 @@ GEN_SHADD_UW(3)
         }                                                                      \
         return gen_arith(ctx, a, EXT_NONE, gen_sh##SHAMT##add_uw);             \
     }
+
+GEN_SHADD_UW(4)
+GEN_TRANS_SHADD_UW(4)
 #else
 #define GEN_TRANS_SHADD_UW(SHAMT)                             \
 static bool trans_sh##SHAMT##add_uw(DisasContext *ctx,        \

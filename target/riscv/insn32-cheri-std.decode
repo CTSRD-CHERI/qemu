@@ -99,3 +99,7 @@ sc       ....... .....  ..... 100 ..... 0100011 @s ?pred_cre
 amoswap_c 00001 . . ..... ..... 100 ..... 0101111 @atom_st ?pred_cre
 lr_c      00010 . . 00000 ..... 100 ..... 0101111 @atom_ld ?pred_cre
 sc_c      00011 . . ..... ..... 100 ..... 0101111 @atom_st ?pred_cre
+
+# Pre-0.9.6 mode-dependent sh4add instructions (sh4addy starting in 0.9.6)
+sh4add     0010000 .......... 111 ..... 0110011 @r
+sh4add_uw  0010000 .......... 111 ..... 0111011 @r
