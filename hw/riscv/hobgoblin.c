@@ -923,11 +923,10 @@ static char *custom_riscv_isa_string(RISCVCPU *cpu, bool is_32_bit)
             g_string_append(result, multi_exts[i].ext);
     }
 
-    uint64_t features = cpu->env.features;
-    if ((features & (1ULL << RISCV_FEATURE_CHERI))) {
+    if (riscv_feature(&cpu->env, RISCV_FEATURE_CHERI)) {
         g_string_append(result, "_zcheripurecap");
     }
-    if ((features & (1ULL << RISCV_FEATURE_CHERI_HYBRID))) {
+    if (riscv_feature(&cpu->env, RISCV_FEATURE_CHERI_HYBRID)) {
         g_string_append(result, "_zcherihybrid");
     }
 
