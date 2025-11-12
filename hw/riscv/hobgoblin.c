@@ -889,6 +889,10 @@ static char *custom_riscv_isa_string(RISCVCPU *cpu, bool is_32_bit)
     ext_map_t multi_exts[] = {
                                { &cpu->cfg.ext_icbom, "_zicbom" },
                                { &cpu->cfg.ext_icboz, "_zicboz" },
+                               { &cpu->cfg.ext_zca, "_zca" },
+                               { &cpu->cfg.ext_zcb, "_zcb" },
+                               { &cpu->cfg.ext_zcd, "_zcd" },
+                               { &cpu->cfg.ext_zcf, "_zcf" },
 #if !defined(TARGET_CHERI_RISCV_V9)
                                { &cpu->cfg.ext_svpbmt, "_svpbmt" }
 #endif
