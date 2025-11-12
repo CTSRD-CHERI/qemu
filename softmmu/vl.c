@@ -878,6 +878,7 @@ static MachineClass *find_default_machine(GSList *machines)
 }
 
 /* Add a weak hook for CHERI-MIPS version string (needed by cheritest) */
+__attribute__((weak)) void print_cheri_mips_version(void);
 __attribute__((weak)) void print_cheri_mips_version(void) {}
 
 static void version(void)

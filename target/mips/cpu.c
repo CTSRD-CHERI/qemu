@@ -146,6 +146,7 @@ const char mips_cheri_hw_regnames[32][10] = {
     {"ErrorEPCC"}, {"KCC"},     {"KDC"},  {"EPCC"},
 };
 
+void print_cheri_mips_version(void);
 void print_cheri_mips_version(void)
 {
     printf("Compiled for MIPS64 (with CHERI)\n");
