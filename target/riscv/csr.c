@@ -3582,8 +3582,8 @@ static RISCVException write_vstval2(CPURISCVState *env, int csrno,
  * csrrc  <->  riscv_csrrw(env, csrno, ret_value, 0, value);
  */
 
-RISCVException riscv_csrrw_check(CPURISCVState *env, int csrno, bool write_mask,
-                                 RISCVCPU *cpu)
+RISCVException riscv_csrrw_check(CPURISCVState *env, int csrno,
+                                 target_ulong write_mask, RISCVCPU *cpu)
 {
     /* check privileges and return RISCV_EXCP_ILLEGAL_INST if check fails */
     int read_only = get_field(csrno, 0xC00) == 3;

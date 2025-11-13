@@ -1013,8 +1013,8 @@ static inline const char *cpu_get_mode_name(qemu_log_instr_cpu_mode_t mode)
 
 void riscv_cpu_update_mask(CPURISCVState *env);
 
-RISCVException riscv_csrrw_check(CPURISCVState *env, int csrno, bool write_mask,
-                                 RISCVCPU *cpu);
+RISCVException riscv_csrrw_check(CPURISCVState *env, int csrno,
+                                 target_ulong write_mask, RISCVCPU *cpu);
 RISCVException riscv_csrrw(CPURISCVState *env, int csrno,
                            target_ulong *ret_value,
                            target_ulong new_value, target_ulong write_mask,
