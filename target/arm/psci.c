@@ -77,7 +77,7 @@ void arm_handle_psci_call(ARMCPU *cpu)
          * arguments so we can simply zero-extend all arguments regardless
          * of which exact function we are about to call.
          */
-        param[i] = is_a64(env) ? arm_get_xreg(env, i) : env->regs[i];
+        param[i] = is_a64(env) ? arm_get_a64_reg(env, i) : env->regs[i];
     }
     /*
      * XXX-AM:

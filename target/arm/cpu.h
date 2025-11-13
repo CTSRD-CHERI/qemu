@@ -1211,7 +1211,7 @@ int fp_exception_el(CPUARMState *env, int cur_el);
 int sve_exception_el(CPUARMState *env, int cur_el);
 uint32_t sve_zcr_len_for_el(CPUARMState *env, int el);
 
-static inline bool is_a64(CPUARMState *env)
+static inline bool is_a64(const CPUARMState *env)
 {
 #ifdef TARGET_CHERI
     // Morello does not support 32-bit, so might as well optimise everything away
@@ -3624,13 +3624,13 @@ static inline bool arm_cpu_data_is_big_endian(CPUARMState *env)
 #include "cpu_cheri.h"
 #include "cheri-lazy-capregs.h"
 
-// Get an integer register by number in any mode.
-static inline target_ulong arm_get_xreg(CPUARMState *env, int regnum)
+static inline QEMU_ALWAYS_INLINE target_ulong arm_get_a64_reg(CPUARMState *env,
+                                                              int regnum)
 {
 #ifdef TARGET_CHERI
     return get_capreg_cursor(env, regnum);
 #else
-    return (is_a64(env) ? env->xregs[regnum] : env->regs[regnum]);
+    return env->xregs[regnum];
 #endif
 }
 

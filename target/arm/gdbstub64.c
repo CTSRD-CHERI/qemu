@@ -29,11 +29,11 @@ int aarch64_cpu_gdb_read_register(CPUState *cs, GByteArray *mem_buf, int n)
 
     if (n < 31) {
         /* Core integer register.  */
-        return gdb_get_reg64(mem_buf, arm_get_xreg(env, n));
+        return gdb_get_reg64(mem_buf, arm_get_a64_reg(env, n));
     }
     switch (n) {
     case 31:
-        return gdb_get_reg64(mem_buf, arm_get_xreg(env, n));
+        return gdb_get_reg64(mem_buf, arm_get_a64_reg(env, 31));
     case 32:
         return gdb_get_reg64(mem_buf, get_aarch_reg_as_x(&env->pc));
     case 33:

@@ -954,7 +954,7 @@ static void aarch64_cpu_dump_state(CPUState *cs, FILE *f, int flags)
 
     qemu_fprintf(f, " PC=%016" PRIx64 " ", get_aarch_reg_as_x(&env->pc));
     for (i = 0; i < 32; i++) {
-        target_ulong reg = arm_get_xreg(env, i);
+        target_ulong reg = arm_get_a64_reg(env, i);
         if (i == 31) {
             qemu_fprintf(f, " SP=%016" PRIx64 "\n", reg);
         } else {

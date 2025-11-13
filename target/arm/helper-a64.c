@@ -629,7 +629,8 @@ void HELPER(casp_le_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
     mem_idx = cpu_mmu_index(env, false);
     oi = make_memop_idx(MO_LE | MO_128 | MO_ALIGN, mem_idx);
 
-    cmpv = int128_make128(arm_get_xreg(env, rs), arm_get_xreg(env, rs + 1));
+    cmpv =
+        int128_make128(arm_get_a64_reg(env, rs), arm_get_a64_reg(env, rs + 1));
     newv = int128_make128(new_lo, new_hi);
     oldv = cpu_atomic_cmpxchgo_le_mmu(env, addr, cmpv, newv, oi, ra);
 
@@ -650,7 +651,8 @@ void HELPER(casp_be_parallel)(CPUARMState *env, uint32_t rs, uint64_t addr,
     mem_idx = cpu_mmu_index(env, false);
     oi = make_memop_idx(MO_LE | MO_128 | MO_ALIGN, mem_idx);
 
-    cmpv = int128_make128(arm_get_xreg(env, rs + 1), arm_get_xreg(env, rs));
+    cmpv =
+        int128_make128(arm_get_a64_reg(env, rs + 1), arm_get_a64_reg(env, rs));
     newv = int128_make128(new_lo, new_hi);
     oldv = cpu_atomic_cmpxchgo_be_mmu(env, addr, cmpv, newv, oi, ra);
 

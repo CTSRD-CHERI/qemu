@@ -252,11 +252,11 @@ int arm_cpu_write_elf64_note(WriteCoreDumpFunction f, CPUState *cs,
         sp = 0;
     } else {
         pstate = pstate_read(env);
-        sp = arm_get_xreg(env, 31);
+        sp = arm_get_a64_reg(env, 31);
     }
 
     for (i = 0; i < 31; ++i) {
-        note.prstatus.pr_reg.regs[i] = cpu_to_dump64(s, arm_get_xreg(env, i));
+        note.prstatus.pr_reg.regs[i] = cpu_to_dump64(s, arm_get_a64_reg(env, i));
     }
     note.prstatus.pr_reg.sp = cpu_to_dump64(s, sp);
     note.prstatus.pr_reg.pc = cpu_to_dump64(s, get_aarch_reg_as_x(&env->pc));

@@ -219,7 +219,11 @@ common_semi_arg(CPUState *cs, int argno)
 {
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
-    return arm_get_xreg(env, argno);
+    if (is_a64(env)) {
+        return arm_get_a64_reg(env, argno);
+    } else {
+        return env->regs[argno];
+    }
 }
 
 static inline void
@@ -432,7 +436,12 @@ static target_ulong common_semi_flen_buf(CPUState *cs)
      */
     ARMCPU *cpu = ARM_CPU(cs);
     CPUARMState *env = &cpu->env;
-    sp = arm_get_xreg(env, is_a64(env) ? 31 : 13);
+
+    if (is_a64(env)) {
+        sp = arm_get_a64_reg(env, 31);
+    } else {
+        sp = env->regs[13];
+    }
 #endif
 #ifdef TARGET_RISCV
     RISCVCPU *cpu = RISCV_CPU(cs);

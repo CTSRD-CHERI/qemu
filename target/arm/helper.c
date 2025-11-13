@@ -10622,7 +10622,7 @@ static void handle_semihosting(CPUState *cs)
     if (is_a64(env)) {
         qemu_log_mask(CPU_LOG_INT,
                       "...handling as semihosting call 0x" TARGET_FMT_lx "\n",
-                      arm_get_xreg(env, 0));
+                      arm_get_a64_reg(env, 0));
         arm_set_xreg(env, 0, do_common_semihosting(cs));
         increment_aarch_reg(&env->pc, 4);
     } else {
