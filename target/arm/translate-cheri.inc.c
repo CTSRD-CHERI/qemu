@@ -325,7 +325,7 @@ static inline __attribute__((always_inline)) bool load_store_implementation(
         }
     }
 
-    TCGv_i64 wb;
+    TCGv_i64 wb = 0;
     // There are too many places we might accidentally add DDC base, so if we
     // are going to store back, take a copy
     if ((pre_inc || post_inc)) {
@@ -853,7 +853,7 @@ static bool cvt_impl_ptr_to_cap(DisasContext *ctx, uint32_t cd, uint32_t cn,
         tcg_gen_mov_i64(new_cursor, tcg_rm);
     }
 
-    TCGLabel *l1;
+    TCGLabel *l1 = NULL;
 
     if (zero_is_null) {
         l1 = gen_new_label();

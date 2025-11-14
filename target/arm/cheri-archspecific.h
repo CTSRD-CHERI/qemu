@@ -231,7 +231,7 @@ static inline void update_next_pcc_for_tcg(CPUARMState *env,
     bool c64_changed =
         (target->_cr_cursor & 1) != ((env->pstate & PSTATE_C64) != 0);
 
-    unsigned int cur_el;
+    unsigned int cur_el = 0;
 
     env->pc.cap = *target;
     cheri_debug_assert(env->pc.cap.cr_extra == CREG_FULLY_DECOMPRESSED);
