@@ -645,7 +645,7 @@ static void do_cpu_loglevel_switch(CPUState *cpu, run_on_cpu_data data)
     qemu_log_instr_loglevel_t prev_level = cpulog->loglevel;
     bool prev_level_active = cpulog->loglevel_active;
     qemu_log_instr_loglevel_t next_level = data.host_int;
-    bool next_level_active;
+    bool next_level_active = 0;
 
     /* Decide whether we have to pause/resume logging */
     switch (next_level) {
@@ -812,7 +812,7 @@ void qemu_log_instr_init(CPUState *cpu)
     cpu_log_instr_state_t *cpulog = &cpu->log_state;
     GArray *iinfo_ring = g_array_sized_new(FALSE, TRUE,
         sizeof(cpu_log_instr_info_t), reset_entry_buffer_size);
-    cpu_log_instr_info_t *iinfo;
+    cpu_log_instr_info_t *iinfo = NULL;
     int i;
 
     g_array_set_size(iinfo_ring, reset_entry_buffer_size);
