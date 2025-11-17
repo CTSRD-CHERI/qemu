@@ -112,12 +112,14 @@ enum {
 #define CC128R_PERM_WRITE (1 << 0)
 #define CC128R_PERM_LOAD_MUTABLE (1 << 1)
 #define CC128R_PERM_ELEVATE_LEVEL (1 << 2)
-#define CC128R_PERM_STORE_LEVEL (1 << 3)
-#define CC128R_PERM_LEVEL (1 << 4)
-#define CC128R_PERM_CAPABILITY (1 << 5)
+#define CC128R_PERM_STORE_LEVEL (3 << 3)
+#define CC128R_PERM_LEVEL (3 << 5)
+#define CC128R_PERM_FOREIGN (1 << 7)
+#define CC128R_PERM_FOREIGN_AUTH (1 << 8)
+#define CC128R_PERM_CAPABILITY (1 << 9)
 // Software permissions start at bit 6
 #define CC128R_UPERMS_ALL (0xf) /* 4 bits */
-#define CC128R_UPERMS_SHFT (6)
+#define CC128R_UPERMS_SHFT (10)
 #define CC128R_PERM_SW_ALL (CC128R_UPERMS_ALL << CC128R_UPERMS_SHFT)
 #define CC128R_PERM_ACCESS_SYS_REGS (1 << 16)
 #define CC128R_PERM_EXECUTE (1 << 17)
