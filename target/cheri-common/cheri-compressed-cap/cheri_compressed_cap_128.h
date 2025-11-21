@@ -76,7 +76,8 @@ enum {
     _CC_FIELD(POISON,111,111),
     _CC_FIELD(PERM_POISON,110,110),
     _CC_FIELD(FLAGS, 109, 109),
-    _CC_FIELD(OTYPE, 108, 91),
+    _CC_FIELD(PVER, 108, 101),
+    _CC_FIELD(OTYPE, 100, 91),
     _CC_FIELD(EBT, 90, 64),
 
     _CC_FIELD(INTERNAL_EXPONENT, 90, 90),
@@ -197,6 +198,11 @@ decompress_128cap_already_xored(uint64_t pesbt, uint64_t cursor, cc128_cap_t* cd
 __attribute__((deprecated("Use cc128_decompress_mem"))) static inline void
 decompress_128cap(uint64_t pesbt, uint64_t cursor, _cc_cap_t* cdp) {
     cc128_decompress_mem(pesbt, cursor, cdp->cr_tag, cdp);
+}
+static inline uint32_t _cc_N(get_pver)(const _cc_cap_t* cap) { return _CC_EXTRACT_FIELD(cap->cr_pesbt, PVER) ; }
+
+static inline void _cc_N(update_pver)(_cc_cap_t* cap, uint32_t pver_val) {
+    cap->cr_pesbt = _CC_DEPOSIT_FIELD(cap->cr_pesbt, pver_val, PVER);
 }
 
 #undef CC_FORMAT_LOWER
