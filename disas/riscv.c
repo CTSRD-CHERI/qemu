@@ -562,6 +562,7 @@ typedef enum {
     rv_op_cmove,
     rv_op_ccleartag,
     rv_op_csetcappermpoison,
+    rv_op_cgetcappver,
     rv_op_cpoison,
     rv_op_cclearpoison,
     rv_op_cjalr,
@@ -590,6 +591,7 @@ typedef enum {
     rv_op_csetoffset,
     rv_op_csetaddr,
     rv_op_csethigh,
+    rv_op_csetcappver,
     rv_op_cincoffset,
     rv_op_ctoptr,
     rv_op_cfromptr,
@@ -1382,6 +1384,7 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_cmove] = { "cmove", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_ccleartag] = { "ccleartag", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_csetcappermpoison] = { "csetcappermpoison", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgetcappver] = { "cgetcapper", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_cjalr] = { "cjalr", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_cgetaddr] = { "cgetaddr", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
     [rv_op_cgethigh] = { "cgetaddr", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
@@ -1440,6 +1443,7 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_csetoffset] = { "csetoffset", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
     [rv_op_csetaddr] = { "csetaddr", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
     [rv_op_csethigh] = { "csethigh", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
+    [rv_op_csetcappver] = { "csetcappver", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
     [rv_op_cincoffset] = { "cincoffset", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
     [rv_op_ctoptr] = { "ctoptr", rv_codec_r, rv_fmt_rd_cs1_cs2, NULL, 0, 0, 0 },
     [rv_op_cfromptr] = { "cfromptr", rv_codec_r, rv_fmt_cd_cs1_rs2, NULL, 0, 0, 0 },
@@ -1728,6 +1732,7 @@ static rv_opcode decode_cheri_two_op(unsigned func) {
     case 0b10010: return rv_op_cloadtags;
     case 0b10111: return rv_op_cgethigh;
     case 0b11000: return rv_op_csetcappermpoison;
+    case 0b11011: return rv_op_cgetcappver;
     default: return rv_op_illegal;
     }
 }
@@ -1757,6 +1762,7 @@ static rv_opcode decode_cheri_inst(rv_inst inst) {
     CHERI_THREEOP_CASE(cfromptr,    0010011,  ..... ..... 000 ..... 1011011 @r)
     CHERI_THREEOP_CASE(csub,        0010100,  ..... ..... 000 ..... 1011011 @r)
     CHERI_THREEOP_CASE(csethigh,    0010110,  ..... ..... 000 ..... 1011011 @r)
+    CHERI_THREEOP_CASE(csetcappver, 0010111,  ..... ..... 000 ..... 1011011 @r)
     // 0010101-0011100 unused
     CHERI_THREEOP_CASE(cbuildcap,   0011101,  ..... ..... 000 ..... 1011011 @r)
     CHERI_THREEOP_CASE(ccopytype,   0011110,  ..... ..... 000 ..... 1011011 @r)

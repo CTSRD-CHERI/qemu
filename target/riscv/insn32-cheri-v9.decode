@@ -67,6 +67,7 @@ ctoptr      0010010  ..... ..... 000 ..... 1011011 @rcc
 cfromptr    0010011  ..... ..... 000 ..... 1011011 @ccr
 csub        0010100  ..... ..... 000 ..... 1011011 @rcc
 csethigh    0010110  ..... ..... 000 ..... 1011011 @ccr
+csetcappver 0010111  ..... ..... 000 ..... 1011011 @ccr
 # 0010101-0011100 unused
 cbuildcap   0011101  ..... ..... 000 ..... 1011011 @ccc
 ccopytype   0011110  ..... ..... 000 ..... 1011011 @ccc
@@ -104,6 +105,8 @@ jalr_pcc    1111111  10100 ..... 000 ..... 1011011 @r2
 cgethigh    1111111  10111 ..... 000 ..... 1011011 @rc
 csetcappermpoison   1111111  11000 ..... 000 ..... 1011011 @cc
 cgetpoison  1111111  11001 ..... 000 ..... 1011011 @rc
+cgetcappver  1111111  11010 ..... 000 ..... 1011011 @rc
+
 
 # There is an existing @sfence_vma format with rs1+rs2 fields, but let's define a new name
 @r_2source ....... ..... .....   ... ..... ....... %rs2 %rs1
