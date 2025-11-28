@@ -75,13 +75,13 @@ typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 0, _CC_N(MODE_INT) = 1 } _CC_N(Mode
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
-    _CC_FIELD(RESERVED1, 127, 121),
-    _CC_FIELD(SDP, 120, 117),
+    _CC_FIELD(RESERVED1, 127, 125),
+    _CC_FIELD(SDP, 124, 121),
     _CC_FIELD(FLAGS, 116, 116), // TODO: remove this old alias
-    _CC_FIELD(AP_M, 116, 108),  // Combined architectural permissions and mode
-    _CC_FIELD(MODE, 116, 116),
-    _CC_FIELD(AP, 115, 108),
-    _CC_FIELD(LEVEL, 107, 107),
+    _CC_FIELD(AP_M, 120, 109),  // Combined architectural permissions and mode
+    _CC_FIELD(MODE, 120, 120),
+    _CC_FIELD(AP, 119, 109), // needs 3 more
+    _CC_FIELD(LEVEL, 108, 107),
     _CC_FIELD(RESERVED0, 106, 92),
     _CC_FIELD(OTYPE, 91, 91),
     _CC_FIELD(EBT, 90, 64),
