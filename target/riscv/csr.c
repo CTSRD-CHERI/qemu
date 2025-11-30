@@ -4023,7 +4023,7 @@ riscv_csr_operations csr_ops[CSR_TABLE_SIZE] = {
 #ifdef TARGET_CHERI_RISCV_STD_093
     [CSR_STVAL2]       = { "stval2", smode, read_stval2, write_stval2,
         .min_priv_ver = PRIV_VERSION_1_12_0 },
-    [CSR_STVAL2]       = { "vstval2", hmode, read_vstval2, write_vstval2,
+    [CSR_VSTVAL2]      = { "vstval2", hmode, read_vstval2, write_vstval2,
         .min_priv_ver = PRIV_VERSION_1_12_0 },
 #endif
 
