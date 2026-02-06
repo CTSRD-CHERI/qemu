@@ -82,8 +82,7 @@ enum {
     _CC_FIELD(FLAGS, 57, 57), // TODO: remove this field
     _CC_FIELD(LEVEL, 56, 56),
     _CC_FIELD(RESERVED1, 55, 55),
-    _CC_FIELD(RESERVED0, 54, 54),
-    _CC_FIELD(POISON, 53, 53),
+    _CC_FIELD(RESERVED0, 54, 53),
     _CC_FIELD(OTYPE, 52, 52),
     _CC_FIELD(EBT, 51, 32),
 
@@ -103,12 +102,10 @@ enum {
     _CC_FIELD(EXPONENT_HIGH_PART, 43, 42),
     _CC_FIELD(EXP_NONZERO_BOTTOM, 41, 34),
     _CC_FIELD(EXPONENT_LOW_PART, 33, 32),
-    _CC_FIELD(PERM_POISON, 53, 54),
 };
 #pragma GCC diagnostic pop
 
 #define CC64R_OTYPE_BITS CC64R_FIELD_OTYPE_SIZE
-#define CC64R_POISON_BITS CC64R_FIELD_POISON_SIZE
 #define CC64R_BOT_WIDTH CC64R_FIELD_EXP_ZERO_BOTTOM_SIZE
 #define CC64R_BOT_INTERNAL_EXP_WIDTH CC64R_FIELD_EXP_NONZERO_BOTTOM_SIZE
 #define CC64R_EXP_LOW_WIDTH CC64R_FIELD_EXPONENT_LOW_PART_SIZE
@@ -150,15 +147,6 @@ enum _CC_N(OTypes) {
     _CC_N(MAX_RESERVED_OTYPE) = _CC_N(OTYPE_SENTRY),
 };
 
-enum _CC_N(POISON){
-    CC64R_POISON_UNPOISONED = false,
-    CC64R_POISON_POISONED   = true,
-    CC64R_MAX_POISON = (bool)((1u << CC64R_POISON_BITS) - 1u)
-};
-enum _CC_N(PERM_POISON){
-    CC64R_PERM_POISON_UNPERMED = false,
-    CC64R_PERM_POISON_PERMED   = true
-};
 #define CC64R_LS_SPECIAL_OTYPES(ITEM, ...)                                                                             \
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)

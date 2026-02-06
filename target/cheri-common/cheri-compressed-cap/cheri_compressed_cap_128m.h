@@ -96,9 +96,7 @@ enum {
     _CC_FIELD(HWPERMS, 127, 110), // TODO: remove this, currently still used by QEMU
     // Morello HW perms actually 127..116, and 111...100 with SW perms in the middle.
     _CC_FIELD(UPERMS, 115, 112),
-    _CC_FIELD(PERM_POISON, 109, 109),
-    _CC_FIELD(POISON, 108, 108),
-    _CC_FIELD(OTYPE, 107, 95),
+    _CC_FIELD(OTYPE, 109, 95),
     _CC_FIELD(EBT, 94, 64),
 // This is a bit dodgy. This enum only really works for non-address bits.
 // Just provide nonsense values that will make the length of the range 0.
@@ -125,8 +123,6 @@ enum {
 #pragma GCC diagnostic pop
 
 #define CC128M_OTYPE_BITS CC128M_FIELD_OTYPE_SIZE
-#define CC128M_POISON_BITS CC128M_FIELD_POISON_SIZE
-#define CC128M_PERM_POISON_BITS CC128M_FIELD_PERM_POISON_SIZE
 #define CC128M_BOT_WIDTH CC128M_FIELD_EXP_ZERO_BOTTOM_SIZE
 #define CC128M_BOT_INTERNAL_EXP_WIDTH CC128M_FIELD_EXP_NONZERO_BOTTOM_SIZE
 #define CC128M_EXP_LOW_WIDTH CC128M_FIELD_EXPONENT_LOW_PART_SIZE
@@ -182,15 +178,6 @@ enum _CC_N(OTypes) {
     _CC_N(MAX_RESERVED_OTYPE) = _CC_N(OTYPE_LOAD_BRANCH),
 };
 
-enum _CC_N(POISON){
-    CC128M_POISON_UNPOISONED = false,
-    CC128M_POISON_POISONED   = true,
-    CC128M_MAX_POISON = (bool)((1u << CC128M_POISON_BITS) - 1u)
-};
-enum _CC_N(PERM_POISON){
-    CC128M_PERM_POISON_UNPERMED = false,
-    CC128M_PERM_POISON_PERMED   = true
-};
 #define CC128M_LS_SPECIAL_OTYPES(ITEM, ...)                                                                            \
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)                                                                                    \
