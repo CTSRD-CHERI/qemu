@@ -81,21 +81,22 @@ static inline target_ulong cap_get_all_perms(const cap_register_t *c)
 {
     return CAP_cc(get_all_permissions)(c);
 }
-
+#if defined(TARGET_CHERI_RISCV_V9) && defined(TARGET_RISCV64)
 static inline bool cap_get_poison(const cap_register_t *c)
 {
     return CAP_cc(get_poison)(c);
 }
-
+#endif 
+#if defined(TARGET_RISCV64) && defined(TARGET_CHERI_RISCV_V9)
 static inline bool cap_get_perm_poison(const cap_register_t *c)
 {
-    return CAP_cc(get_perm_poison)(c);
+    return false; //CAP_cc(get_perm_poison)(c);
 }
-
+#endif 
 #if defined(TARGET_CHERI_RISCV_V9) && defined(TARGET_RISCV64)
 static inline target_ulong cap_get_pver(const cap_register_t *c)
 {
-    return CAP_cc(get_pver)(c);
+    return 0; //CAP_cc(get_pver)(c);
 }
 #endif
 

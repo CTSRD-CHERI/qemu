@@ -266,7 +266,7 @@ target_ulong CHERI_HELPER_IMPL(cgetcappver(CPUArchState *env, uint32_t cb))
      * TODO: could do this directly from TCG now.
      */
 #if defined(TARGET_RISCV64) && defined(TARGET_CHERI_RISCV_V9)
-    return CAP_cc(get_pver)(get_readonly_capreg(env, cb));
+    return 0; //CAP_cc(get_pver)(get_readonly_capreg(env, cb));
 #endif 
 } 
 
@@ -1344,11 +1344,14 @@ void CHERI_HELPER_IMPL(store_cap_via_cap(CPUArchState *env, uint32_t valreg,
 
 void CHERI_HELPER_IMPL(csetcappermpoison(CPUArchState *env, uint32_t cd, uint32_t cb))
 {
-    const cap_register_t *cbp = get_readonly_capreg(env, cb);
-    GET_HOST_RETPC();
+   #if defined(TARGET_CHERI_RISCV_V9) && defined(TARGET_RISCV64)
+
+   // const cap_register_t *cbp = get_readonly_capreg(env, cb);
+   // GET_HOST_RETPC();
     /*
      * CSetPermPoison: Set Cap PermPoison
      */
+      /*
     if (!cbp->cr_tag) {
         raise_cheri_exception(env, CapEx_TagViolation, cb);
     } else if (!cap_is_unsealed(cbp)) {
@@ -1359,8 +1362,9 @@ void CHERI_HELPER_IMPL(csetcappermpoison(CPUArchState *env, uint32_t cd, uint32_
     cap_register_t result = *cbp;
     CAP_cc(update_perm_poison)(&result, CC128_PERM_POISON_PERMED);
     update_capreg(env, cd, &result);
+    */
+    #endif 
 }
-
 void CHERI_HELPER_IMPL(csetcappver(CPUArchState *env, uint32_t cd, uint32_t cb,
                                 target_ulong new_mem_pesbt))
 {
@@ -1379,7 +1383,7 @@ void CHERI_HELPER_IMPL(csetcappver(CPUArchState *env, uint32_t cd, uint32_t cb,
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     }
     cap_register_t result = *cbp;
-    CAP_cc(update_pver)(&result, new_mem_pesbt);
+    //CAP_cc(update_pver)(&result, new_mem_pesbt);
     update_capreg(env, cd, &result);
     #endif 
 
@@ -1727,7 +1731,7 @@ void store_cap_to_memory_mmu_index(CPUArchState *env, uint32_t cs,
         
         if(poison){
             st_cap_word_p((char*)host + CHERI_MEM_OFFSET_CURSOR, cursor);
-            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, ((long) pesbt_for_mem) | ((long)1 << 47));
+            st_cap_word_p((char*)host + CHERI_MEM_OFFSET_METADATA, ((long) pesbt_for_mem) | ((long)1 << 46));
             //printf("pesbt before poison %lx\n", (long) pesbt_for_mem);
             //printf("pesbt after  poison %lx\n", ((long) pesbt_for_mem) | ((long)1 << 47));
         }else{

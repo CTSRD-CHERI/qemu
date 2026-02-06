@@ -378,16 +378,19 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
                                    size, access_type, addr);
 #endif
     }
-    bool cap_perm_poison = cap_get_perm_poison(cbp);
+    bool cap_perm_poison= false;
+#if defined(TARGET_RISCV64) && defined(TARGET_CHERI_RISCV_V9)
+    cap_perm_poison = (cap_get_all_perms(cbp) & CAP_PERM_POISON);
+#endif 
     MMUAccessType rw = required_perms & CAP_PERM_STORE ? MMU_DATA_STORE : MMU_DATA_LOAD;
     
     unsigned int mask = ~((1 << 0) | (1 << 2) | (1 << 3)| (1 << 4));
 
-    
     //if (((long long)cursor == 0x1234567812345678)&& cpu_in_user_mode(env) && cap_poison &&cheri_in_capmode(env)) {
     
     if (cheri_poison_check(env, addr, size, rw, _host_return_address)) {
-        if(cap_perm_poison ){
+        
+        if(!cap_perm_poison){
             void *host = probe_read(env, addr&mask, CHERI_CAP_SIZE, cpu_mmu_index(env, false), _host_return_address);
             target_ulong cursor =0;
             target_ulong pesbt =0;
@@ -398,26 +401,36 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
                 cursor = ldq_p((char *)host + CHERI_MEM_OFFSET_CURSOR);
                 //printf("qemu poison check cursor %lx\n", (long) cursor);
             }
-            if(pesbt>>(111-64) & 0x1){
+            cap_register_t poison_cap;
+            CAP_cc(decompress_raw)(pesbt, cursor, 1, &poison_cap);
+            cap_length_t poison_top = cap_get_top(&poison_cap);
+            target_ulong poison_base = cap_get_base(&poison_cap);
+
+            bool isPoisonCap = false; 
+#if defined(TARGET_RISCV64) && defined(TARGET_CHERI_RISCV_V9)
+            isPoisonCap = cap_get_poison(&poison_cap);
+#endif 
+            printf("poison exceptin\n");
+            raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
+                                     !is_load);
+            /*
+            if(isPoisonCap){
                 cap_length_t cbp_top = cap_get_top(cbp);
                 target_ulong cbp_base = cap_get_base(cbp);
-                cap_register_t poison_cap;
-                CAP_cc(decompress_raw)(pesbt, cursor, 1, &poison_cap);
-                cap_length_t poison_top = cap_get_top(&poison_cap);
-                target_ulong poison_base = cap_get_base(&poison_cap);
+
                 //printf("cbp top %lx\n",(long) cbp_top);
                 //printf("cbp base %lx\n",(long) cbp_base);
                 //printf("poison top %lx\n",(long) poison_top);
                 //printf("poison base %lx\n",(long) poison_base);
-                if(cbp_top<= poison_top && cbp_base >= poison_base){
-                    printf("poison exception faulting addr %lx, size %d rw%x\n",(long)addr, (int) size , rw);
+                //if(cbp_top<= poison_top && cbp_base >= poison_base){
+                //    printf("poison exception faulting addr %lx, size %d rw%x\n",(long)addr, (int) size , rw);
                     
 	                raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
                                      !is_load);
                 //}else{
                 //    printf("master cap no trap\n");
-                }
-            }
+               // }
+            }*/
         }
         else {
             if((int)rw ==1 ){
@@ -425,6 +438,7 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
                 cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, false);
             }
         }
+        
         //printf("check poison trap \n");
     }
     
