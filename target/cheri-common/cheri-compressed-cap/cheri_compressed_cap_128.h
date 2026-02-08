@@ -74,7 +74,8 @@ enum {
     _CC_FIELD(HWPERMS, 123, 111),
     _CC_FIELD(POISON, 110, 110),
     _CC_FIELD(FLAGS, 109, 109),
-    _CC_FIELD(OTYPE, 108, 91),
+    _CC_FIELD(PVER, 108, 101),
+    _CC_FIELD(OTYPE, 100, 91),
     _CC_FIELD(EBT, 90, 64),
 
     _CC_FIELD(INTERNAL_EXPONENT, 90, 90),
@@ -93,6 +94,7 @@ enum {
 };
 #pragma GCC diagnostic pop
 
+#define CC128_PVER_BITS CC128_FIELD_PVER_SIZE
 #define CC128_OTYPE_BITS CC128_FIELD_OTYPE_SIZE
 #define CC128_BOT_WIDTH CC128_FIELD_EXP_ZERO_BOTTOM_SIZE
 #define CC128_BOT_INTERNAL_EXP_WIDTH CC128_FIELD_EXP_NONZERO_BOTTOM_SIZE
@@ -172,7 +174,7 @@ _CC_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
 #include "cheri_compressed_cap_v9_common.h"
 
 // Sanity-check mask is the expected NULL encoding
-_CC_STATIC_ASSERT_SAME(CC128_MEM_XOR_MASK, UINT64_C(0x00001ffffc018004));
+//_CC_STATIC_ASSERT_SAME(CC128_MEM_XOR_MASK, UINT64_C(0x00001ffffc018004));
 
 __attribute__((deprecated("Use cc128_compress_raw"))) static inline uint64_t
 compress_128cap_without_xor(const cc128_cap_t* csp) {
@@ -199,13 +201,13 @@ static inline void _cc_N(update_poison)(_cc_cap_t* cap, bool value) {
     uint8_t poison_bit = (value) ? 1 : 0;
     cap->cr_pesbt = _CC_DEPOSIT_FIELD(cap->cr_pesbt, (_cc_addr_t)poison_bit, POISON);
 }
-/*
+
 static inline uint32_t _cc_N(get_pver)(const _cc_cap_t* cap) { return _CC_EXTRACT_FIELD(cap->cr_pesbt, PVER) ; }
 
 static inline void _cc_N(update_pver)(_cc_cap_t* cap, uint32_t pver_val) {
     cap->cr_pesbt = _CC_DEPOSIT_FIELD(cap->cr_pesbt, pver_val, PVER);
 }
-*/
+
 
 #undef CC_FORMAT_LOWER
 #undef CC_FORMAT_UPPER

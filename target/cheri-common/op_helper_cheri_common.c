@@ -266,7 +266,7 @@ target_ulong CHERI_HELPER_IMPL(cgetcappver(CPUArchState *env, uint32_t cb))
      * TODO: could do this directly from TCG now.
      */
 #if defined(TARGET_RISCV64) && defined(TARGET_CHERI_RISCV_V9)
-    return 0; //CAP_cc(get_pver)(get_readonly_capreg(env, cb));
+    return CAP_cc(get_pver)(get_readonly_capreg(env, cb));
 #endif 
 } 
 
@@ -1383,7 +1383,7 @@ void CHERI_HELPER_IMPL(csetcappver(CPUArchState *env, uint32_t cd, uint32_t cb,
         raise_cheri_exception(env, CapEx_SealViolation, cb);
     }
     cap_register_t result = *cbp;
-    //CAP_cc(update_pver)(&result, new_mem_pesbt);
+    CAP_cc(update_pver)(&result, new_mem_pesbt);
     update_capreg(env, cd, &result);
     #endif 
 

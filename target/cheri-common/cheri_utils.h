@@ -96,7 +96,7 @@ static inline bool cap_get_perm_poison(const cap_register_t *c)
 #if defined(TARGET_CHERI_RISCV_V9) && defined(TARGET_RISCV64)
 static inline target_ulong cap_get_pver(const cap_register_t *c)
 {
-    return 0; //CAP_cc(get_pver)(c);
+    return CAP_cc(get_pver)(c);
 }
 #endif
 
