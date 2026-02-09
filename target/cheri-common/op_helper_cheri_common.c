@@ -270,6 +270,18 @@ target_ulong CHERI_HELPER_IMPL(cgetcappver(CPUArchState *env, uint32_t cb))
 #endif 
 } 
 
+target_ulong CHERI_HELPER_IMPL(cgetcappoison(CPUArchState *env, uint32_t cb))
+{
+    /*
+     * CGetHigh: Move Metadata bits to a General-Purpose Register
+     * TODO: could do this directly from TCG now.
+     */
+#if defined(TARGET_RISCV64) && defined(TARGET_CHERI_RISCV_V9)
+    return CAP_cc(get_poison)(get_readonly_capreg(env, cb));
+#endif 
+} 
+
+
 target_ulong CHERI_HELPER_IMPL(cgetlen(CPUArchState *env, uint32_t cb))
 {
     /*

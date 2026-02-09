@@ -564,6 +564,7 @@ typedef enum {
     rv_op_csetcappermpoison,
     rv_op_cgetcappver,
     rv_op_cpoison,
+    rv_op_cgetcappoison,
     rv_op_cclearpoison,
     rv_op_cjalr,
     rv_op_cgethigh,
@@ -1388,6 +1389,7 @@ const rv_opcode_data opcode_data[] = {
     [rv_op_cjalr] = { "cjalr", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_cgetaddr] = { "cgetaddr", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
     [rv_op_cgethigh] = { "cgetaddr", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
+    [rv_op_cgetcappoison] = { "cgetcappoison", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
     [rv_op_csealentry] = { "csealentry", rv_codec_r, rv_fmt_cd_cs1, NULL, 0, 0, 0 },
     [rv_op_cloadtags] = { "cloadtags", rv_codec_r, rv_fmt_rd_cs1, NULL, 0, 0, 0 },
 
@@ -1726,13 +1728,14 @@ static rv_opcode decode_cheri_two_op(unsigned func) {
     case 0b01011: return rv_op_ccleartag;
     case 0b01100: return rv_op_cjalr;
     case 0b01101: return rv_op_cclearpoison;
-    case 0b01110: return rv_op_cpoison;
     case 0b01111: return rv_op_cgetaddr;
     case 0b10001: return rv_op_csealentry;
     case 0b10010: return rv_op_cloadtags;
     case 0b10111: return rv_op_cgethigh;
     case 0b11000: return rv_op_csetcappermpoison;
-    case 0b11011: return rv_op_cgetcappver;
+    case 0b11001: return rv_op_cpoison;
+    case 0b11010: return rv_op_cgetcappver;
+    case 0b11011: return rv_op_cgetcappoison;
     default: return rv_op_illegal;
     }
 }

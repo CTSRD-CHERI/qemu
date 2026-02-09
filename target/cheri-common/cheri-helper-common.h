@@ -63,6 +63,7 @@ DEF_HELPER_2(cgetbase, tl, env, i32)
 DEF_HELPER_2(cgetflags, tl, env, i32)
 #endif
 DEF_HELPER_2(cgethigh, tl, env, i32)
+DEF_HELPER_2(cgetcappoison, tl, env, i32)
 DEF_HELPER_2(cgetcappver, tl, env, i32)
 DEF_HELPER_2(cgetlen, tl, env, i32)
 DEF_HELPER_2(cgetperm, tl, env, i32)
