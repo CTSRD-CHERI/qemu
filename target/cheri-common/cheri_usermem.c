@@ -239,11 +239,39 @@ void qemu_ram_clear_region(ram_addr_t size, void *host)
     ram_addr_t regionend, regionstart, rightblockend, rightblockstart;
 
     qemu_ram_init(&region, size, (ram_addr_t)host);
+    regionstart = qemu_ram_get_cursor(&region);
+    regionend = regionstart + qemu_ram_get_length(&region) - 1;
 
-    node = g_tree_lower_bound(cheri_tagtree, &region);
+    /*
+     * The last region at or before the given address is the one before the
+     * first block strictly after the given address. If the latter does not
+     * exist then that means all blocks are at of before the given address and
+     * we just want the last one in the tree. If the former does not exist then
+     * all blocks are strictly greater than the given address and we just want
+     * the first one in the tree.
+     */
+    node = g_tree_upper_bound(cheri_tagtree, &region);
+    if (node != NULL) {
+        node = g_tree_node_previous(node);
+        if (node == NULL) {
+            node = g_tree_node_first(cheri_tagtree);
+        }
+    } else {
+        node = g_tree_node_last(cheri_tagtree);
+    }
+    /*
+     * The found block may not in fact overlap the region; if so, skip it so we
+     * can assert in the loop that no other blocks start before the region.
+     */
+    if (node != NULL) {
+        block = g_tree_node_value(node);
+        blockstart = qemu_ram_get_cursor(block);
+        blockend = blockstart + qemu_ram_get_length(block) - 1;
+        if (blockend < regionstart) {
+            node = g_tree_node_next(node);
+        }
+    }
     while (node != NULL) {
-        regionstart = qemu_ram_get_cursor(&region);
-        regionend = regionstart + qemu_ram_get_length(&region) - 1;
         block = g_tree_node_value(node);
         blockstart = qemu_ram_get_cursor(block);
         blockend = blockstart + qemu_ram_get_length(block) - 1;
