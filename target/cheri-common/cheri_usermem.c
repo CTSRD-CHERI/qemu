@@ -170,6 +170,11 @@ static void qemu_ram_free(RAMBlock *block)
     if (!block->dirty)
         qemu_ram_remove(block);
 
+    if (block->refcount != 0) {
+        block->dirty = true;
+        return;
+    }
+
     parent = block->parent;
     if (parent != NULL) {
         assert(parent->refcount > 0);
@@ -177,16 +182,11 @@ static void qemu_ram_free(RAMBlock *block)
 
         if (parent->refcount == 0 && parent->dirty)
             qemu_ram_free(parent);
-    }
-
-    if (block->refcount == 0) {
-        if (parent == NULL)
-            cheri_tag_free(block);
-
-        g_free(block);
     } else {
-        block->dirty = true;
+        cheri_tag_free(block);
     }
+
+    g_free(block);
 }
 
 ram_addr_t qemu_ram_block_host_offset(RAMBlock *rb, void *host)
