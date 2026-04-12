@@ -214,6 +214,15 @@ static void aarch64_morello_initfn(Object *obj)
 
     t = cpu->isar.id_aa64pfr1;
     t = FIELD_DP64(t, ID_AA64PFR1, CE, 1);
+    /* BTI */
+    t = FIELD_DP64(t, ID_AA64PFR1, BT, 1);
+    /*
+     * Begin with full support for MTE. This will be downgraded to MTE=0
+     * during realize if the board provides no tag memory, much like
+     * we do for EL2 with the virtualization=on property.
+     */
+    t = FIELD_DP64(t, ID_AA64PFR1, MTE, 3);
+
     cpu->isar.id_aa64pfr1 = t;
 
     t = cpu->isar.id_aa64dfr0;
@@ -283,6 +292,8 @@ static void aarch64_morello_initfn(Object *obj)
     cpu->gic_vpribits = 5;
     cpu->gic_vprebits = 5;
     define_arm_cp_regs(cpu, cortex_a72_a57_a53_cp_reginfo);
+
+    aarch64_add_pauth_properties(obj);
 }
 
 static void aarch64_a53_initfn(Object *obj)
