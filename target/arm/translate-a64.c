@@ -532,6 +532,8 @@ gen_mte_and_cheri_check1_mmuidx(DisasContext *s, TCGv_i64 addr, bool is_read,
     if (tag_checked && s->mte_active[is_unpriv]) {
         TCGv_i32 tcg_desc;
         TCGv_i64 ret;
+        TCGv_i64 save;
+        TCGv_cap_checked_ptr result;
         int desc = 0;
 
         desc = FIELD_DP32(desc, MTEDESC, MIDX, core_idx);
@@ -541,12 +543,22 @@ gen_mte_and_cheri_check1_mmuidx(DisasContext *s, TCGv_i64 addr, bool is_read,
         desc = FIELD_DP32(desc, MTEDESC, SIZEM1, (1 << log2_size) - 1);
         tcg_desc = tcg_const_i32(desc);
 
+        /*
+         * Callers may still need @addr for writeback after this helper path.
+         * arm_bounds_checked() can clobber temps, so preserve it here just
+         * like clean_data_tbi_and_cheri() does.
+         */
+        save = tcg_temp_local_new_i64();
+        tcg_gen_mov_i64(save, addr);
         ret = new_tmp_a64(s);
         gen_helper_mte_check(ret, cpu_env, tcg_desc, addr);
         tcg_temp_free_i32(tcg_desc);
 
-        return arm_bounds_checked(s, ret, (1 << log2_size), base_reg, is_read,
+        result = arm_bounds_checked(s, ret, (1 << log2_size), base_reg, is_read,
                                   is_write, alternate_base, ddc_base);
+        tcg_gen_mov_i64(addr, save);
+        tcg_temp_free_i64(save);
+        return result;
     }
     return clean_data_tbi_and_cheri(s, addr, is_read, is_write, 1 << log2_size,
                                     base_reg, alternate_base, ddc_base);
@@ -575,6 +587,8 @@ TCGv_cap_checked_ptr gen_mte_and_cheri_checkN(DisasContext *s, TCGv_i64 addr,
     if (tag_checked && s->mte_active[0]) {
         TCGv_i32 tcg_desc;
         TCGv_i64 ret;
+        TCGv_i64 save;
+        TCGv_cap_checked_ptr result;
         int desc = 0;
 
         desc = FIELD_DP32(desc, MTEDESC, MIDX, get_mem_index(s));
@@ -584,12 +598,22 @@ TCGv_cap_checked_ptr gen_mte_and_cheri_checkN(DisasContext *s, TCGv_i64 addr,
         desc = FIELD_DP32(desc, MTEDESC, SIZEM1, size - 1);
         tcg_desc = tcg_const_i32(desc);
 
+        /*
+         * Callers may still need @addr for writeback after this helper path.
+         * arm_bounds_checked() can clobber temps, so preserve it here just
+         * like clean_data_tbi_and_cheri() does.
+         */
+        save = tcg_temp_local_new_i64();
+        tcg_gen_mov_i64(save, addr);
         ret = new_tmp_a64(s);
         gen_helper_mte_check(ret, cpu_env, tcg_desc, addr);
         tcg_temp_free_i32(tcg_desc);
 
-        return arm_bounds_checked(s, ret, size, base_reg, is_read,
+        result = arm_bounds_checked(s, ret, size, base_reg, is_read,
                                   is_write, alternate_base, ddc_base);
+        tcg_gen_mov_i64(addr, save);
+        tcg_temp_free_i64(save);
+        return result;
     }
     return clean_data_tbi_and_cheri(s, addr, is_read, is_write, size,
                                     base_reg, alternate_base, ddc_base);
