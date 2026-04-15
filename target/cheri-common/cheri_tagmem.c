@@ -830,7 +830,7 @@ bool cheri_poison_check_one(CPUArchState *env, target_ulong vaddr,
 }
 
 bool cheri_poison_check(CPUArchState *env, target_ulong vaddr, int32_t size,
-                         MMUAccessType rw, uintptr_t pc)
+                        MMUAccessType rw, uintptr_t pc)
 {
     cheri_debug_assert(size > 0);
     target_ulong first_addr = vaddr;
@@ -838,21 +838,24 @@ bool cheri_poison_check(CPUArchState *env, target_ulong vaddr, int32_t size,
     TagOffset tag_start = addr_to_tag_offset(first_addr);
     TagOffset tag_end = addr_to_tag_offset(last_addr);
     if (likely(tag_start.value == tag_end.value)) {
-        // Common case, only one granule (i.e. aligned load / store)
+        /* Common case, only one granule (i.e. aligned load / store) */
         return cheri_poison_check_one(env, vaddr, rw, pc);
     }
-    // Unaligned -> can cross a capabiblity alignment boundary and
-    // therefore invalidate two tags. It can also cross pages
+    /*
+     * Unaligned -> can cross a capabiblity alignment boundary and
+     * therefore invalidate two tags. It can also cross pages.
+     */
     size_t ntags = tag_end.value - tag_start.value + 1;
-    if(ntags ==2){
+    if (ntags == 2) {
         assert(ntags == 2 && "Should check at most two version granules here");
         bool poison = false;
         for (target_ulong addr = tag_offset_to_addr(tag_start);
-             addr <= tag_offset_to_addr(tag_start)+CHERI_CAP_SIZE; addr += CHERI_CAP_SIZE) {
+             addr <= tag_offset_to_addr(tag_start) + CHERI_CAP_SIZE;
+             addr += CHERI_CAP_SIZE) {
             poison |= cheri_poison_check_one(env, addr, rw, pc);
         }
         return poison;
-    }else{
+    } else {
         return false;
     }
 }
