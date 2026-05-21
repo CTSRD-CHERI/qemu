@@ -94,6 +94,10 @@ static MemTxResult iocap_keymngr_write(void *opaque, hwaddr addr, uint64_t data,
         s->key_en[key_index] = enabling_key;
         return MEMTX_OK;
     } else if (addr < 0x2000) {
+        hwaddr key_index = (addr - 0x1000) >> 4;
+        if (s->key_en[key_index]) {
+            return MEMTX_ERROR;
+        }
         for (int b = 0; b < size; b++) {
             s->key_data[addr - 0x1000 + b] = (data >> (b * 8)) & 0xFF;
         }
