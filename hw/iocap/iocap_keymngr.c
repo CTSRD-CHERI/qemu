@@ -1,5 +1,7 @@
 #include "hw/iocap/iocap_keymngr.h"
 
+#include "qemu/error-report.h"
+
 #include "migration/vmstate.h"
 #include "qapi/error.h" /* provides error_fatal() handler */
 #include "qemu/log.h"
@@ -55,46 +57,49 @@ static MemTxResult iocap_keymngr_write(void *opaque, hwaddr addr, uint64_t data,
     if (size > 8 || (addr % 8) + size > 8) {
         // Incorrect access size or
         // Crossing an 8-byte boundary access
-        qemu_log("iocap: invalid wr addr 0x%lx size 0x%x\n", addr, size);
+        error_printf("iocap: invalid wr addr 0x%lx size 0x%x\n", addr, size);
         return MEMTX_ERROR;
     }
 
-    if (addr < 0x1000 && (addr % 16) == 0) {
-        hwaddr key_index = addr >> 4;
-        bool enabling_key = data & 1;
+    if (addr < 0x1000) {
+        if ((addr % 16) == 0) {
+            hwaddr key_index = addr >> 4;
+            bool enabling_key = data & 1;
 
-        // if (enabling_key && !s->key_en[key_index]) {
-        //     qemu_log(
-        //         "iocap: enabling key %ld with data 0x%02x%02x%02x%02x%02x%02x%02x%02x_%02x%02x%02x%02x%02x%02x%02x%02x\n",
-        //         key_index,
-        //         s->key_data[addr + 15],
-        //         s->key_data[addr + 14],
-        //         s->key_data[addr + 13],
-        //         s->key_data[addr + 12],
-        //         s->key_data[addr + 11],
-        //         s->key_data[addr + 10],
-        //         s->key_data[addr + 9],
-        //         s->key_data[addr + 8],
-        //         s->key_data[addr + 7],
-        //         s->key_data[addr + 6],
-        //         s->key_data[addr + 5],
-        //         s->key_data[addr + 4],
-        //         s->key_data[addr + 3],
-        //         s->key_data[addr + 2],
-        //         s->key_data[addr + 1],
-        //         s->key_data[addr]
-        //     );
-        // } else if (!enabling_key && s->key_en[key_index]) {
-        //     qemu_log(
-        //         "iocap: disabling key %ld\n",
-        //         key_index
-        //         );
-        // }
+            // if (enabling_key && !s->key_en[key_index]) {
+            //     qemu_log(
+            //         "iocap: enabling key %ld with data 0x%02x%02x%02x%02x%02x%02x%02x%02x_%02x%02x%02x%02x%02x%02x%02x%02x\n",
+            //         key_index,
+            //         s->key_data[addr + 15],
+            //         s->key_data[addr + 14],
+            //         s->key_data[addr + 13],
+            //         s->key_data[addr + 12],
+            //         s->key_data[addr + 11],
+            //         s->key_data[addr + 10],
+            //         s->key_data[addr + 9],
+            //         s->key_data[addr + 8],
+            //         s->key_data[addr + 7],
+            //         s->key_data[addr + 6],
+            //         s->key_data[addr + 5],
+            //         s->key_data[addr + 4],
+            //         s->key_data[addr + 3],
+            //         s->key_data[addr + 2],
+            //         s->key_data[addr + 1],
+            //         s->key_data[addr]
+            //     );
+            // } else if (!enabling_key && s->key_en[key_index]) {
+            //     qemu_log(
+            //         "iocap: disabling key %ld\n",
+            //         key_index
+            //         );
+            // }
 
-        s->key_en[key_index] = enabling_key;
+            s->key_en[key_index] = enabling_key;
+        }
         return MEMTX_OK;
-    } else if (addr < 0x2000) {
-        hwaddr key_index = (addr - 0x1000) >> 4;
+    } else if (addr >= 0x1000 && addr < 0x2000) {
+        hwaddr key_index = (addr >> 4) - 0x100;
+        // error_printf("iocap: addr 0x%lx key_index 0x%lx\n", addr, key_index);
         if (s->key_en[key_index]) {
             return MEMTX_ERROR;
         }
@@ -104,7 +109,7 @@ static MemTxResult iocap_keymngr_write(void *opaque, hwaddr addr, uint64_t data,
         return MEMTX_OK;
     } else {
         // Invalid address
-        qemu_log("iocap: invalid wr addr 0x%lx size 0x%x\n", addr, size);
+        error_printf("iocap: invalid wr addr 0x%lx size 0x%x\n", addr, size);
         return MEMTX_DECODE_ERROR;
     }
 }
