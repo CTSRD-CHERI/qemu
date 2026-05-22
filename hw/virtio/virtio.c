@@ -268,7 +268,9 @@ static void vring_iocap_desc_read(VirtIODevice *vdev, VRingDesc *desc,
     // CCapNativeVirtqDesc are both the same: four native-byte-order fields addr,len,flags,next
     CCapResult res = ccap2024_11_read_virtio(&cap, (CCapNativeVirtqDesc *)desc);
     if (res != CCapResult_Success) {
-        virtio_error(vdev, "ccap2024_11_read_virtio failed in vring_iocap_desc_read: %s\n", ccap_result_str(res));
+        virtio_error(vdev, "ccap2024_11_read_virtio failed in vring_iocap_desc_read: %s 0x%016lx%016lx 0x%016lx%016lx\n", ccap_result_str(res),
+         ((uint64_t*)&cap.data)[1], ((uint64_t*)&cap.data)[0], ((uint64_t*)&cap.signature)[1], ((uint64_t*)&cap.signature)[0]
+        );
     }
     // check the IOCap on read - assume that the point of reading a descriptor
     // is very close to the point of using said descriptor.
