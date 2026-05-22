@@ -1,20 +1,28 @@
 /**
 * A library for using I/O capabilities with cryptographic protection, a.k.a. crypto-caps, a.k.a. ccaps.
-* Minimal C reimplementation of rust_caps_c version 0.5.0, with the following caveats:
+* Minimal C reimplementation of rust_caps_c version 0.6.3, with the following caveats:
 * - no cap2024_02 support
 * - no random generation support
 * - ccap2024_11_read_secret_id does not try to decode the capability beyond the secret_key_id bitfield
 * - requires an extern function for doing AES encryption
 * - secret_key_id is currently NOT bounds checked (TODO fix this)
+* - implements extra functions for directly bit-twiddling virtio-related fields in capabilities
 */
 
-#ifndef LIBRUST_CAPS_C_H
-#define LIBRUST_CAPS_C_H
+#ifndef LIBCCAP_H
+#define LIBCCAP_H
 
-#include <stdarg.h>
+#if !defined(LIBCCAP_NO_STANDARD_HEADERS)
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
+#else
+// Assume we have been wrapped in some header which includes the equivalents of stdbool and stdint.h
+// See libccap_platform.incl.c for more details.
+#endif
+
+#if !defined(LIBCCAP_USE_RESULT_FUNC_PREFIX)
+#define LIBCCAP_USE_RESULT_FUNC_PREFIX __attribute__((warn_unused_result))
+#endif
 
 /**
  * One of the flags that can be set in [CCapNativeVirtqDesc],
@@ -65,6 +73,7 @@ enum CCapResult
   CCapResult_Encode_TooBigSecretId = 10,
   CCapResult_Encode_InvalidPerms = 11,
   CCapResult_Decode_NotVirtio = 12,
+  CCapResult_CatastrophicFailure = 13,
   CCapResult_NullRequiredArgs = 100,
 };
 #ifndef __cplusplus
@@ -105,13 +114,13 @@ extern "C" {
 #endif // __cplusplus
 
 /**
- * A function called when librust_caps_c needs to perform AES encryption.
+ * A function called when libccap needs to perform AES encryption.
  *
- * This function is *not* defined by librust_caps_c, and must be defined by the target linking the library in.
+ * This function is *not* defined by libccap, and must be defined by the target linking the library in.
  * 
  * It must support (secret) and (result) being the same pointer.
  */
-extern void aes_encrypt_128_func(const CCapU128* secret, const CCapU128* data, CCapU128* result);
+extern void ccap_aes_encrypt_128_func(const CCapU128* secret, const CCapU128* data, CCapU128* result);
 
 /**
  * Convert a CCapPerms enum to a null-terminated static immutable C string.
@@ -133,6 +142,7 @@ const char *ccap_result_str(CCapResult res);
  *
  * Does not use caveats.
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_init_almighty(struct CCap2024_11 *cap,
                                      const CCapU128 *secret,
                                      uint32_t secret_id,
@@ -150,6 +160,7 @@ CCapResult ccap2024_11_init_almighty(struct CCap2024_11 *cap,
  *
  * Does not use caveats.
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_init_exact(struct CCap2024_11 *cap,
                                   const CCapU128 *secret,
                                   uint64_t base,
@@ -162,6 +173,7 @@ CCapResult ccap2024_11_init_exact(struct CCap2024_11 *cap,
  * Uses the initial resource and both caveats if necessary.
  * Calculates the capability signature given the packed data and the secret.
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_init_cavs_exact(struct CCap2024_11 *cap,
                                        const CCapU128 *secret,
                                        uint64_t base,
@@ -180,6 +192,7 @@ CCapResult ccap2024_11_init_cavs_exact(struct CCap2024_11 *cap,
  *
  * Does not use caveats.
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_init_inexact(struct CCap2024_11 *cap,
                                     const CCapU128 *secret,
                                     uint64_t base,
@@ -196,6 +209,7 @@ CCapResult ccap2024_11_init_inexact(struct CCap2024_11 *cap,
  * Returns `CCapResult_DecodeInvalidSignature` if the signature is invalid.
  * Returns other errors if the capability is otherwise malformed.
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_check_signature(const struct CCap2024_11 *cap,
                                        const CCapU128 *secret);
 
@@ -207,6 +221,7 @@ CCapResult ccap2024_11_check_signature(const struct CCap2024_11 *cap,
  * Returns a Decode error if the capability data is invalid.
  * Doesn't check the capability signature.
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_read_range(const struct CCap2024_11 *cap,
                                   uint64_t *base,
                                   uint64_t *len,
@@ -218,6 +233,7 @@ CCapResult ccap2024_11_read_range(const struct CCap2024_11 *cap,
  * Returns a Decode error if the capability permissions field is invalid, but does not check any other part of the capability.
  * Doesn't check the capability signature.
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_read_perms(const struct CCap2024_11 *cap,
                                   CCapPerms *perms);
 
@@ -227,6 +243,7 @@ CCapResult ccap2024_11_read_perms(const struct CCap2024_11 *cap,
  * Returns a Decode error if the capability data is invalid.
  * Doesn't check the capability signature.
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_read_secret_id(const struct CCap2024_11 *cap, uint32_t *secret_id);
 
 /**
@@ -256,6 +273,7 @@ CCapResult ccap2024_11_read_secret_id(const struct CCap2024_11 *cap, uint32_t *s
  *
  * Uses caveats
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_init_virtio_cavs_exact(struct CCap2024_11 *cap,
                                               const CCapU128 *secret,
                                               const struct CCapNativeVirtqDesc *virtio_desc,
@@ -283,21 +301,67 @@ CCapResult ccap2024_11_init_virtio_cavs_exact(struct CCap2024_11 *cap,
  *
  * In practice this means you should only call this function on capabilities encoded through [$ccap_version_init_virtio_exact], where those invariants are enforced.
  */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_read_virtio(const struct CCap2024_11 *cap,
                                    struct CCapNativeVirtqDesc *virtio_desc);
 
-#if !defined(LIBRUST_CAPS_C_HOSTED)
 /**
- * A function called when librust_caps_c panics to print debug information.
+ * Given a pointer to a capaility initialized with ccap2024_11_init_virtio_*,
+ * read out the encoded 'next' field.
+ * Can never fail.
+ * DOES NOT CHECK IF cap IS NULL.
+ * 
+ * |- INDIRECT -|- NEXT -|- next[12:0] -|- key[7:0] -|
+ *      [22]       [21]       [20:8]         [7:0]
+ * 
+ */
+uint16_t ccap2024_11_read_virtio_next(const struct CCap2024_11 *cap);
+
+/**
+ * Given a pointer to a capability initialized with ccap2024_11_init_virtio_*,
+ * read out the INDIRECT and NEXT flags.
+ * Can never fail. Does not read out the WRITE flag because that is encoded in the permissions chain,
+ * which has one invalid value and thus can fail.
+ * DOES NOT CHECK IF cap IS NULL.
+ * 
+ * |- INDIRECT -|- NEXT -|- next[12:0] -|- key[7:0] -|
+ *      [22]       [21]       [20:8]         [7:0]
+ */
+uint16_t ccap2024_11_read_virtio_flags_indirect_next(const struct CCap2024_11 *cap);
+
+/**
+ * Given a pointer to a capability, clear the data with 0s and overwrite the data that would encode the 'next' field with the given value.
+ * This is useful for systems like FreeBSD which use this field in normal descriptors to store information.
+ * 
+ * cap is non-optional, and the function returns `NullRequiredArgs` if they're null.
+ * 
+ * Returns `Encode_TooBigSecretId` if `next` does not fit into 13 bits.
+ */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+CCapResult ccap2024_11_clear_and_write_virtio_next(struct CCap2024_11* cap, uint16_t next);
+
+#if !defined(LIBCCAP_HOSTED)
+/**
+ * A function called when libccap panics to print debug information.
  *
- * This function is *not* defined by librust_caps_c, and must be defined by the target linking the library in.
+ * This function is *not* defined by libccap, and must be defined by the target linking the library in.
  */
 extern uint64_t ccap_panic_write_utf8(const uint8_t *utf8,
                                       uint64_t utf_len);
+#endif
+
+#if !defined(LIBCCAP_HOSTED)
+/**
+ * A function called once libccap has finished printing debug information,
+ * allowing the error to be surfaced to the relevant systems via e.g. an exception or an abort.
+ *
+ * This function is *not* defined by libccap, and must be defined by the target linking the library in.
+ */
+extern void ccap_panic_complete(void);
 #endif
 
 #ifdef __cplusplus
 } // extern "C"
 #endif // __cplusplus
 
-#endif /* LIBRUST_CAPS_C_H */
+#endif /* LIBCCAP_H */

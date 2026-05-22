@@ -1,27 +1,64 @@
-#include "hw/iocap/libccap-0.5.0/libccap.h"
+// Include platform-specific setup, including the path to the header file.
+// This file should be customized for each platform.
+#include "libccap_platform.incl.c"
 
 // Include generated bitfield for Cap2024_11
 #include "libccap_bitfields.incl.c"
 
-#include <string.h> // memcmp
+#if !defined(LIBCCAP_MEMCMP)
+// Previously I defined it as LIBCCAP_MEMCMP(left, right, size) = memcmp(left, right, size)
+// but that breaks down in more complicated scenarios.
+// See https://tech.lgbt/@fay59/113903948791120892
+#define LIBCCAP_MEMCMP memcmp
+#endif
 
-// #define DBG_TRACE
+#if !defined(libccap_dbg_trace)
+#define libccap_dbg_trace(...)
+#endif
 
-#ifdef DBG_TRACE
-#include <stdio.h>
+#if !defined(LIBCCAP_INTERNAL_FUNC_PREFIX)
+#define LIBCCAP_INTERNAL_FUNC_PREFIX static
+#endif
 
-#define dbg_trace(...) printf(__VA_ARGS__)
-#else
-#define dbg_trace(...)
+#if !defined(LIBCCAP_EXTERNAL_FUNC_PREFIX)
+#define LIBCCAP_EXTERNAL_FUNC_PREFIX
+#endif
+
+// LIBCCAP_USE_RESULT_FUNC_PREFIX is defined by libccap.h, which libccap_platform.incl.c includes
+
+#if !defined(LIBCCAP_ILOG2)
+// https://stackoverflow.com/a/22418446
+LIBCCAP_INTERNAL_FUNC_PREFIX inline uint8_t libccap_ilog2(uint64_t x) {
+    if (x == 0) return 0;
+
+    return 64 - __builtin_clzl(x) - 1;
+}
+#define LIBCCAP_ILOG2(x) libccap_ilog2(x)
+#endif
+
+#if !defined(LIBCCAP_NORETURN_SPECIFIER)
+    #if defined(__STDC_VERSION__)
+        #if (__STDC_VERSION__ >= 202311L)
+            #define LIBCCAP_NORETURN_SPECIFIER [[noreturn]]
+        #elif (__STDC_VERSION__ >= 201112L)
+            #define LIBCCAP_NORETURN_SPECIFIER _Noreturn
+        #else
+            #define LIBCCAP_NORETURN_SPECIFIER
+        #endif
+    #else
+        #define LIBCCAP_NORETURN_SPECIFIER
+    #endif
 #endif
 
 // Simple reimplementation of the Rust panic! without nice argument handling, for internal use only
-void panic(const char* msg) {
+LIBCCAP_INTERNAL_FUNC_PREFIX LIBCCAP_NORETURN_SPECIFIER void libccap_simple_panic(const char* msg) {
     // very simple strlen, because we can't depend on libraries
     uint64_t len;
     for (len = 0; msg[len] != '\0'; len++);
     // write out the message
     ccap_panic_write_utf8((const uint8_t*)msg, len);
+    // call the finalizing function, which may never return to us
+    ccap_panic_complete();
     // block forever
     do {} while(1);
 }
@@ -57,13 +94,7 @@ enum CapPermsChain {
 };
 typedef uint8_t CapPermsChain;
 
-CCapResult check_cap_perms_chain(uint8_t chain) {
-    if (chain >= 0b1111) {
-        return CCapResult_Decode_InvalidCapPermsChain;
-    }
-    return CCapResult_Success;
-}
-CapPermsChain root_perms_chain_for_cap_perms(CCapPerms perms) {
+LIBCCAP_INTERNAL_FUNC_PREFIX CapPermsChain libccap_root_perms_chain_for_cap_perms(CCapPerms perms) {
     switch (perms) {
         case CCapPerms_Read:
             return CapPermsChain_ReadOnly_0Cav;
@@ -72,10 +103,12 @@ CapPermsChain root_perms_chain_for_cap_perms(CCapPerms perms) {
         case CCapPerms_ReadWrite:
             return CapPermsChain_ReadWrite_0Cav;
         default:
-            panic("Invalid perms");
+            libccap_simple_panic("Invalid perms");
+            return 0b1111; // Invalid value
     }
 }
-CCapResult add_perms_caveat_to_cap_perms_chain(uint8_t chain, CCapPerms perms, CapPermsChain* out) {
+LIBCCAP_USE_RESULT_FUNC_PREFIX 
+LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_add_perms_caveat_to_cap_perms_chain(uint8_t chain, CCapPerms perms, CapPermsChain* out) {
     switch (chain) {
         case CapPermsChain_ReadOnly_2Cav:
         case CapPermsChain_ReadWrite_2Cav:
@@ -98,7 +131,7 @@ CCapResult add_perms_caveat_to_cap_perms_chain(uint8_t chain, CCapPerms perms, C
                     *out =  CapPermsChain_ReadWrite_1Cav;
                     return CCapResult_Success;
                 default:
-                    panic("Invalid perms");
+                    return CCapResult_Encode_InvalidPerms;
             }
 
         case CapPermsChain_ReadWrite_1Cav:
@@ -113,7 +146,7 @@ CCapResult add_perms_caveat_to_cap_perms_chain(uint8_t chain, CCapPerms perms, C
                     *out =  CapPermsChain_ReadWrite_2Cav;
                     return CCapResult_Success;
                 default:
-                    panic("Invalid perms");
+                    return CCapResult_Encode_InvalidPerms;
             }
 
         case CapPermsChain_ReadOnly_0Cav:
@@ -157,10 +190,13 @@ CCapResult add_perms_caveat_to_cap_perms_chain(uint8_t chain, CCapPerms perms, C
             }
             *out = CapPermsChain_ShrunkToWrite_2Cav_ByCav1;
             return CCapResult_Success;
-                
+        
+        default:
+            return CCapResult_Encode_InvalidPerms;
     }
 }
-CCapResult perms_for_cap_perms_chain(uint8_t chain, CCapPerms* out) {
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_perms_for_cap_perms_chain(uint8_t chain, CCapPerms* out) {
     switch (chain) {
         case CapPermsChain_ReadWrite_0Cav:
         case CapPermsChain_ReadWrite_1Cav:
@@ -187,7 +223,8 @@ CCapResult perms_for_cap_perms_chain(uint8_t chain, CCapPerms* out) {
             return CCapResult_Decode_InvalidCapPermsChain;
     }
 }
-CCapResult num_cavs_for_cap_perms_chain(uint8_t chain, uint8_t* out) {
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_num_cavs_for_cap_perms_chain(uint8_t chain, uint8_t* out) {
     switch (chain) {
         case CapPermsChain_ReadWrite_0Cav:
         case CapPermsChain_ReadOnly_0Cav:
@@ -217,7 +254,7 @@ CCapResult num_cavs_for_cap_perms_chain(uint8_t chain, uint8_t* out) {
             return CCapResult_Decode_InvalidCapPermsChain;
     }
 }
-void cap_perms_chain_at_root(CapPermsChain chain, CapPermsChain* out) {
+LIBCCAP_INTERNAL_FUNC_PREFIX void libccap_cap_perms_chain_at_root(CapPermsChain chain, CapPermsChain* out) {
     switch (chain) {
         case CapPermsChain_ReadOnly_0Cav:
         case CapPermsChain_ReadOnly_1Cav:
@@ -242,7 +279,7 @@ void cap_perms_chain_at_root(CapPermsChain chain, CapPermsChain* out) {
             return;
     }
 }
-bool cap_perms_chain_at_cav1(CapPermsChain chain, CapPermsChain* out) {
+LIBCCAP_INTERNAL_FUNC_PREFIX bool libccap_cap_perms_chain_at_cav1(CapPermsChain chain, CapPermsChain* out) {
     switch (chain) {
         // 0-caveat chains don't have a cav1
         case CapPermsChain_ReadOnly_0Cav:
@@ -283,7 +320,7 @@ bool cap_perms_chain_at_cav1(CapPermsChain chain, CapPermsChain* out) {
             return false;
     }
 }
-bool cap_perms_chain_at_cav2(CapPermsChain chain, CapPermsChain* out) {
+LIBCCAP_INTERNAL_FUNC_PREFIX bool libccap_cap_perms_chain_at_cav2(CapPermsChain chain, CapPermsChain* out) {
     switch (chain) {
         // 0-caveat chains don't have a cav2
         case CapPermsChain_ReadOnly_0Cav:
@@ -313,16 +350,17 @@ bool cap_perms_chain_at_cav2(CapPermsChain chain, CapPermsChain* out) {
 }
 
 // INTERNAL
-CCapResult read_bits_range(const struct Cap2024_11_Bits bits,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap2024_11_Bits bits,
                                   uint64_t *base_ptr,
                                   uint64_t *len_ptr,
                                   bool *len_64_ptr) {
 
     uint8_t num_cavs = 0;
-    if (num_cavs_for_cap_perms_chain(bits.perms, &num_cavs) != CCapResult_Success) {
+    if (libccap_num_cavs_for_cap_perms_chain(bits.perms, &num_cavs) != CCapResult_Success) {
         return CCapResult_Decode_InvalidCapPermsChain;
     }
-    dbg_trace("read_bits_range perms %x n_cavs %d\n", bits.perms, num_cavs);
+    libccap_dbg_trace("libccap_read_bits_range perms %x n_cavs %d\n", bits.perms, num_cavs);
     // Ensure that caveats are only nonzero when they are used by the capability
     if (num_cavs < 1 && (bits.index != 0 || bits.index_size_div != 0)) {
         return CCapResult_Decode_UnexpectedCaveat;
@@ -354,7 +392,8 @@ CCapResult read_bits_range(const struct Cap2024_11_Bits bits,
             }
             break;
         default:
-            panic("Impossible q value != 0,1,2,3");
+            libccap_simple_panic("Impossible q value != 0,1,2,3");
+            return CCapResult_CatastrophicFailure;
     }
 
     uint8_t quadrant = q;
@@ -383,14 +422,15 @@ CCapResult read_bits_range(const struct Cap2024_11_Bits bits,
             elem_count = ((implicit_1 << 26) | (bits.b_c & 0x3FFFFFF)) + 1;
             break;
         default:
-            panic("Impossible quadrant value != 0,1,2,3");
+            libccap_simple_panic("Impossible quadrant value != 0,1,2,3");
+            return CCapResult_CatastrophicFailure;
     }
 
     // The length may be (1 << 64) - detect by shifting up by one less than the actual amount and seeing if the top bit is set.
     bool len_64 = (elem_count << (elem_width_log2 - 1)) >> 63;
     uint64_t length = elem_count << elem_width_log2;
 
-    dbg_trace("read_bits_range initial base %lx len %lx\n", base, length);
+    libccap_dbg_trace("libccap_read_bits_range initial base %lx len %lx\n", base, length);
 
     if (num_cavs > 0) {
         // cav1
@@ -410,7 +450,8 @@ CCapResult read_bits_range(const struct Cap2024_11_Bits bits,
                 log_max_count = 26 + implicit_1;
                 break;
             default:
-                panic("Impossible quadrant value != 0,1,2,3");
+                libccap_simple_panic("Impossible quadrant value != 0,1,2,3");
+                return CCapResult_CatastrophicFailure;
         }
 
         uint64_t check_lhs = ((uint64_t)(bits.index + 1)) << log_max_count;
@@ -427,7 +468,8 @@ CCapResult read_bits_range(const struct Cap2024_11_Bits bits,
             if (bits.index == 0) {
                 // This is an identity-sized cav1, which uses the initial base and length but can be shrunk further by a cav2
                 identity_cav1 = true;
-                dbg_trace("read_bits_range cav1    identity\n", base, length);
+                // MODIFIED FROM 0.6.3 - needs to propagate
+                libccap_dbg_trace("libccap_read_bits_range cav1    identity base %lx len %lx\n", base, length);
             } else {
                 // This is invalid
                 return CCapResult_Decode_InvalidCaveat;
@@ -442,7 +484,7 @@ CCapResult read_bits_range(const struct Cap2024_11_Bits bits,
             len_64 = (elem_width_log2_cav1 == 64);
             length = len_64 ? 0 : (elem_count_cav1 << elem_width_log2_cav1);
 
-            dbg_trace("read_bits_range cav1    base %lx len %lx\n", base, length);
+            libccap_dbg_trace("libccap_read_bits_range cav1    base %lx len %lx\n", base, length);
         }
 
         if (num_cavs > 1) {
@@ -505,7 +547,7 @@ CCapResult read_bits_range(const struct Cap2024_11_Bits bits,
                 len_64 = (((uint64_t)elem_count_cav2) << (elem_width_log2_cav2 - 1)) >> 63;
             length = (((uint64_t)elem_count_cav2) << elem_width_log2_cav2);
 
-            dbg_trace("read_bits_range cav2    base %lx len %lx\n", base, length);
+            libccap_dbg_trace("libccap_read_bits_range cav2    base %lx len %lx\n", base, length);
         }
     }
 
@@ -523,17 +565,8 @@ CCapResult read_bits_range(const struct Cap2024_11_Bits bits,
 }
 
 // INTERNAL
-// https://stackoverflow.com/a/22418446
-static inline uint8_t ilog2(uint64_t x) {
-    if (x == 0) return 0;
-
-    return 64 - __builtin_clzl(x) - 1;
-}
-
-// #include <stdio.h>
-
-// INTERNAL
-CCapResult generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint64_t base, uint64_t len, uint64_t* actual_base_ptr, uint64_t* actual_len_ptr) {
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint64_t base, uint64_t len, uint64_t* actual_base_ptr, uint64_t* actual_len_ptr) {
     if (len == 0) {
         return CCapResult_Encode_UnrepresentableBaseRange;
     }
@@ -557,7 +590,7 @@ CCapResult generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint6
     uint8_t encoded_elem_width_log2;
     uint8_t count_bits;
 
-    uint8_t log_len_minus1 = (len == 1) ? 0 : ilog2(len - 1);
+    uint8_t log_len_minus1 = (len == 1) ? 0 : LIBCCAP_ILOG2(len - 1);
 
     if (log_len_minus1 <= 14) {
         implicit_1 = false;
@@ -600,7 +633,8 @@ CCapResult generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint6
         encoded_elem_width_log2 = elem_width_log2 - 7;
         count_bits = 26;
     } else {
-        panic("Impossible log_len_minus1");
+        libccap_simple_panic("Impossible log_len_minus1");
+        return CCapResult_CatastrophicFailure;
     }
 
     // We pack bits of the base address and the count together into a 49-bit vector
@@ -622,7 +656,7 @@ CCapResult generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint6
         // increasing the length might bump us up a count_bits quadrant, thus further shrinking the base_bits,
         // but after that happens once it won't recurse again.
         // TODO if this sizes up to (1 << 64) it breaks
-        return generate_initial(
+        return libccap_generate_initial(
             bits,
             perms,
             expected_decoded_base,
@@ -640,10 +674,12 @@ CCapResult generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint6
 
     // sanity check
     if (encoded_count >= ((uint64_t)1 << count_bits)) {
-        panic("encoded_count too big\n");
+        libccap_simple_panic("encoded_count too big\n");
+        return CCapResult_CatastrophicFailure;
     }
     if (encoded_base >= ((uint64_t)1 << base_bits)) {
-        panic("encoded_base too big\n");
+        libccap_simple_panic("encoded_base too big\n");
+        return CCapResult_CatastrophicFailure;
     }
 
     uint64_t b_c = (encoded_base << count_bits) | encoded_count;
@@ -652,10 +688,12 @@ CCapResult generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint6
     uint64_t actual_len = count << elem_width_log2; // TODO I think this is exactly equal to re-decoding encoded_count?
 
     if (actual_base > base) {
-        panic("Too-large base\n");
+        libccap_simple_panic("Too-large base\n");
+        return CCapResult_CatastrophicFailure;
     }
     if (actual_len < len || (base - actual_base) > (actual_len - len)) {
-        panic("Not-long-enough len\n");
+        libccap_simple_panic("Not-long-enough len\n");
+        return CCapResult_CatastrophicFailure;
     }
 
     bits->b_c = b_c;
@@ -668,7 +706,8 @@ CCapResult generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint6
 }
 
 // INTERNAL
-CCapResult generate_caveats(struct Cap2024_11_Bits* bits, CCapPerms perms, uint64_t base, uint64_t len, uint64_t* actual_base_ptr, uint64_t* actual_len_ptr) {
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_caveats(struct Cap2024_11_Bits* bits, CCapPerms perms, uint64_t base, uint64_t len, uint64_t* actual_base_ptr, uint64_t* actual_len_ptr) {
     uint64_t actual_base = *actual_base_ptr;
     uint64_t actual_len = *actual_len_ptr;
 
@@ -746,19 +785,27 @@ CCapResult generate_caveats(struct Cap2024_11_Bits* bits, CCapPerms perms, uint6
 
         bits->index = selected_index;
         bits->index_size_div = selected_size_div;
-        add_perms_caveat_to_cap_perms_chain(bits->perms, perms, &bits->perms);
+        CCapResult res = libccap_add_perms_caveat_to_cap_perms_chain(bits->perms, perms, &bits->perms);
+        if (res != CCapResult_Success) {
+            // Should be impossible because the perms should be the same as the initial perms of the root of the chain
+            libccap_dbg_trace("failed to extend caveat chain 0x%x with perms %s\n", bits->perms, ccap_perms_str(perms));
+            libccap_simple_panic("failed to extend caveat chain\n");
+        }
 
-        dbg_trace("added cav1   index %x size_div %x\n", selected_index, selected_size_div);
+        libccap_dbg_trace("added cav1   index %x size_div %x\n", selected_index, selected_size_div);
 
-        if (read_bits_range(*bits, &actual_base, &actual_len, NULL) != CCapResult_Success) {
-            panic("Added invalid cav1");
+        if (libccap_read_bits_range(*bits, &actual_base, &actual_len, NULL) != CCapResult_Success) {
+            libccap_simple_panic("Added invalid cav1\n");
+            return CCapResult_CatastrophicFailure;
         }
 
         if (actual_base > base) {
-            panic("cav1 Too-large base\n");
+            libccap_simple_panic("cav1 Too-large base\n");
+            return CCapResult_CatastrophicFailure;
         }
         if (actual_len < len || (base - actual_base) > (actual_len - len)) {
-            panic("cav1 Not-long-enough len\n");
+            libccap_simple_panic("cav1 Not-long-enough len\n");
+            return CCapResult_CatastrophicFailure;
         }
 
         // fprintf(stderr, "cav1   base 0x%lx len 0x%lx\n", actual_base, actual_len);
@@ -793,21 +840,29 @@ CCapResult generate_caveats(struct Cap2024_11_Bits* bits, CCapPerms perms, uint6
                 bits->range_y_minus_one = ((base + len - actual_base) << (14 - cav1_pow2)) - 1;
             }
 
-            add_perms_caveat_to_cap_perms_chain(bits->perms, perms, &bits->perms);
+            res = libccap_add_perms_caveat_to_cap_perms_chain(bits->perms, perms, &bits->perms);
+            if (res != CCapResult_Success) {
+                // Should be impossible because the perms should be the same as the initial perms of the root of the chain
+                libccap_dbg_trace("failed to extend caveat chain 0x%x with perms %s\n", bits->perms, ccap_perms_str(perms));
+                libccap_simple_panic("failed to extend caveat chain\n");
+            }
 
-            dbg_trace("added cav2   range_x %x range_y-1 %x\n", bits->range_x, bits->range_y_minus_one);
+            libccap_dbg_trace("added cav2   range_x %x range_y-1 %x\n", bits->range_x, bits->range_y_minus_one);
 
-            if (read_bits_range(*bits, &actual_base, &actual_len, NULL) != CCapResult_Success) {
-                panic("Added invalid cav2");
+            if (libccap_read_bits_range(*bits, &actual_base, &actual_len, NULL) != CCapResult_Success) {
+                libccap_simple_panic("Added invalid cav2");
+                return CCapResult_CatastrophicFailure;
             }
 
             // fprintf(stderr, "cav2   base 0x%lx len 0x%lx\n", actual_base, actual_len);
 
             if (actual_base > base) {
-                panic("cav2 Too-large base\n");
+                libccap_simple_panic("cav2 Too-large base\n");
+                return CCapResult_CatastrophicFailure;
             }
             if (actual_len < len || (base - actual_base) > (actual_len - len)) {
-                panic("cav2 Not-long-enough len\n");
+                libccap_simple_panic("cav2 Not-long-enough len\n");
+                return CCapResult_CatastrophicFailure;
             }
 
         } else {
@@ -828,11 +883,11 @@ CCapResult generate_caveats(struct Cap2024_11_Bits* bits, CCapPerms perms, uint6
 }
 
 // INTERNAL
-void get_expected_signature(const CCapU128* data, const CCapU128* secret, CCapU128* expected_sig) {
+LIBCCAP_INTERNAL_FUNC_PREFIX void libccap_get_expected_signature(const CCapU128* data, const CCapU128* secret, CCapU128* expected_sig) {
     struct Cap2024_11_Bits bits = Cap2024_11_Bits_unpack(data);
 
     CCapPerms root_perms;
-    cap_perms_chain_at_root(bits.perms, &root_perms);
+    libccap_cap_perms_chain_at_root(bits.perms, &root_perms);
     struct Cap2024_11_Bits root_bits = bits;
     root_bits.perms = root_perms;
     root_bits.index = 0;
@@ -844,10 +899,10 @@ void get_expected_signature(const CCapU128* data, const CCapU128* secret, CCapU1
     Cap2024_11_Bits_pack(&root_bits, &root_u128);
 
     // encrypto the root data with the secret, update expected_sig with the root signature
-    aes_encrypt_128_func(secret, &root_u128, expected_sig);
+    ccap_aes_encrypt_128_func(secret, &root_u128, expected_sig);
 
     CCapPerms cav1_perms;
-    if (cap_perms_chain_at_cav1(bits.perms, &cav1_perms)) {
+    if (libccap_cap_perms_chain_at_cav1(bits.perms, &cav1_perms)) {
         // We have cav1
         struct Cap2024_11_Bits cav1_bits = bits;
         cav1_bits.perms = cav1_perms;
@@ -858,15 +913,13 @@ void get_expected_signature(const CCapU128* data, const CCapU128* secret, CCapU1
         Cap2024_11_Bits_pack(&cav1_bits, &cav1_u128);
 
         // encrypt the cav1 data with the root signature, update expected_sig with the cav1 signature
-        aes_encrypt_128_func(expected_sig, &cav1_u128, expected_sig);
+        ccap_aes_encrypt_128_func(expected_sig, &cav1_u128, expected_sig);
 
         CCapPerms cav2_perms;
-        if (cap_perms_chain_at_cav2(bits.perms, &cav2_perms)) {
+        if (libccap_cap_perms_chain_at_cav2(bits.perms, &cav2_perms)) {
             // We have cav2
-            // cav2_u128 = cap->data
-            CCapU128 cav2_sig;
             // encrypt the cav2 data with the cav1 signature, update expected_sig with the cav2 signature
-            aes_encrypt_128_func(expected_sig, data, expected_sig);
+            ccap_aes_encrypt_128_func(expected_sig, data, expected_sig);
         }
     }
 }
@@ -875,7 +928,7 @@ void get_expected_signature(const CCapU128* data, const CCapU128* secret, CCapU1
  * Convert a CCapPerms enum to a null-terminated static immutable C string.
  * Invokes undefined behaviour if passed an value not in the enumeration.
  */
-const char *ccap_perms_str(CCapPerms perms) {
+LIBCCAP_EXTERNAL_FUNC_PREFIX const char *ccap_perms_str(CCapPerms perms) {
     switch (perms) {
         case CCapPerms_Read:
             return "CCapPerms_Read";
@@ -892,7 +945,7 @@ const char *ccap_perms_str(CCapPerms perms) {
  * Convert a CCapResult enum to a null-terminated static immutable C string.
  * Invokes undefined behaviour if passed an value not in the enumeration.
  */
-const char *ccap_result_str(CCapResult res) {
+LIBCCAP_EXTERNAL_FUNC_PREFIX const char *ccap_result_str(CCapResult res) {
     switch (res) {
         case (CCapResult_Success): return "CCapResult_Success";
         case (CCapResult_Encode_UnrepresentableBaseRange): return "CCapResult_Encode_UnrepresentableBaseRange";
@@ -908,6 +961,7 @@ const char *ccap_result_str(CCapResult res) {
         case (CCapResult_Encode_TooBigSecretId): return "CCapResult_Encode_TooBigSecretId";
         case (CCapResult_Encode_InvalidPerms): return "CCapResult_Encode_InvalidPerms";
         case (CCapResult_Decode_NotVirtio): return "CCapResult_Decode_NotVirtio";
+        case (CCapResult_CatastrophicFailure): return "CCapResult_CatastrophicFailure";
         default:
             return "CCapResult_Invalid";
     }
@@ -921,7 +975,8 @@ const char *ccap_result_str(CCapResult res) {
  *
  * Does not use caveats.
  */
-CCapResult ccap2024_11_init_almighty(struct CCap2024_11 *cap,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_almighty(struct CCap2024_11 *cap,
                                      const CCapU128 *secret,
                                      uint32_t secret_id,
                                      CCapPerms perms) {
@@ -935,12 +990,12 @@ CCapResult ccap2024_11_init_almighty(struct CCap2024_11 *cap,
         .range_x = 0,
         .range_y_minus_one = 0,
         .secret_key_id = secret_id,
-        .perms = root_perms_chain_for_cap_perms(perms)
+        .perms = libccap_root_perms_chain_for_cap_perms(perms)
     };
 
     Cap2024_11_Bits_pack(&bits, &cap->data);
 
-    aes_encrypt_128_func(secret, &cap->data, &cap->signature);
+    ccap_aes_encrypt_128_func(secret, &cap->data, &cap->signature);
 
     return CCapResult_Success;
 }
@@ -957,7 +1012,8 @@ CCapResult ccap2024_11_init_almighty(struct CCap2024_11 *cap,
  *
  * Does not use caveats.
  */
-CCapResult ccap2024_11_init_exact(struct CCap2024_11 *cap,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_exact(struct CCap2024_11 *cap,
                                   const CCapU128 *secret,
                                   uint64_t base,
                                   uint64_t len,
@@ -972,7 +1028,8 @@ CCapResult ccap2024_11_init_exact(struct CCap2024_11 *cap,
     uint64_t actual_len;
     // don't need to check len_64 - this function cannot take arguments that imply the len should be 1 << 64, and if it were upgraded from (len) to (1 << 64) actual_len would be == 0.
     if (ccap2024_11_read_range(cap, &actual_base, &actual_len, NULL) != CCapResult_Success) {
-        panic("ccap2024_11_read_range failed on ccap2024_11_init_inexact successful outcome");
+        libccap_simple_panic("ccap2024_11_read_range failed on ccap2024_11_init_inexact successful outcome");
+        return CCapResult_CatastrophicFailure;
     }
 
     if (actual_base != base || actual_len != len) {
@@ -987,7 +1044,8 @@ CCapResult ccap2024_11_init_exact(struct CCap2024_11 *cap,
  * Uses the initial resource and both caveats if necessary.
  * Calculates the capability signature given the packed data and the secret.
  */
-CCapResult ccap2024_11_init_cavs_exact(struct CCap2024_11 *cap,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_cavs_exact(struct CCap2024_11 *cap,
                                        const CCapU128 *secret,
                                        uint64_t base,
                                        uint64_t len,
@@ -1000,31 +1058,31 @@ CCapResult ccap2024_11_init_cavs_exact(struct CCap2024_11 *cap,
         return CCapResult_NullRequiredArgs;
     }
 
-    dbg_trace("base %lx len %lx\n", base, len);
+    libccap_dbg_trace("base %lx len %lx\n", base, len);
 
     struct Cap2024_11_Bits bits = {
         .index = 0,
         .index_size_div = 0,
         .range_x = 0,
         .range_y_minus_one = 0,
-        .perms = root_perms_chain_for_cap_perms(perms),
+        .perms = libccap_root_perms_chain_for_cap_perms(perms),
         .secret_key_id = secret_id,
     };
     uint64_t actual_base;
     uint64_t actual_len;
-    CCapResult res = generate_initial(&bits, perms, base, len, &actual_base, &actual_len);
+    CCapResult res = libccap_generate_initial(&bits, perms, base, len, &actual_base, &actual_len);
     if (res != CCapResult_Success) {
         return res;
     }
-    dbg_trace("post-initial actual base %lx actual len %lx perms chain %x\n", actual_base, actual_len, bits.perms);
-    res = generate_caveats(&bits, perms, base, len, &actual_base, &actual_len);
+    libccap_dbg_trace("post-initial actual base %lx actual len %lx perms chain %x\n", actual_base, actual_len, bits.perms);
+    res = libccap_generate_caveats(&bits, perms, base, len, &actual_base, &actual_len);
     if (res != CCapResult_Success) {
         return res;
     }
-    dbg_trace("    post-cav actual base %lx actual len %lx perms chain %x\n", actual_base, actual_len, bits.perms);
+    libccap_dbg_trace("    post-cav actual base %lx actual len %lx perms chain %x\n", actual_base, actual_len, bits.perms);
 
     Cap2024_11_Bits_pack(&bits, &cap->data);
-    get_expected_signature(&cap->data, secret, &cap->signature);
+    libccap_get_expected_signature(&cap->data, secret, &cap->signature);
 
     // fprintf(stderr, "test: base target/ 0x%lx actual 0x%lx\n      len target 0x%lx actual 0x%lx\n", base, actual_base, len, actual_len);
     if (actual_base != base || actual_len != len) {
@@ -1045,7 +1103,8 @@ CCapResult ccap2024_11_init_cavs_exact(struct CCap2024_11 *cap,
  *
  * Does not use caveats.
  */
-CCapResult ccap2024_11_init_inexact(struct CCap2024_11 *cap,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_inexact(struct CCap2024_11 *cap,
                                     const CCapU128 *secret,
                                     uint64_t base,
                                     uint64_t len,
@@ -1063,19 +1122,19 @@ CCapResult ccap2024_11_init_inexact(struct CCap2024_11 *cap,
         .index_size_div = 0,
         .range_x = 0,
         .range_y_minus_one = 0,
-        .perms = root_perms_chain_for_cap_perms(perms),
+        .perms = libccap_root_perms_chain_for_cap_perms(perms),
         .secret_key_id = secret_id,
     };
     uint64_t actual_base;
     uint64_t actual_len;
-    CCapResult res = generate_initial(&bits, perms, base, len, &actual_base, &actual_len);
+    CCapResult res = libccap_generate_initial(&bits, perms, base, len, &actual_base, &actual_len);
 
     if (res != CCapResult_Success) {
         return res;
     }
 
     Cap2024_11_Bits_pack(&bits, &cap->data);
-    get_expected_signature(&cap->data, secret, &cap->signature);
+    libccap_get_expected_signature(&cap->data, secret, &cap->signature);
 
     return CCapResult_Success;
 }
@@ -1089,7 +1148,8 @@ CCapResult ccap2024_11_init_inexact(struct CCap2024_11 *cap,
  * Returns `CCapResult_DecodeInvalidSignature` if the signature is invalid.
  * Returns other errors if the capability is otherwise malformed.
  */
-CCapResult ccap2024_11_check_signature(const struct CCap2024_11 *cap,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_check_signature(const struct CCap2024_11 *cap,
                                        const CCapU128 *secret) {
     if (cap == NULL) {
         return CCapResult_NullRequiredArgs;
@@ -1099,9 +1159,9 @@ CCapResult ccap2024_11_check_signature(const struct CCap2024_11 *cap,
     }
 
     CCapU128 expected_sig;
-    get_expected_signature(&cap->data, secret, &expected_sig);
+    libccap_get_expected_signature(&cap->data, secret, &expected_sig);
 
-    if (memcmp(expected_sig, cap->signature, 16) == 0) {
+    if (LIBCCAP_MEMCMP(expected_sig, cap->signature, 16) == 0) {
         return CCapResult_Success;
     } else {
         return CCapResult_Decode_InvalidSignature;
@@ -1116,7 +1176,8 @@ CCapResult ccap2024_11_check_signature(const struct CCap2024_11 *cap,
  * Returns a Decode error if the capability data is invalid.
  * Doesn't check the capability signature.
  */
-CCapResult ccap2024_11_read_range(const struct CCap2024_11 *cap,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_read_range(const struct CCap2024_11 *cap,
                                   uint64_t *base_ptr,
                                   uint64_t *len_ptr,
                                   bool *len_64_ptr) {
@@ -1126,7 +1187,7 @@ CCapResult ccap2024_11_read_range(const struct CCap2024_11 *cap,
 
     struct Cap2024_11_Bits bits = Cap2024_11_Bits_unpack(&cap->data);
 
-    return read_bits_range(bits, base_ptr, len_ptr, len_64_ptr);
+    return libccap_read_bits_range(bits, base_ptr, len_ptr, len_64_ptr);
 }
 
 /**
@@ -1135,7 +1196,8 @@ CCapResult ccap2024_11_read_range(const struct CCap2024_11 *cap,
  * Returns a Decode error if the capability permissions field is invalid, but does not check any other part of the capability.
  * Doesn't check the capability signature.
  */
-CCapResult ccap2024_11_read_perms(const struct CCap2024_11 *cap,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_read_perms(const struct CCap2024_11 *cap,
                                   CCapPerms *perms) {
     if (cap == NULL) {
         return CCapResult_NullRequiredArgs;
@@ -1145,7 +1207,7 @@ CCapResult ccap2024_11_read_perms(const struct CCap2024_11 *cap,
     }
 
     struct Cap2024_11_Bits bits = Cap2024_11_Bits_unpack(&cap->data);
-    return perms_for_cap_perms_chain(bits.perms, perms);
+    return libccap_perms_for_cap_perms_chain(bits.perms, perms);
 }
 
 /**
@@ -1154,7 +1216,8 @@ CCapResult ccap2024_11_read_perms(const struct CCap2024_11 *cap,
  * Returns a Decode error if the capability data is invalid.
  * Doesn't check the capability signature.
  */
-CCapResult ccap2024_11_read_secret_id(const struct CCap2024_11 *cap, uint32_t *secret_id) {
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_read_secret_id(const struct CCap2024_11 *cap, uint32_t *secret_id) {
     if (cap == NULL) {
         return CCapResult_NullRequiredArgs;
     }
@@ -1195,7 +1258,8 @@ CCapResult ccap2024_11_read_secret_id(const struct CCap2024_11 *cap, uint32_t *s
  *
  * Uses caveats
  */
-CCapResult ccap2024_11_init_virtio_cavs_exact(struct CCap2024_11 *cap,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_virtio_cavs_exact(struct CCap2024_11 *cap,
                                               const CCapU128 *secret,
                                               const struct CCapNativeVirtqDesc *virtio_desc,
                                               uint8_t secret_id) {
@@ -1227,7 +1291,7 @@ CCapResult ccap2024_11_init_virtio_cavs_exact(struct CCap2024_11 *cap,
     uint64_t base = virtio_desc->addr;
     uint64_t len = virtio_desc->len;
 
-    dbg_trace("base %lx len %lx\n", base, len);
+    libccap_dbg_trace("base %lx len %lx\n", base, len);
 
     return ccap2024_11_init_cavs_exact(cap, secret, base, len, packed_secret_id, perms);
 }
@@ -1254,7 +1318,8 @@ CCapResult ccap2024_11_init_virtio_cavs_exact(struct CCap2024_11 *cap,
  *
  * In practice this means you should only call this function on capabilities encoded through [$ccap_version_init_virtio_exact], where those invariants are enforced.
  */
-CCapResult ccap2024_11_read_virtio(const struct CCap2024_11 *cap,
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_read_virtio(const struct CCap2024_11 *cap,
                                    struct CCapNativeVirtqDesc *virtio_desc) {
     if (cap == NULL) {
         return CCapResult_NullRequiredArgs;
@@ -1265,7 +1330,7 @@ CCapResult ccap2024_11_read_virtio(const struct CCap2024_11 *cap,
     uint64_t base;
     uint64_t len;
     bool len_64;
-    CCapResult res = read_bits_range(bits, &base, &len, &len_64);
+    CCapResult res = libccap_read_bits_range(bits, &base, &len, &len_64);
     if (res != CCapResult_Success) {
         return res;
     }
@@ -1275,7 +1340,7 @@ CCapResult ccap2024_11_read_virtio(const struct CCap2024_11 *cap,
     }
 
     CCapPerms perms;
-    res = perms_for_cap_perms_chain(bits.perms, &perms);
+    res = libccap_perms_for_cap_perms_chain(bits.perms, &perms);
     if (res != CCapResult_Success) {
         return res;
     }
@@ -1300,5 +1365,70 @@ CCapResult ccap2024_11_read_virtio(const struct CCap2024_11 *cap,
     virtio_desc->flags = flags;
     virtio_desc->next = next;
     
+    return CCapResult_Success;
+}
+
+/**
+ * Given a pointer to a capaility initialized with ccap2024_11_init_virtio_*,
+ * read out the encoded 'next' field.
+ * Can never fail.
+ * DOES NOT CHECK IF cap IS NULL.
+ * 
+ * |- INDIRECT -|- NEXT -|- next[12:0] -|- key[7:0] -|
+ *      [22]       [21]       [20:8]         [7:0]
+ * 
+ */
+LIBCCAP_EXTERNAL_FUNC_PREFIX uint16_t ccap2024_11_read_virtio_next(const struct CCap2024_11 *cap) {
+    struct Cap2024_11_Bits bits = Cap2024_11_Bits_unpack(&cap->data);
+    
+    uint16_t next = (bits.secret_key_id >> 8) & 0x1FFF;
+
+    return next;
+}
+
+/**
+ * Given a pointer to a capability initialized with ccap2024_11_init_virtio_*,
+ * read out the INDIRECT and NEXT flags.
+ * Can never fail. Does not read out the WRITE flag because that is encoded in the permissions chain,
+ * which has one invalid value and thus can fail.
+ * DOES NOT CHECK IF cap IS NULL.
+ * 
+ * |- INDIRECT -|- NEXT -|- next[12:0] -|- key[7:0] -|
+ *      [22]       [21]       [20:8]         [7:0]
+ */
+LIBCCAP_EXTERNAL_FUNC_PREFIX uint16_t ccap2024_11_read_virtio_flags_indirect_next(const struct CCap2024_11 *cap) {
+    struct Cap2024_11_Bits bits = Cap2024_11_Bits_unpack(&cap->data);
+
+    uint16_t flags = 
+        (((bits.secret_key_id >> 22) & 1) ? CCAP_VIRTQ_F_INDIRECT : 0)
+        | (((bits.secret_key_id >> 21) & 1) ? CCAP_VIRTQ_F_NEXT : 0);
+    
+    return flags;
+}
+
+/**
+ * Given a pointer to a capability, clear the data with 0s and overwrite the data that would encode the 'next' field with the given value.
+ * This is useful for systems like FreeBSD which use this field in normal descriptors to store information.
+ * 
+ * cap is non-optional, and the function returns `NullRequiredArgs` if they're null.
+ * 
+ * Returns `Encode_TooBigSecretId` if `next` does not fit into 13 bits.
+ */
+LIBCCAP_USE_RESULT_FUNC_PREFIX
+LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_clear_and_write_virtio_next(struct CCap2024_11* cap, uint16_t next) {
+    if (cap == NULL) {
+        return CCapResult_NullRequiredArgs;
+    }
+    if (next >= (1 << 13)) {
+        return CCapResult_Encode_TooBigSecretId;
+    }
+    
+    struct Cap2024_11_Bits bits = {
+        .secret_key_id = (((uint32_t)next) << 8),
+        0
+    };
+
+    Cap2024_11_Bits_pack(&bits, &cap->data);
+
     return CCapResult_Success;
 }
