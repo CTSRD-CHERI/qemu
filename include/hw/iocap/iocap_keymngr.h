@@ -19,10 +19,10 @@ struct IOCapKeymngrState {
     {
         struct
         {
-            uint64_t good_reads;
-            uint64_t bad_reads;
             uint64_t good_writes;
             uint64_t bad_writes;
+            uint64_t good_reads;
+            uint64_t bad_reads;
         };
         uint8_t perf_bytes[32] __attribute__((aligned(8)));
     };
