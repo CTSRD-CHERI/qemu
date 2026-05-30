@@ -31,6 +31,8 @@
 #include "sysemu/sysemu.h"
 #include "chardev-internal.h"
 
+void (*chardev_special_char_function_callback)(void) = NULL;
+
 /* MUX driver for serial I/O splitting */
 
 /*
@@ -91,6 +93,7 @@ static const char * const mux_help[] = {
     "% t    toggle console timestamps\n\r",
     "% b    send break (magic sysrq)\n\r",
     "% c    switch between console and monitor\n\r",
+    "% i    clear IOCap lease key data\n\r",
     "% %  sends %\n\r",
     NULL
 };
@@ -176,6 +179,10 @@ static int mux_proc_byte(Chardev *chr, MuxChardev *d, int ch)
             d->timestamps = !d->timestamps;
             d->timestamps_start = -1;
             d->linestart = 0;
+            break;
+        case 'i':
+            if (chardev_special_char_function_callback != NULL)
+                chardev_special_char_function_callback();
             break;
         }
     } else if (ch == term_escape_char) {

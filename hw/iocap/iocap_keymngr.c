@@ -5,6 +5,7 @@
 #include "migration/vmstate.h"
 #include "qapi/error.h" /* provides error_fatal() handler */
 #include "qemu/log.h"
+#include "chardev/char.h"
 
 #define REG_ID 	0x0
 #define PERF_COUNTER_GOOD_WRITE	0x1000
@@ -147,6 +148,7 @@ static void iocap_keymngr_instance_init(Object *obj)
 
     if (singleton_iocap_keymngr == NULL) {
         singleton_iocap_keymngr = s;
+        chardev_special_char_function_callback = iocap_keymngr_clear;
     } else {
         qemu_log("iocap: multiple instances of iocap_keymngr, global iocap_keymngr_check_cap_signature() may not work as expected\n");
     }
@@ -264,4 +266,14 @@ sig_fail:
         singleton_iocap_keymngr->bad_writes++;
     }
     return false;
+}
+
+void iocap_keymngr_clear(void)
+{
+    if (singleton_iocap_keymngr == NULL) {
+        qemu_log("iocap: can't clear anything, no iocap_keymngr present\n");
+        return;
+    }
+    memset(singleton_iocap_keymngr->key_data, 0, 4096);
+    qemu_log("iocap: cleared iocap_keymngr\n");
 }

@@ -45,4 +45,8 @@ DeviceState *iocap_keymngr_create(hwaddr);
 // TODO allow checking the range as well?
 bool iocap_keymngr_check_cap_signature(const CCap2024_11* cap, CCapPerms access_mode);
 
+// Shortcut function called by the character handler to clear all IOCaps.
+// Should demonstrate verification failures immediately.
+void iocap_keymngr_clear(void);
+
 #endif

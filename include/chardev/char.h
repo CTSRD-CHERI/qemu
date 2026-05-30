@@ -291,4 +291,6 @@ void resume_mux_open(void);
 /* console.c */
 void qemu_chr_parse_vc(QemuOpts *opts, ChardevBackend *backend, Error **errp);
 
+extern void (*chardev_special_char_function_callback)(void);
+
 #endif
