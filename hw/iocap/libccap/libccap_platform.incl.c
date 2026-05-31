@@ -13,7 +13,7 @@
 // The wrapper file may also override the LIBCCAP_USE_RESULT_FUNC_PREFIX define, which by default is a warn_unused_result attribute.
 // You may also define the extern functions here, stubs are provided below.
 
-#include "hw/iocap/libccap-0.6.3/libccap.h"
+#include "hw/iocap/libccap/libccap.h"
 
 #include "hw/iocap/iocap.h"
 

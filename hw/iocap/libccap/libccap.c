@@ -17,18 +17,29 @@
 #endif
 
 #if !defined(LIBCCAP_INTERNAL_FUNC_PREFIX)
-#define LIBCCAP_INTERNAL_FUNC_PREFIX static
+#define LIBCCAP_INTERNAL_FUNC_PREFIX static inline
 #endif
 
 #if !defined(LIBCCAP_EXTERNAL_FUNC_PREFIX)
 #define LIBCCAP_EXTERNAL_FUNC_PREFIX
 #endif
 
+#if !defined(LIBCCAP_OPTIMIZE_OUT_PANIC)
+#define LIBCCAP_OPTIMIZE_OUT_PANIC 0
+#endif
+
+#if !defined(LIBCCAP_USE_INITIAL_REGION_LUT)
+#define LIBCCAP_USE_INITIAL_REGION_LUT 1
+#endif
+#if !LIBCCAP_USE_INITIAL_REGION_LUT
+#error "Libccap doesn't work without the initial region LUT right now"
+#endif
+
 // LIBCCAP_USE_RESULT_FUNC_PREFIX is defined by libccap.h, which libccap_platform.incl.c includes
 
 #if !defined(LIBCCAP_ILOG2)
 // https://stackoverflow.com/a/22418446
-LIBCCAP_INTERNAL_FUNC_PREFIX inline uint8_t libccap_ilog2(uint64_t x) {
+LIBCCAP_INTERNAL_FUNC_PREFIX uint8_t libccap_ilog2(uint64_t x) {
     if (x == 0) return 0;
 
     return 64 - __builtin_clzl(x) - 1;
@@ -52,6 +63,9 @@ LIBCCAP_INTERNAL_FUNC_PREFIX inline uint8_t libccap_ilog2(uint64_t x) {
 
 // Simple reimplementation of the Rust panic! without nice argument handling, for internal use only
 LIBCCAP_INTERNAL_FUNC_PREFIX LIBCCAP_NORETURN_SPECIFIER void libccap_simple_panic(const char* msg) {
+    #if LIBCCAP_OPTIMIZE_OUT_PANIC
+    __builtin_unreachable();
+    #else
     // very simple strlen, because we can't depend on libraries
     uint64_t len;
     for (len = 0; msg[len] != '\0'; len++);
@@ -61,6 +75,7 @@ LIBCCAP_INTERNAL_FUNC_PREFIX LIBCCAP_NORETURN_SPECIFIER void libccap_simple_pani
     ccap_panic_complete();
     // block forever
     do {} while(1);
+    #endif
 }
 
 // CapPermsChain
@@ -107,7 +122,7 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CapPermsChain libccap_root_perms_chain_for_cap_perm
             return 0b1111; // Invalid value
     }
 }
-LIBCCAP_USE_RESULT_FUNC_PREFIX 
+LIBCCAP_USE_RESULT_FUNC_PREFIX
 LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_add_perms_caveat_to_cap_perms_chain(uint8_t chain, CCapPerms perms, CapPermsChain* out) {
     switch (chain) {
         case CapPermsChain_ReadOnly_2Cav:
@@ -190,7 +205,7 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_add_perms_caveat_to_cap_perms_ch
             }
             *out = CapPermsChain_ShrunkToWrite_2Cav_ByCav1;
             return CCapResult_Success;
-        
+
         default:
             return CCapResult_Encode_InvalidPerms;
     }
@@ -349,6 +364,86 @@ LIBCCAP_INTERNAL_FUNC_PREFIX bool libccap_cap_perms_chain_at_cav2(CapPermsChain 
     }
 }
 
+
+#if LIBCCAP_USE_INITIAL_REGION_LUT
+typedef struct {
+    // uint8_t w;
+    uint8_t e;
+    uint8_t m_top;
+    uint8_t m_bits;
+    // uint8_t m_top_and_bits; // (m_top << 7) | m_bits
+    uint8_t b_bits; // = b_m_width - m_bits
+    uint8_t b_align; // = addr_size - b_bits
+    uint8_t min_used_pow2;
+    uint8_t max_encodable_pow2;
+} CCapWidthClass;
+#define PACK_M_BITS(M_TOP, M_BITS) \
+    .m_top=M_TOP,                  \
+    .m_bits=M_BITS,                \
+    .b_bits=49-M_BITS,             \
+    .b_align=(54 - (49 - M_BITS))
+    // ((((uint8_t)m_top)<<7) | ((uint8_t)m_bits))
+const static CCapWidthClass ccap2024_width_classes[32] = {
+    { .e=10, PACK_M_BITS(0, 5), .min_used_pow2=10, .max_encodable_pow2=15, },
+    { .e=10, PACK_M_BITS(1, 5), .min_used_pow2=15, .max_encodable_pow2=16, },
+    { .e=11, PACK_M_BITS(1, 5), .min_used_pow2=16, .max_encodable_pow2=17, },
+    { .e=12, PACK_M_BITS(1, 5), .min_used_pow2=17, .max_encodable_pow2=18, },
+    { .e=13, PACK_M_BITS(1, 5), .min_used_pow2=18, .max_encodable_pow2=19, },
+    { .e=14, PACK_M_BITS(1, 5), .min_used_pow2=19, .max_encodable_pow2=20, },
+    { .e=15, PACK_M_BITS(1, 5), .min_used_pow2=20, .max_encodable_pow2=21, },
+    { .e=16, PACK_M_BITS(1, 5), .min_used_pow2=21, .max_encodable_pow2=22, },
+
+    { .e=17, PACK_M_BITS(0, 12), .min_used_pow2=22, .max_encodable_pow2=29, },
+    { .e=17, PACK_M_BITS(1, 12), .min_used_pow2=29, .max_encodable_pow2=30, },
+    { .e=18, PACK_M_BITS(1, 12), .min_used_pow2=30, .max_encodable_pow2=31, },
+    { .e=19, PACK_M_BITS(1, 12), .min_used_pow2=31, .max_encodable_pow2=32, },
+    { .e=20, PACK_M_BITS(1, 12), .min_used_pow2=32, .max_encodable_pow2=33, },
+    { .e=21, PACK_M_BITS(1, 12), .min_used_pow2=33, .max_encodable_pow2=34, },
+    { .e=22, PACK_M_BITS(1, 12), .min_used_pow2=34, .max_encodable_pow2=35, },
+    { .e=23, PACK_M_BITS(1, 12), .min_used_pow2=35, .max_encodable_pow2=36, },
+
+    { .e=24, PACK_M_BITS(0, 19), .min_used_pow2=36, .max_encodable_pow2=43, },
+    { .e=24, PACK_M_BITS(1, 19), .min_used_pow2=43, .max_encodable_pow2=44, },
+    { .e=25, PACK_M_BITS(1, 19), .min_used_pow2=44, .max_encodable_pow2=45, },
+    { .e=26, PACK_M_BITS(1, 19), .min_used_pow2=45, .max_encodable_pow2=46, },
+    { .e=27, PACK_M_BITS(1, 19), .min_used_pow2=46, .max_encodable_pow2=47, },
+    { .e=28, PACK_M_BITS(1, 19), .min_used_pow2=47, .max_encodable_pow2=48, },
+    { .e=29, PACK_M_BITS(1, 19), .min_used_pow2=48, .max_encodable_pow2=49, },
+    { .e=30, PACK_M_BITS(1, 19), .min_used_pow2=49, .max_encodable_pow2=50, },
+
+    { .e=31, PACK_M_BITS(0, 26), .min_used_pow2=50, .max_encodable_pow2=57, },
+    { .e=31, PACK_M_BITS(1, 26), .min_used_pow2=57, .max_encodable_pow2=58, },
+    { .e=32, PACK_M_BITS(1, 26), .min_used_pow2=58, .max_encodable_pow2=59, },
+    { .e=33, PACK_M_BITS(1, 26), .min_used_pow2=59, .max_encodable_pow2=60, },
+    { .e=34, PACK_M_BITS(1, 26), .min_used_pow2=60, .max_encodable_pow2=61, },
+    { .e=35, PACK_M_BITS(1, 26), .min_used_pow2=61, .max_encodable_pow2=62, },
+    { .e=36, PACK_M_BITS(1, 26), .min_used_pow2=62, .max_encodable_pow2=63, },
+    { .e=37, PACK_M_BITS(1, 26), .min_used_pow2=63, .max_encodable_pow2=64, }
+};
+
+const static uint8_t ccap2024_length_pow2_to_width_class[64] = {
+    // 0..9 -> w0
+    0,0,0,0,0,
+    0,0,0,0,0,
+    // 10..15 -> w0
+    0,0,0,0,0,
+    // 16->w1, .. 22->w7
+    1,2,3,4,5,6,7,
+    // 23..29 -> w8
+    8,8,8,8,8,8,8,
+    // 30->w9, 36->w15
+    9,10,11,12,13,14,15,
+    // 37..43 -> w16
+    16,16,16,16,16,16,16,
+    // 44->w17, 50->w23
+    17,18,19,20,21,22,23,
+    // 51..57 -> w24
+    24,24,24,24,24,24,24,
+    // 58..63 (would be 64, but we don't support those lengths here)
+    // w25->w31
+    25,26,27,28,29,30,31
+};
+#endif
 // INTERNAL
 LIBCCAP_USE_RESULT_FUNC_PREFIX
 LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap2024_11_Bits bits,
@@ -369,6 +464,18 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap
         return CCapResult_Decode_UnexpectedCaveat;
     }
 
+    #if LIBCCAP_USE_INITIAL_REGION_LUT
+    uint8_t w = (bits.encoded_elem_width + 1) & 0b11111;
+    const CCapWidthClass* w_cl = &ccap2024_width_classes[w];
+    uint64_t base = (bits.b_c >> (w_cl->m_bits)) << (w_cl->b_align);
+    uint64_t elem_count_mask = ((uint64_t)-1) >> (64 - w_cl->m_bits);
+    uint64_t elem_count = ((
+        ((uint64_t)w_cl->m_top) << (w_cl->m_bits)
+    ) | (
+        bits.b_c & elem_count_mask
+    )) + 1;
+    uint8_t elem_width_log2 = w_cl->e;
+    #else
     // Initial resource decoding
     uint64_t implicit_1 = (bits.encoded_elem_width & 0b111) != 0b111;
 
@@ -388,7 +495,7 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap
             if (bits.encoded_elem_width == 31) {
                 elem_width_log2 = 10;
             } else {
-                elem_width_log2 = bits.encoded_elem_width + 10 - 3; 
+                elem_width_log2 = bits.encoded_elem_width + 10 - 3;
             }
             break;
         default:
@@ -425,16 +532,20 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap
             libccap_simple_panic("Impossible quadrant value != 0,1,2,3");
             return CCapResult_CatastrophicFailure;
     }
+    #endif
 
     // The length may be (1 << 64) - detect by shifting up by one less than the actual amount and seeing if the top bit is set.
     bool len_64 = (elem_count << (elem_width_log2 - 1)) >> 63;
     uint64_t length = elem_count << elem_width_log2;
 
-    libccap_dbg_trace("libccap_read_bits_range initial base %lx len %lx\n", base, length);
+    libccap_dbg_trace("libccap_read_bits_range initial w %d elem_count %lx elem_count_mask %lx m_top %d base %lx len %lx\n", w, elem_count, elem_count_mask, w_cl->m_top, base, length);
 
     if (num_cavs > 0) {
         // cav1
 
+        #if LIBCCAP_USE_INITIAL_REGION_LUT
+        uint8_t log_max_count = w_cl->m_bits + w_cl->m_top;
+        #else
         uint8_t log_max_count;
         switch (quadrant) {
             case 0:
@@ -453,6 +564,7 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap
                 libccap_simple_panic("Impossible quadrant value != 0,1,2,3");
                 return CCapResult_CatastrophicFailure;
         }
+        #endif
 
         uint64_t check_lhs = ((uint64_t)(bits.index + 1)) << log_max_count;
         uint64_t check_rhs = elem_count << bits.index_size_div;
@@ -468,7 +580,6 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap
             if (bits.index == 0) {
                 // This is an identity-sized cav1, which uses the initial base and length but can be shrunk further by a cav2
                 identity_cav1 = true;
-                // MODIFIED FROM 0.6.3 - needs to propagate
                 libccap_dbg_trace("libccap_read_bits_range cav1    identity base %lx len %lx\n", base, length);
             } else {
                 // This is invalid
@@ -495,6 +606,7 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap
             uint16_t elem_count_cav2 = bits.range_y_minus_one - bits.range_x + 1;
             uint8_t elem_width_log2_cav2;
             uint64_t base_offset_cav2;
+            bool cav2_force_match_cav1 = false;
             if (elem_width_log2_cav1 >= 14) {
                 elem_width_log2_cav2 = elem_width_log2_cav1 - 14;
                 base_offset_cav2 = ((uint64_t)bits.range_x) << elem_width_log2_cav2;
@@ -511,7 +623,11 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap
                         // or the top bits are equal and the the bottom bits of top_offset are greater
                         || ((top_offset_cav2 > length) && (top_offset_64_cav2 == len_64))
                     ) {
-                        return CCapResult_Decode_InvalidCaveat;
+                        if (bits.range_x == 0) {
+                            cav2_force_match_cav1 = true;
+                        } else {
+                            return CCapResult_Decode_InvalidCaveat;
+                        }
                     }
                 }
             } else {
@@ -526,26 +642,31 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap
                     //                         !=
                     //               (range_y + 1) >> BLAH
                     uint16_t top_offset_cav2 = elem_count_cav2 + base_offset_cav2;
-                    
+
                     // top_offset is always <2^16 here, so don't need to consider the top
                     if ((!len_64) && (top_offset_cav2 > length)) {
-                        return CCapResult_Decode_InvalidCaveat;
+                        if (bits.range_x == 0) {
+                            cav2_force_match_cav1 = true;
+                        } else {
+                            return CCapResult_Decode_InvalidCaveat;
+                        }
                     }
                 }
             }
 
-
-            uint64_t base_cav2 = base + base_offset_cav2;
-            if (base_cav2 < base) {
-                // overflowed 64 bits
-                return CCapResult_Decode_InvalidCaveat;
+            if (!cav2_force_match_cav1) {
+                uint64_t base_cav2 = base + base_offset_cav2;
+                if (base_cav2 < base) {
+                    // overflowed 64 bits
+                    return CCapResult_Decode_InvalidCaveat;
+                }
+                base = base_cav2;
+                if (elem_width_log2_cav2 == 0)
+                    len_64 = false;
+                else
+                    len_64 = (((uint64_t)elem_count_cav2) << (elem_width_log2_cav2 - 1)) >> 63;
+                length = (((uint64_t)elem_count_cav2) << elem_width_log2_cav2);
             }
-            base = base_cav2;
-            if (elem_width_log2_cav2 == 0)
-                len_64 = false;
-            else
-                len_64 = (((uint64_t)elem_count_cav2) << (elem_width_log2_cav2 - 1)) >> 63;
-            length = (((uint64_t)elem_count_cav2) << elem_width_log2_cav2);
 
             libccap_dbg_trace("libccap_read_bits_range cav2    base %lx len %lx\n", base, length);
         }
@@ -566,12 +687,14 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_read_bits_range(const struct Cap
 
 // INTERNAL
 LIBCCAP_USE_RESULT_FUNC_PREFIX
-LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint64_t base, uint64_t len, uint64_t* actual_base_ptr, uint64_t* actual_len_ptr) {
+LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_initial(struct Cap2024_11_Bits* bits, CCapPerms perms, uint64_t base, uint64_t len, uint64_t* actual_base_ptr, uint64_t* actual_len_ptr, bool* actual_len_64_ptr) {
     if (len == 0) {
         return CCapResult_Encode_UnrepresentableBaseRange;
     }
     if (base >= ((uint64_t)1 << 54)) {
-        return CCapResult_Encode_UnrepresentableBaseRange;
+        uint64_t new_base = ((uint64_t)1 << 54) - 1;
+        len += (base - new_base);
+        base = new_base;
     }
 
     // The Rust encoder has this uncommented. There is no benefit in doing this.
@@ -585,85 +708,56 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_initial(struct Cap2024_
     //     len = 1 << 10;
     // }
 
-    bool implicit_1;
-    uint8_t elem_width_log2;
-    uint8_t encoded_elem_width_log2;
-    uint8_t count_bits;
-
     uint8_t log_len_minus1 = (len == 1) ? 0 : LIBCCAP_ILOG2(len - 1);
+    uint8_t w = ccap2024_length_pow2_to_width_class[log_len_minus1];
+    const CCapWidthClass* w_cl = &ccap2024_width_classes[w];
 
-    if (log_len_minus1 <= 14) {
-        implicit_1 = false;
-        elem_width_log2 = 10;
-        encoded_elem_width_log2 = 31;
-        count_bits = 5;
-    } else if (/* 15 <= */ log_len_minus1 <= 21) {
-        implicit_1 = true;
-        elem_width_log2 = log_len_minus1 - 5;
-        encoded_elem_width_log2 = elem_width_log2 - 10;
-        count_bits = 5;
-    } else if (/* 22 <= */ log_len_minus1 <= 28) {
-        implicit_1 = false;
-        elem_width_log2 = 17;
-        encoded_elem_width_log2 = elem_width_log2 - 10;
-        count_bits = 12;
-    } else if (/* 29 <= */ log_len_minus1 <= 35) {
-        implicit_1 = true;
-        elem_width_log2 = log_len_minus1 - 12;
-        encoded_elem_width_log2 = elem_width_log2 - 9;
-        count_bits = 12;
-    } else if (/* 36 <= */ log_len_minus1 <= 42) {
-        implicit_1 = false;
-        elem_width_log2 = 24;
-        encoded_elem_width_log2 = elem_width_log2 - 9;
-        count_bits = 19;
-    } else if (/* 43 <= */ log_len_minus1 <= 49) {
-        implicit_1 = true;
-        elem_width_log2 = log_len_minus1 - 19;
-        encoded_elem_width_log2 = elem_width_log2 - 8;
-        count_bits = 19;
-    } else if (/* 50 <= */ log_len_minus1 <= 56) {
-        implicit_1 = false;
-        elem_width_log2 = 31;
-        encoded_elem_width_log2 = elem_width_log2 - 8;
-        count_bits = 26;
-    } else if (/* 57 <= */ log_len_minus1 <= 63) {
-        implicit_1 = true;
-        elem_width_log2 = log_len_minus1 - 26;
-        encoded_elem_width_log2 = elem_width_log2 - 7;
-        count_bits = 26;
-    } else {
-        libccap_simple_panic("Impossible log_len_minus1");
-        return CCapResult_CatastrophicFailure;
-    }
+    bool implicit_1 = w_cl->m_top;
+    uint8_t elem_width_log2 = w_cl->e;
+    uint8_t encoded_elem_width_log2 = (w == 0) ? 31 : (w - 1);
+    uint8_t count_bits = w_cl->m_bits;
+    uint8_t base_shift = w_cl->b_align;
 
-    // We pack bits of the base address and the count together into a 49-bit vector
-    uint8_t base_bits = 49 - count_bits;
+    // First, see if we round down the base
+    uint64_t encoded_base = base >> base_shift;
+    uint64_t expected_decoded_base = encoded_base << base_shift;
+    uint64_t required_len = len + (base - expected_decoded_base);
 
     // The initial resource is expressed as (count << elem_width_log2) where count is a positive integer
-    uint64_t count = len >> elem_width_log2;
+    uint64_t count = required_len >> elem_width_log2;
     // Round up count if we shifted bits of len out
-    if ((count << elem_width_log2) < len) {
+    if ((count << elem_width_log2) < required_len) {
         count++;
     }
 
-    uint8_t base_shift = 54 - base_bits;
-    uint64_t encoded_base = base >> base_shift;
-    // if we rounded down the base...
-    uint64_t expected_decoded_base = encoded_base << base_shift;
-    if (expected_decoded_base < base) {
+    if (w_cl->max_encodable_pow2 < 64 && (count << elem_width_log2) > ((uint64_t)1 << w_cl->max_encodable_pow2)) {
         // we need to retry with a longer length to compensate.
         // increasing the length might bump us up a count_bits quadrant, thus further shrinking the base_bits,
         // but after that happens once it won't recurse again.
-        // TODO if this sizes up to (1 << 64) it breaks
-        return libccap_generate_initial(
-            bits,
-            perms,
-            expected_decoded_base,
-            (base - expected_decoded_base) + len,
-            actual_base_ptr,
-            actual_len_ptr
-        );
+
+        w = w + 1;
+        if (w == 32) {
+            libccap_simple_panic("too-large length\n");
+        }
+        w_cl = &ccap2024_width_classes[w];
+
+        implicit_1 = w_cl->m_top;
+        elem_width_log2 = w_cl->e;
+        encoded_elem_width_log2 = (w == 0) ? 31 : (w - 1);
+        count_bits = w_cl->m_bits;
+        base_shift = w_cl->b_align;
+
+        // First, see if we round down the base
+        encoded_base = base >> base_shift;
+        expected_decoded_base = encoded_base << base_shift;
+        required_len = len + (base - expected_decoded_base);
+
+        // The initial resource is expressed as (count << elem_width_log2) where count is a positive integer
+        count = required_len >> elem_width_log2;
+        // Round up count if we shifted bits of len out
+        if ((count << elem_width_log2) < required_len) {
+            count++;
+        }
     }
 
     uint64_t encoded_count = count - 1;
@@ -672,26 +766,31 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_initial(struct Cap2024_
         encoded_count = encoded_count & (~(1 << count_bits));
     }
 
+    libccap_dbg_trace("log %d w %d e %d count %016lx encoded_count %016lx\n", log_len_minus1, w, w_cl->e, count, encoded_count);
+
     // sanity check
-    if (encoded_count >= ((uint64_t)1 << count_bits)) {
+    if (encoded_count >= ((uint64_t)1 << w_cl->m_bits)) {
         libccap_simple_panic("encoded_count too big\n");
         return CCapResult_CatastrophicFailure;
     }
-    if (encoded_base >= ((uint64_t)1 << base_bits)) {
+    if (encoded_base >= ((uint64_t)1 << w_cl->b_bits)) {
         libccap_simple_panic("encoded_base too big\n");
         return CCapResult_CatastrophicFailure;
     }
 
+
     uint64_t b_c = (encoded_base << count_bits) | encoded_count;
 
-    uint64_t actual_base = encoded_base << base_shift;
+    uint64_t actual_base = expected_decoded_base;
     uint64_t actual_len = count << elem_width_log2; // TODO I think this is exactly equal to re-decoding encoded_count?
+    bool actual_len_64 = (count << (elem_width_log2 - 1)) >> 63;
 
     if (actual_base > base) {
         libccap_simple_panic("Too-large base\n");
         return CCapResult_CatastrophicFailure;
     }
-    if (actual_len < len || (base - actual_base) > (actual_len - len)) {
+    // intended len_64 is always false, so if we have set actual_len_64 we can guarantee we are long enough.
+    if ((actual_len < len || (base - actual_base) > (actual_len - len)) && !actual_len_64) {
         libccap_simple_panic("Not-long-enough len\n");
         return CCapResult_CatastrophicFailure;
     }
@@ -701,24 +800,26 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_initial(struct Cap2024_
 
     *actual_base_ptr = actual_base;
     *actual_len_ptr = actual_len;
+    *actual_len_64_ptr = actual_len_64;
 
     return CCapResult_Success;
 }
 
 // INTERNAL
 LIBCCAP_USE_RESULT_FUNC_PREFIX
-LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_caveats(struct Cap2024_11_Bits* bits, CCapPerms perms, uint64_t base, uint64_t len, uint64_t* actual_base_ptr, uint64_t* actual_len_ptr) {
+LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_caveats(struct Cap2024_11_Bits* bits, CCapPerms perms, uint64_t base, uint64_t len, uint64_t* actual_base_ptr, uint64_t* actual_len_ptr, bool* actual_len_64_ptr) {
     uint64_t actual_base = *actual_base_ptr;
     uint64_t actual_len = *actual_len_ptr;
+    bool actual_len_64 = *actual_len_64_ptr;
 
     if (actual_base != base || actual_len != len) {
         // Add cav1
 
         // fprintf(stderr, "target base 0x%lx len 0x%lx\n", base, len);
         // fprintf(stderr, "actual base 0x%lx len 0x%lx\n", actual_base, actual_len);
-        
-        uint64_t base_rel_initial = base - actual_base;
 
+
+        /*
         // Do a mini-decode of the initial resource to get log_max_count and elem_width_log2
         uint8_t implicit_1 = 1;
         uint8_t log_max_count; // = count_bits + implicit_1;
@@ -732,7 +833,7 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_caveats(struct Cap2024_
             case 0b00:
                 log_max_count = 5 + implicit_1;
                 break;
-            
+
             case 0b01:
                 log_max_count = 12 + implicit_1;
                 break;
@@ -763,28 +864,70 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_caveats(struct Cap2024_
                 }
                 break;
         }
+        */
+        uint8_t w = (bits->encoded_elem_width + 1) & 0b11111;
+        const CCapWidthClass* w_cl = &ccap2024_width_classes[w];
 
-        uint8_t max_pow2_of_cav1 = elem_width_log2 + log_max_count;
+        uint8_t max_pow2_of_cav1 = w_cl->max_encodable_pow2;
         uint8_t min_pow2_of_cav1 = (max_pow2_of_cav1 >= 15) ? (max_pow2_of_cav1 - 15) : 0;
 
-        uint64_t base_topn = base_rel_initial >> min_pow2_of_cav1;
-        uint64_t top_excl_topn = (base_rel_initial + len) >> min_pow2_of_cav1;
-        uint64_t top_topn = top_excl_topn - 1;
+        uint64_t intended_base_rel = base - actual_base;
+        uint64_t intended_top_rel = intended_base_rel + len;
+        uint64_t intended_top_rel_aligned = (intended_top_rel >> min_pow2_of_cav1) << min_pow2_of_cav1;
+        if (intended_top_rel_aligned < intended_top_rel) {
+            intended_top_rel_aligned += ((uint64_t)1) << min_pow2_of_cav1;
+        }
+        uint64_t top_rel_rounded_up = intended_top_rel_aligned - 1;
 
-        uint16_t selected_index = 0;
-        uint8_t selected_size_div = 0;
-        for (uint8_t fifteen_minus_size_div = 0; fifteen_minus_size_div <= 15; fifteen_minus_size_div++) {
-            uint16_t base_index = base_topn >> fifteen_minus_size_div;
-            uint16_t top_index = top_topn >> fifteen_minus_size_div;
-            if (base_index == top_index) {
-                selected_index = base_index;
-                selected_size_div = 15 - fifteen_minus_size_div;
-                break;
-            }
+        if (top_rel_rounded_up >= actual_len) {
+            bits->index = 0;
+            bits->index_size_div = 0;
+
+            libccap_dbg_trace("forced into null cav1; initial w: %d, intended_base_rel: %016lx, top_rel_rounded_up: %016lx, actual_len: %016lx\n", w, intended_base_rel, top_rel_rounded_up, actual_len);
+        } else {
+            uint64_t b_offset_at_min = intended_base_rel >> min_pow2_of_cav1;
+            uint64_t t_offset_at_min = top_rel_rounded_up >> min_pow2_of_cav1;
+            uint64_t x = b_offset_at_min ^ t_offset_at_min;
+            uint64_t target_shift = 64 - __builtin_clzl(x);
+
+            bits->index = b_offset_at_min >> target_shift;
+            bits->index_size_div = 15 - target_shift;
         }
 
-        bits->index = selected_index;
-        bits->index_size_div = selected_size_div;
+        uint64_t elem_count_mask = ((uint64_t)-1) >> (64 - w_cl->m_bits);
+        uint64_t elem_count = ((
+            ((uint64_t)w_cl->m_top) << (w_cl->m_bits)
+        ) | (
+            bits->b_c & elem_count_mask
+        )) + 1;
+        uint64_t check_lhs = ((uint64_t)(bits->index + 1)) << (w_cl->m_bits + w_cl->m_top);
+        uint64_t check_rhs = elem_count << bits->index_size_div;
+        uint8_t elem_width_log2_cav1 = w_cl->max_encodable_pow2 - bits->index_size_div;
+        uint64_t base_offset_cav1 = ((uint64_t)bits->index) << elem_width_log2_cav1;
+
+        if (check_lhs > check_rhs) {
+            // cav1 exceeds the bounds of the initial resource
+            if (bits->index == 0) {
+                // This is an identity-sized cav1, which uses the initial base and length but can be shrunk further by a cav2
+                // identity_cav1 = true;
+                libccap_dbg_trace("libccap_generate_caveats cav1    identity base %lx len %lx\n", actual_base, actual_len);
+            } else {
+                // This is invalid
+                return CCapResult_CatastrophicFailure;
+            }
+        } else {
+            uint64_t base_cav1 = actual_base + base_offset_cav1;
+            if (base_cav1 < actual_base) {
+                // overflowed 64 bits
+                return CCapResult_CatastrophicFailure;
+            }
+            actual_base = base_cav1;
+            actual_len_64 = (elem_width_log2_cav1 == 64);
+            actual_len = actual_len_64 ? 0 : (1 << elem_width_log2_cav1);
+
+            libccap_dbg_trace("libccap_generate_caveats cav1    base %lx len %lx\n", actual_base, actual_len);
+        }
+
         CCapResult res = libccap_add_perms_caveat_to_cap_perms_chain(bits->perms, perms, &bits->perms);
         if (res != CCapResult_Success) {
             // Should be impossible because the perms should be the same as the initial perms of the root of the chain
@@ -792,28 +935,28 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_caveats(struct Cap2024_
             libccap_simple_panic("failed to extend caveat chain\n");
         }
 
-        libccap_dbg_trace("added cav1   index %x size_div %x\n", selected_index, selected_size_div);
+        libccap_dbg_trace("added cav1   index %x size_div %x len_pow2 %d\n", bits->index, bits->index_size_div, max_pow2_of_cav1 - bits->index_size_div);
 
-        if (libccap_read_bits_range(*bits, &actual_base, &actual_len, NULL) != CCapResult_Success) {
-            libccap_simple_panic("Added invalid cav1\n");
-            return CCapResult_CatastrophicFailure;
-        }
-
+        // Check we didn't accidentally shrink it too far
         if (actual_base > base) {
             libccap_simple_panic("cav1 Too-large base\n");
             return CCapResult_CatastrophicFailure;
         }
-        if (actual_len < len || (base - actual_base) > (actual_len - len)) {
-            libccap_simple_panic("cav1 Not-long-enough len\n");
+        // intended len_64 is always false, so if we have set actual_len_64 we can guarantee we are long enough.
+        if ((actual_len < len || (base - actual_base) > (actual_len - len)) && !actual_len_64) {
+            libccap_simple_panic("Not-long-enough len\n");
             return CCapResult_CatastrophicFailure;
         }
+
+        uint64_t cav1_base = actual_base;
+        uint64_t cav1_len = actual_len;
 
         // fprintf(stderr, "cav1   base 0x%lx len 0x%lx\n", actual_base, actual_len);
 
         if (actual_base != base || actual_len != len) {
             // Add cav2
 
-            uint8_t cav1_pow2 = max_pow2_of_cav1 - selected_size_div;
+            uint8_t cav1_pow2 = max_pow2_of_cav1 - bits->index_size_div;
 
             // fprintf(stderr, "cav1 pow2 %d.. %d ..%d\n", min_pow2_of_cav1, cav1_pow2, max_pow2_of_cav1);
 
@@ -832,7 +975,19 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_caveats(struct Cap2024_
                     range_y++;
                 }
 
-                bits->range_x = (base - actual_base) >> slice_pow2;
+                uint64_t len_shifted = len >> slice_pow2;
+                if ((len_shifted << slice_pow2) < len) {
+                    len_shifted++;
+                }
+
+                libccap_dbg_trace("top_offset %016lx slice_pow2 %d range_y %04x\n", top_offset, slice_pow2, range_y);
+
+                if (range_y >= len_shifted) {
+                    bits->range_x = 0;
+                } else {
+                    bits->range_x = (base - actual_base) >> slice_pow2;
+                }
+
                 bits->range_y_minus_one = range_y - 1;
                 // fprintf(stderr, "cav2   x 0x%lx y 0x%lx\n", bits->range_x, bits->range_y_minus_one+1);
             } else {
@@ -847,11 +1002,30 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_caveats(struct Cap2024_
                 libccap_simple_panic("failed to extend caveat chain\n");
             }
 
-            libccap_dbg_trace("added cav2   range_x %x range_y-1 %x\n", bits->range_x, bits->range_y_minus_one);
+            libccap_dbg_trace("added cav2   cav1_pow2 %d range_x %x range_y-1 %x\n", cav1_pow2, bits->range_x, bits->range_y_minus_one);
 
-            if (libccap_read_bits_range(*bits, &actual_base, &actual_len, NULL) != CCapResult_Success) {
-                libccap_simple_panic("Added invalid cav2");
-                return CCapResult_CatastrophicFailure;
+            // if (libccap_read_bits_range(*bits, &actual_base, &actual_len, NULL) != CCapResult_Success) {
+            //     libccap_simple_panic("Added invalid cav2");
+            //     return CCapResult_CatastrophicFailure;
+            // }
+
+            if (cav1_pow2 >= 14) {
+                uint8_t slice_pow2 = cav1_pow2 - 14;
+
+                actual_base += ((uint64_t)bits->range_x) << slice_pow2;
+                actual_len = (((uint64_t)bits->range_y_minus_one) - ((uint64_t)bits->range_x) + 1) << slice_pow2;
+                if ((actual_len - cav1_base + actual_base) > cav1_len && bits->range_x == 0) {
+                    actual_len = cav1_len;
+                }
+            } else {
+
+                uint8_t slice_pow2 = (14 - cav1_pow2);
+
+                actual_base += ((uint64_t)bits->range_x) >> slice_pow2;
+                actual_len = (((uint64_t)bits->range_y_minus_one) - ((uint64_t)bits->range_x) + 1) >> slice_pow2;
+                if ((actual_len - cav1_base + actual_base) > cav1_len && bits->range_x == 0) {
+                    actual_len = cav1_len;
+                }
             }
 
             // fprintf(stderr, "cav2   base 0x%lx len 0x%lx\n", actual_base, actual_len);
@@ -861,10 +1035,18 @@ LIBCCAP_INTERNAL_FUNC_PREFIX CCapResult libccap_generate_caveats(struct Cap2024_
                 return CCapResult_CatastrophicFailure;
             }
             if (actual_len < len || (base - actual_base) > (actual_len - len)) {
+                libccap_dbg_trace("base %016lx len %016lx\nactual_base %016lx actual_len %016lx\n", base, len, actual_base, actual_len);
                 libccap_simple_panic("cav2 Not-long-enough len\n");
                 return CCapResult_CatastrophicFailure;
             }
-
+            if ((actual_len - cav1_base + actual_base) > cav1_len) {
+                libccap_simple_panic("cav2 too-large len\n");
+                return CCapResult_CatastrophicFailure;
+            }
+            if (cav1_base > actual_base) {
+                libccap_simple_panic("cav1 too-small base\n");
+                return CCapResult_CatastrophicFailure;
+            }
         } else {
             bits->range_x = 0;
             bits->range_y_minus_one = 0;
@@ -1019,23 +1201,20 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_exact(struct CCap2024_1
                                   uint64_t len,
                                   uint32_t secret_id,
                                   CCapPerms perms) {
-    CCapResult inexact_res = ccap2024_11_init_inexact(cap, secret, base, len, secret_id, perms);
+    uint64_t actual_base;
+    uint64_t actual_len;
+    bool actual_len_64;
+
+    CCapResult inexact_res = ccap2024_11_init_inexact(cap, secret, base, len, secret_id, perms, &actual_base, &actual_len, &actual_len_64);
     if (inexact_res != CCapResult_Success) {
         return inexact_res;
     }
 
-    uint64_t actual_base;
-    uint64_t actual_len;
-    // don't need to check len_64 - this function cannot take arguments that imply the len should be 1 << 64, and if it were upgraded from (len) to (1 << 64) actual_len would be == 0.
-    if (ccap2024_11_read_range(cap, &actual_base, &actual_len, NULL) != CCapResult_Success) {
-        libccap_simple_panic("ccap2024_11_read_range failed on ccap2024_11_init_inexact successful outcome");
-        return CCapResult_CatastrophicFailure;
-    }
-
+    // // don't need to check len_64 - this function cannot take arguments that imply the len should be 1 << 64, and if it were upgraded from (len) to (1 << 64) actual_len would be == 0.
     if (actual_base != base || actual_len != len) {
         return CCapResult_Encode_UnrepresentableBaseRange;
     }
-    
+
     return CCapResult_Success;
 }
 
@@ -1059,6 +1238,7 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_cavs_exact(struct CCap2
     }
 
     libccap_dbg_trace("base %lx len %lx\n", base, len);
+    bool len_64 = false;
 
     struct Cap2024_11_Bits bits = {
         .index = 0,
@@ -1070,12 +1250,13 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_cavs_exact(struct CCap2
     };
     uint64_t actual_base;
     uint64_t actual_len;
-    CCapResult res = libccap_generate_initial(&bits, perms, base, len, &actual_base, &actual_len);
+    bool actual_len_64;
+    CCapResult res = libccap_generate_initial(&bits, perms, base, len, &actual_base, &actual_len, &actual_len_64);
     if (res != CCapResult_Success) {
         return res;
     }
-    libccap_dbg_trace("post-initial actual base %lx actual len %lx perms chain %x\n", actual_base, actual_len, bits.perms);
-    res = libccap_generate_caveats(&bits, perms, base, len, &actual_base, &actual_len);
+    libccap_dbg_trace("post-initial actual base %lx actual len %d%016lx perms chain %x\n", actual_base, actual_len_64, actual_len, bits.perms);
+    res = libccap_generate_caveats(&bits, perms, base, len, &actual_base, &actual_len, &actual_len_64);
     if (res != CCapResult_Success) {
         return res;
     }
@@ -1085,10 +1266,10 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_cavs_exact(struct CCap2
     libccap_get_expected_signature(&cap->data, secret, &cap->signature);
 
     // fprintf(stderr, "test: base target/ 0x%lx actual 0x%lx\n      len target 0x%lx actual 0x%lx\n", base, actual_base, len, actual_len);
-    if (actual_base != base || actual_len != len) {
+    if (actual_base != base || actual_len != len || actual_len_64 != len_64) {
         return CCapResult_Encode_UnrepresentableBaseRange;
     }
-    
+
     return CCapResult_Success;
 }
 
@@ -1097,6 +1278,7 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_cavs_exact(struct CCap2
  * Calculates the capability signature given the packed data and the secret.
  *
  * cap and secret are non-optional, and the function returns `NullRequiredArgs` if either are null.
+ * Writes into actual_{base,len,len_64}_ptrs if non-NULL and returning Success.
  *
  * Will round the bounds up to the smallest possible value that encloses [base, base+len].
  * If exact bounds are required use [ccap$version_init_exact].
@@ -1109,7 +1291,11 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_inexact(struct CCap2024
                                     uint64_t base,
                                     uint64_t len,
                                     uint32_t secret_id,
-                                    CCapPerms perms) {
+                                    CCapPerms perms,
+
+                                    uint64_t *actual_base_ptr,
+                                    uint64_t *actual_len_ptr,
+                                    bool *actual_len_64_ptr) {
     if (cap == NULL) {
         return CCapResult_NullRequiredArgs;
     }
@@ -1127,7 +1313,8 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_inexact(struct CCap2024
     };
     uint64_t actual_base;
     uint64_t actual_len;
-    CCapResult res = libccap_generate_initial(&bits, perms, base, len, &actual_base, &actual_len);
+    bool actual_len_64;
+    CCapResult res = libccap_generate_initial(&bits, perms, base, len, &actual_base, &actual_len, &actual_len_64);
 
     if (res != CCapResult_Success) {
         return res;
@@ -1136,6 +1323,15 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_inexact(struct CCap2024
     Cap2024_11_Bits_pack(&bits, &cap->data);
     libccap_get_expected_signature(&cap->data, secret, &cap->signature);
 
+    if (actual_base_ptr != NULL) {
+        *actual_base_ptr = actual_base;
+    }
+    if (actual_len_ptr != NULL) {
+        *actual_len_ptr = actual_len;
+    }
+    if (actual_len_64_ptr != NULL) {
+        *actual_len_64_ptr = actual_len_64;
+    }
     return CCapResult_Success;
 }
 
@@ -1282,7 +1478,7 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_init_virtio_cavs_exact(struc
         return CCapResult_Encode_TooBigSecretId;
     }
 
-    uint32_t packed_secret_id = 
+    uint32_t packed_secret_id =
         ((virtio_desc->flags & CCAP_VIRTQ_F_INDIRECT) ? (1 << 22) : 0)
         | ((virtio_desc->flags & CCAP_VIRTQ_F_NEXT) ? (1 << 21) : 0)
         | (((uint32_t)virtio_desc->next) << 8)
@@ -1353,7 +1549,7 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_read_virtio(const struct CCa
         return CCapResult_Decode_NotVirtio;
     }
 
-    uint16_t flags = 
+    uint16_t flags =
         (((bits.secret_key_id >> 22) & 1) ? CCAP_VIRTQ_F_INDIRECT : 0)
         | (((bits.secret_key_id >> 21) & 1) ? CCAP_VIRTQ_F_NEXT : 0)
         | ((perms == CCapPerms_Write) ? CCAP_VIRTQ_F_WRITE : 0);
@@ -1364,7 +1560,7 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_read_virtio(const struct CCa
     virtio_desc->len = len;
     virtio_desc->flags = flags;
     virtio_desc->next = next;
-    
+
     return CCapResult_Success;
 }
 
@@ -1373,14 +1569,14 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_read_virtio(const struct CCa
  * read out the encoded 'next' field.
  * Can never fail.
  * DOES NOT CHECK IF cap IS NULL.
- * 
+ *
  * |- INDIRECT -|- NEXT -|- next[12:0] -|- key[7:0] -|
  *      [22]       [21]       [20:8]         [7:0]
- * 
+ *
  */
 LIBCCAP_EXTERNAL_FUNC_PREFIX uint16_t ccap2024_11_read_virtio_next(const struct CCap2024_11 *cap) {
     struct Cap2024_11_Bits bits = Cap2024_11_Bits_unpack(&cap->data);
-    
+
     uint16_t next = (bits.secret_key_id >> 8) & 0x1FFF;
 
     return next;
@@ -1392,26 +1588,26 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX uint16_t ccap2024_11_read_virtio_next(const struct 
  * Can never fail. Does not read out the WRITE flag because that is encoded in the permissions chain,
  * which has one invalid value and thus can fail.
  * DOES NOT CHECK IF cap IS NULL.
- * 
+ *
  * |- INDIRECT -|- NEXT -|- next[12:0] -|- key[7:0] -|
  *      [22]       [21]       [20:8]         [7:0]
  */
 LIBCCAP_EXTERNAL_FUNC_PREFIX uint16_t ccap2024_11_read_virtio_flags_indirect_next(const struct CCap2024_11 *cap) {
     struct Cap2024_11_Bits bits = Cap2024_11_Bits_unpack(&cap->data);
 
-    uint16_t flags = 
+    uint16_t flags =
         (((bits.secret_key_id >> 22) & 1) ? CCAP_VIRTQ_F_INDIRECT : 0)
         | (((bits.secret_key_id >> 21) & 1) ? CCAP_VIRTQ_F_NEXT : 0);
-    
+
     return flags;
 }
 
 /**
  * Given a pointer to a capability, clear the data with 0s and overwrite the data that would encode the 'next' field with the given value.
  * This is useful for systems like FreeBSD which use this field in normal descriptors to store information.
- * 
+ *
  * cap is non-optional, and the function returns `NullRequiredArgs` if they're null.
- * 
+ *
  * Returns `Encode_TooBigSecretId` if `next` does not fit into 13 bits.
  */
 LIBCCAP_USE_RESULT_FUNC_PREFIX
@@ -1422,7 +1618,7 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_clear_and_write_virtio_next(
     if (next >= (1 << 13)) {
         return CCapResult_Encode_TooBigSecretId;
     }
-    
+
     struct Cap2024_11_Bits bits = {
         .secret_key_id = (((uint32_t)next) << 8),
         0
@@ -1431,4 +1627,33 @@ LIBCCAP_EXTERNAL_FUNC_PREFIX CCapResult ccap2024_11_clear_and_write_virtio_next(
     Cap2024_11_Bits_pack(&bits, &cap->data);
 
     return CCapResult_Success;
+}
+
+
+// Debug a cap data
+LIBCCAP_EXTERNAL_FUNC_PREFIX void ccap2024_11_debug_bits(struct CCap2024_11* cap) {
+    if (cap != NULL) {
+        struct Cap2024_11_Bits bits = Cap2024_11_Bits_unpack(&cap->data);
+        #pragma unused(bits) // suppress unused
+    	// uint8_t encoded_elem_width;
+    	// uint64_t b_c;
+    	// uint8_t index_size_div;
+    	// uint16_t index;
+    	// uint16_t range_x;
+    	// uint16_t range_y_minus_one;
+    	// uint32_t secret_key_id;
+    	// uint8_t perms;
+        libccap_dbg_trace("ccap {\n\tw_enc: %d\n\tb_c: 0x%016lx\n\tsize_div: %x\n\tidx: %x\n\tx: %x\n\ty_minus_one: %x\n\tkey_id: %x\n\tperms: %x\n}\n",
+            bits.encoded_elem_width,
+            bits.b_c,
+            bits.index_size_div,
+            bits.index,
+            bits.range_x,
+            bits.range_y_minus_one,
+            bits.secret_key_id,
+            bits.perms
+        );
+    } else {
+        libccap_dbg_trace("ccap <null>");
+    }
 }

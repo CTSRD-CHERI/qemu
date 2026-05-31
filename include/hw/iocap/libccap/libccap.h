@@ -117,7 +117,7 @@ extern "C" {
  * A function called when libccap needs to perform AES encryption.
  *
  * This function is *not* defined by libccap, and must be defined by the target linking the library in.
- * 
+ *
  * It must support (secret) and (result) being the same pointer.
  */
 extern void ccap_aes_encrypt_128_func(const CCapU128* secret, const CCapU128* data, CCapU128* result);
@@ -186,6 +186,7 @@ CCapResult ccap2024_11_init_cavs_exact(struct CCap2024_11 *cap,
  * Calculates the capability signature given the packed data and the secret.
  *
  * cap and secret are non-optional, and the function returns `NullRequiredArgs` if either are null.
+ * Writes into actual_{base,len,len_64}_ptrs if non-NULL and returning Success.
  *
  * Will round the bounds up to the smallest possible value that encloses [base, base+len].
  * If exact bounds are required use [ccap$version_init_exact].
@@ -198,7 +199,11 @@ CCapResult ccap2024_11_init_inexact(struct CCap2024_11 *cap,
                                     uint64_t base,
                                     uint64_t len,
                                     uint32_t secret_id,
-                                    CCapPerms perms);
+                                    CCapPerms perms,
+
+                                    uint64_t *actual_base_ptr,
+                                    uint64_t *actual_len_ptr,
+                                    bool *actual_len_64_ptr);
 
 /**
  * Check if a capability has a valid signature, assuming it was encrypted with the given secret.
@@ -310,10 +315,10 @@ CCapResult ccap2024_11_read_virtio(const struct CCap2024_11 *cap,
  * read out the encoded 'next' field.
  * Can never fail.
  * DOES NOT CHECK IF cap IS NULL.
- * 
+ *
  * |- INDIRECT -|- NEXT -|- next[12:0] -|- key[7:0] -|
  *      [22]       [21]       [20:8]         [7:0]
- * 
+ *
  */
 uint16_t ccap2024_11_read_virtio_next(const struct CCap2024_11 *cap);
 
@@ -323,7 +328,7 @@ uint16_t ccap2024_11_read_virtio_next(const struct CCap2024_11 *cap);
  * Can never fail. Does not read out the WRITE flag because that is encoded in the permissions chain,
  * which has one invalid value and thus can fail.
  * DOES NOT CHECK IF cap IS NULL.
- * 
+ *
  * |- INDIRECT -|- NEXT -|- next[12:0] -|- key[7:0] -|
  *      [22]       [21]       [20:8]         [7:0]
  */
@@ -332,13 +337,16 @@ uint16_t ccap2024_11_read_virtio_flags_indirect_next(const struct CCap2024_11 *c
 /**
  * Given a pointer to a capability, clear the data with 0s and overwrite the data that would encode the 'next' field with the given value.
  * This is useful for systems like FreeBSD which use this field in normal descriptors to store information.
- * 
+ *
  * cap is non-optional, and the function returns `NullRequiredArgs` if they're null.
- * 
+ *
  * Returns `Encode_TooBigSecretId` if `next` does not fit into 13 bits.
  */
 LIBCCAP_USE_RESULT_FUNC_PREFIX
 CCapResult ccap2024_11_clear_and_write_virtio_next(struct CCap2024_11* cap, uint16_t next);
+
+// Debug a cap data
+void ccap2024_11_debug_bits(struct CCap2024_11* cap);
 
 #if !defined(LIBCCAP_HOSTED)
 /**
