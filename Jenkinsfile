@@ -23,7 +23,7 @@ if (!env.CHANGE_ID && archiveBranches.contains(env.BRANCH_NAME)) {
 def paramsArray = []
 
 // Add an OS selector for manual builds
-def allConfigs = ["linux", "freebsd", "linux-debug"]
+def allConfigs = ["freebsd"]//["linux", "freebsd", "linux-debug"]
 paramsArray.add(text(defaultValue: allConfigs.join('\n'),
         description: 'The configurations to build for (one per line)',
         name: 'Configs'))
@@ -158,6 +158,10 @@ selectedConfigs.each { config ->
     if (os == 'linux') {
         // Build on the oldest supported Ubuntu version so the binaries also run there
         nodeLabel = "${nodeLabel}-baseline"
+    }
+    if (os == 'freebsd') {
+        // Test freebsd-next
+        nodeLabel = "${nodeLabel}-next"
     }
     jobs[config] = { ->
         node(nodeLabel) {
