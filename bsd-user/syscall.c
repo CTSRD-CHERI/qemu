@@ -1936,6 +1936,15 @@ abi_long do_freebsd_syscall(void *cpu_env, abi_syscallret_t *retvalp,
         retval = &retreg;
         break;
 
+#ifndef __CheriBSD_version
+    case TARGET_FREEBSD_NR_msetname:
+        /*
+         * Do not emulate msetname(2) available on CheriBSD but not on FreeBSD.
+         */
+        ret = ENOSYS;
+        break;
+#endif
+
     default:
 	gemu_log("qemu: unsupported syscall: %d (calling anyway)\n", sa->code);
         ret = get_errno(syscall(sa->code, arg1, arg2, arg3, arg4, arg5, arg6,

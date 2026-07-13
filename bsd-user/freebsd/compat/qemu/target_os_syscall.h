@@ -236,6 +236,7 @@
 #define	TARGET_FREEBSD_NR_lio_listio	257
 #define	TARGET_FREEBSD_NR_kbounce	258
 #define	TARGET_FREEBSD_NR_flag_captured	259
+#define	TARGET_FREEBSD_NR_msetname	262
 #define	TARGET_FREEBSD_NR_freebsd11_getdents	272
 #define	TARGET_FREEBSD_NR_lchmod	274
 				/* 275 is obsolete netbsd_lchown */
