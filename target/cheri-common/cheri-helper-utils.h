@@ -389,9 +389,16 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
     if (cheri_poison_check(env, addr, size, rw, _host_return_address)) {
         
         if (!cap_perm_poison && cbp->cr_tag) {
-#if 0
-            void *host = probe_read(env, addr & mask, CHERI_CAP_SIZE,
-                cpu_mmu_index(env, false), _host_return_address);
+//#if 0
+            target_ulong aligned_addr =
+                addr & ~((target_ulong)CHERI_CAP_SIZE - 1);
+                    
+            void *host = probe_read(
+                env,
+                aligned_addr,
+                CHERI_CAP_SIZE,
+                cpu_mmu_index(env, false),
+                _host_return_address);
             target_ulong cursor = 0;
             target_ulong pesbt = 0;
             if (likely(host)) {
@@ -401,35 +408,51 @@ static inline QEMU_ALWAYS_INLINE target_ulong cap_check_common_reg(
             }
             cap_register_t poison_cap;
             CAP_cc(decompress_raw)(pesbt, cursor, 1, &poison_cap);
-            cap_length_t poison_top = cap_get_top(&poison_cap);
-            target_ulong poison_base = cap_get_base(&poison_cap);
-
-#if defined(TARGET_RISCV64) && defined(TARGET_CHERI_RISCV_V9)
+            target_long poison_top = (target_long)cap_get_top(&poison_cap);
+            target_long poison_base = cap_get_base(&poison_cap);
             bool is_poison_cap = false;
+            target_ulong cap_pver = 0;
+            target_ulong poison_pver = 0;
+#if defined(TARGET_RISCV64) && defined(TARGET_CHERI_RISCV_V9)
+           
             is_poison_cap = cap_get_poison(&poison_cap);
+            cap_pver = cap_get_pver(cbp) ;
+            poison_pver = cap_get_pver(&poison_cap);
 #endif 
-            printf("poison exception\n");
-#endif
-            raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
-                !is_load);
-            /*
-            if(is_poison_cap){
-                cap_length_t cbp_top = cap_get_top(cbp);
-                target_ulong cbp_base = cap_get_base(cbp);
+            
+//#endif
+            //raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
+            //    !is_load);
+            
+            if(is_poison_cap && poison_cap.cr_tag){
+                target_long cbp_top = (target_long)cap_get_top(cbp);
+                target_long cbp_base = cap_get_base(cbp);
 
-                //printf("cbp top %lx\n",(long) cbp_top);
-                //printf("cbp base %lx\n",(long) cbp_base);
-                //printf("poison top %lx\n",(long) poison_top);
-                //printf("poison base %lx\n",(long) poison_base);
-                //if(cbp_top<= poison_top && cbp_base >= poison_base){
-                //    printf("poison exception faulting addr %lx, size %d rw%x\n",(long)addr, (int) size , rw);
+  
+                //if((cbp_top<= poison_top && cbp_base >= poison_base )&& cap_pver == poison_pver && cap_pver !=0){
+                if((cbp_top<= poison_top && cbp_base >= poison_base )&& cap_pver == poison_pver && cap_pver !=0 ){
+
+                    printf("poison exception\n");
+                    printf("poison top %lx\n",(long) poison_top);
+                    printf("poison base %lx\n",(long) poison_base);
+                    printf("cappver =%lu, poisonpver =%lu\n", (long) cap_pver, (long) poison_pver );
+                    printf("poison exception faulting base %lx, size %d rw%x\n",(long)cbp_base, (int) (cbp_top-cbp_base) , rw);
                     
 	                raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
                                      !is_load);
-                //}else{
-                //    printf("master cap no trap\n");
-               // }
-            }*/
+                }else{
+                    
+                    if((int)rw ==1 ){
+                        cheri_poison_set_aligned(env, addr, cb, NULL, _host_return_address, false);
+                    }else{
+                        if(cap_pver != poison_pver &&  cap_pver!=0){
+                            printf("poison uninitialised read exception cap_pver = %lu, poison_pver =%lu \n", (long) cap_pver, (long) poison_pver);
+                            raise_cheri_exception_addr_wnr(env, CapEx_SealViolation, cb, addr,
+                                     is_load);
+                        }
+                    }
+                }
+            }
         }
         else {
             if((int)rw ==1 ){
