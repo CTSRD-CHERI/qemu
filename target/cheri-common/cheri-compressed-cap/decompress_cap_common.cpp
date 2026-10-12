@@ -36,6 +36,7 @@
 #include <cstring>
 #include <err.h>
 #include <sysexits.h>
+#include <type_traits>
 
 #include "cheri_compressed_cap.h"
 using CCAPI = _CC_CONCAT(CompressedCap, CAP_FORMAT);
@@ -58,7 +59,7 @@ static const char* otype_suffix(uint32_t otype) {
     // clang-format on
 }
 
-static void dump_cap_fields(const CCAPI::cap_t& result) {
+template <typename Cap> static void dump_cap_fields(const Cap& result) {
     printf("Permissions: 0x%" PRIx32 "\n", result.permissions()); // TODO: decode perms
     printf("User Perms:  0x%" PRIx32 "\n", result.software_permissions());
     printf("Base:        0x%016" PRIx64 "\n", (uint64_t)result.base());
@@ -81,7 +82,9 @@ static void dump_cap_fields(const CCAPI::cap_t& result) {
     printf("Sealed:      %d\n", result.is_sealed() ? 1 : 0);
     auto otype = result.type();
     printf("OType:       0x%" PRIx32 "%s\n", otype, otype_suffix(otype));
-    printf("Flags:       0x%" PRIx8 "\n", result.flags());
+    if constexpr (!std::is_same<Cap, cc128m_cap_t>::value) {
+        printf("Mode:        0x%" PRIx8 "\n", (uint8_t)result.execution_mode());
+    }
     printf("Reserved:    0x%" PRIx64 "\n", (uint64_t)result.reserved_bits());
     printf("Valid decompress: %s", result.cr_bounds_valid ? "yes" : "no");
     printf("\n");

@@ -57,7 +57,9 @@ TEST_CASE("Zeroes decode to NULL cap", "[nullcap]") {
     CHECK_FIELD(result, offset, 0);
     CHECK_FIELD(result, software_permissions, 0);
     CHECK_FIELD(result, permissions, 0);
-    CHECK_FIELD(result, flags, 0);
+#ifndef TEST_CC_IS_MORELLO
+    CHECK_FIELD(result, execution_mode, 0);
+#endif
     CHECK_FIELD(result, reserved_bits, 0);
     CHECK((result.cr_pesbt & _CC_N(FIELD_EBT_MASK64)) == (_CC_N(NULL_PESBT) & _CC_N(FIELD_EBT_MASK64)));
     CHECK_FIELD_RAW(result.length(), _CC_N(NULL_LENGTH));
@@ -275,6 +277,8 @@ TEST_CASE("test old permissions API", "[perms]") {
     CHECK(max_cap.has_permissions(_CC_N(PERM_ACCESS_SYS_REGS)) == false);
     CHECK(_cc_N(get_uperms)(&max_cap) == _CC_N(UPERMS_ALL));
     CHECK((max_cap.all_permissions() & _CC_N(PERM_SW_ALL)) == _CC_N(PERM_SW_ALL));
+    _cc_N(update_perms)(&max_cap, all_perms_old_api);
+    CHECK(_cc_N(get_perms)(&max_cap) == all_perms_old_api);
 
     // Now clear SW perms and check it doesn't affect HW ones:
     max_cap = TestAPICC::make_max_perms_cap(0, 0, _CC_MAX_TOP);

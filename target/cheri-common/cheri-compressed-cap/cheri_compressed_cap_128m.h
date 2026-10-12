@@ -79,7 +79,7 @@
 #define CC128M_SPECIAL_OTYPE_VAL_SIGNED(val) (val##u)
 // Morello always supports exactly one level bit (local/global).
 #define CC128M_MANDATORY_LEVEL_BITS 1
-#define CC128M_MAX_LEVEL_BITS CC64_MANDATORY_LEVEL_BITS
+#define CC128M_MAX_LEVEL_BITS CC128M_MANDATORY_LEVEL_BITS
 
 #include "cheri_compressed_cap_macros.h"
 
@@ -93,17 +93,11 @@ enum {
     _CC_FIELD(UPERMS, 115, 112),
     _CC_FIELD(OTYPE, 109, 95),
     _CC_FIELD(EBT, 94, 64),
-// This is a bit dodgy. This enum only really works for non-address bits.
-// Just provide nonsense values that will make the length of the range 0.
-// Should really be `_CC_FIELD(FLAGS, 63, 56)', if this stuff applied to the address
 #define MORELLO_FLAG_BITS 8
-    _CC_FIELD(FLAGS, 64, 65),
 
     _CC_FIELD(EXPONENT_ZERO, 94, 94),
     // The FIELD_INTERNAL_EXPONENT_SIZE name is currently required by various static assertions.
     _CC_N(FIELD_INTERNAL_EXPONENT_SIZE) = _CC_N(FIELD_EXPONENT_ZERO_SIZE),
-    _CC_FIELD(TOP_ENCODED, 93, 80),
-    _CC_FIELD(BOTTOM_ENCODED, 79, 64),
 
     // Top/bottom offsets depending in INTERNAL_EXPONENT flag:
     // Without internal exponent:
@@ -118,9 +112,6 @@ enum {
 #pragma GCC diagnostic pop
 
 #define CC128M_OTYPE_BITS CC128M_FIELD_OTYPE_SIZE
-#define CC128M_BOT_WIDTH CC128M_FIELD_EXP_ZERO_BOTTOM_SIZE
-#define CC128M_BOT_INTERNAL_EXP_WIDTH CC128M_FIELD_EXP_NONZERO_BOTTOM_SIZE
-#define CC128M_EXP_LOW_WIDTH CC128M_FIELD_EXPONENT_LOW_PART_SIZE
 #define CC128M_EXPONENT_WIDTH (CC128M_FIELD_EXPONENT_LOW_PART_SIZE + CC128M_FIELD_EXPONENT_HIGH_PART_SIZE)
 
 #define CC128M_PERM_GLOBAL (1 << 0)
@@ -150,7 +141,7 @@ _CC_STATIC_ASSERT(CC128M_HIGHEST_PERM < CC128M_FIELD_ALL_PERMS_MAX_VALUE, "permi
 _CC_STATIC_ASSERT((CC128M_HIGHEST_PERM << 1) > CC128M_FIELD_ALL_PERMS_MAX_VALUE, "all permission bits should be used");
 
 #define CC128M_PERMS_MASK UINT64_C(0x3FFFF) /* Includes SW perms */
-#define CC128M_PERMS_ALL (CC128M_PERMS_MASK & ~CC128M_UPERMS_ALL)
+#define CC128M_PERMS_ALL (CC128M_PERMS_MASK & ~CC128M_PERM_SW_ALL)
 enum { _CC_N(PERMS_RESERVED_ONES) = 0 };
 #define CC128M_ENCODED_INFINITE_PERMS(lvbits) _CC_ENCODE_FIELD(CC128M_PERMS_MASK, ALL_PERMS)
 _CC_STATIC_ASSERT_SAME(CC128M_PERMS_MASK, CC128M_FIELD_ALL_PERMS_MAX_VALUE);
@@ -178,8 +169,6 @@ enum _CC_N(OTypes) {
     ITEM(OTYPE_SENTRY, __VA_ARGS__)                                                                                    \
     ITEM(OTYPE_LOAD_PAIR_BRANCH, __VA_ARGS__)                                                                          \
     ITEM(OTYPE_LOAD_BRANCH, __VA_ARGS__)
-
-_CC_STATIC_ASSERT_SAME(CC128M_MANTISSA_WIDTH, CC128M_FIELD_EXP_ZERO_BOTTOM_SIZE);
 
 // Morello uses an "exponent zero" flag instead of "internal exponent".
 #define CC128M_ENCODE_IE(value) _CC_ENCODE_FIELD(!(value), EXPONENT_ZERO)

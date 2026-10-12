@@ -1148,9 +1148,6 @@ static inline void gen_cap_load_pesbt(DisasContext *ctx, int regnum, TCGv pesbt)
 WRAP_PESBT_ALL(OTYPE)
 #ifndef TARGET_CHERI_RISCV_STD
 WRAP_PESBT_ALL(HWPERMS)
-#ifndef TARGET_ARRCH64
-WRAP_PESBT_ALL(FLAGS)
-#endif
 #endif
 
 // Set the tag bit of register to the lowest bit of tagbit
@@ -1731,8 +1728,7 @@ static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
     cheri_tcg_printf_verbose("d", "Fast add: exp: %d\n", tmp2);
     // exp < CAP_VALUE_NUM_BITS - CAP_MW;
     tcg_gen_setcondi_i64(TCG_COND_LTU, tmp3, tmp2,
-                         CAP_CC(ADDR_WIDTH) -
-                             CAP_CC(FIELD_BOTTOM_ENCODED_SIZE));
+                         CAP_CC(ADDR_WIDTH) - CAP_CC(MANTISSA_WIDTH));
     // bounds_uses_value & bit 57 changed
     tcg_gen_and_i64(tmp0, tmp0, tmp3);
     tcg_gen_not_i64(tmp0, tmp0);
@@ -1754,7 +1750,7 @@ static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
 
     // Some of these fields should be CAP_MW wide
     // we will just use the _top_ CAP_MW bits of the 64 bit field so
-    int field_shift = CAP_CC(ADDR_WIDTH) - CAP_CC(FIELD_BOTTOM_ENCODED_SIZE);
+    int field_shift = CAP_CC(ADDR_WIDTH) - CAP_CC(MANTISSA_WIDTH);
     // additions/subtractions/comparisons just work
     // i_mid (tmp3) = LSR(increment,exp)<CAP_MW-1:0>;
     tcg_gen_shr_i64(tmp3, increment, tmp2);
@@ -1763,15 +1759,15 @@ static inline void gen_cap_add_fast(DisasContext *ctx, int regnum,
     tcg_gen_shr_i64(tmp1, tmp1, tmp2);
     tcg_gen_shli_i64(tmp1, tmp1, field_shift);
     // i_top (increment) = ASR(increment,exp+CAP_MW);
-    tcg_gen_addi_i64(tmp2, tmp2, CAP_CC(FIELD_BOTTOM_ENCODED_SIZE));
+    tcg_gen_addi_i64(tmp2, tmp2, CAP_CC(MANTISSA_WIDTH));
     tcg_gen_sar_i64(increment, increment, tmp2);
     // B3 = CapGetBottom(c)<CAP_MW-1:CAP_MW-3>;
     // R3 = B3 - '001';
     // R (tmp2) = R3:Zeros(CAP_MW-3);
     gen_cap_load_pesbt(ctx, regnum, tmp2);
     tcg_gen_shri_i64(tmp2, tmp2,
-                     (CAP_CC(FIELD_BOTTOM_ENCODED_START) +
-                      CAP_CC(FIELD_BOTTOM_ENCODED_SIZE)) -
+                     (CAP_CC(FIELD_EXP_ZERO_BOTTOM_START) +
+                      CAP_CC(FIELD_EXP_ZERO_BOTTOM_SIZE)) -
                          3);
     tcg_gen_subi_i64(tmp2, tmp2, 0b001);
     tcg_gen_shli_i64(tmp2, tmp2, 61);

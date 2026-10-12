@@ -53,6 +53,10 @@
 #include "cheri_compressed_cap_128r.h"
 // clang-format on
 
+/* Legacy RVY 0.9.3 things: */
+#include "cheri_compressed_cap_128r093.h"
+#include "cheri_compressed_cap_64r093.h"
+
 /* Legacy CHERI256 things: */
 #include "cheri_compressed_cap_256.h"
 

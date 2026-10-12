@@ -269,7 +269,6 @@ void HELPER(cjal)(CPUArchState *env, uint32_t cd, target_ulong target_addr,
 
 void HELPER(modesw)(CPUArchState *env, int to_capmode)
 {
-    _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
     assert(cheri_in_capmode(env) != to_capmode &&
            "Should have skipped this call during translate");
     cap_set_exec_mode(&env->pcc,

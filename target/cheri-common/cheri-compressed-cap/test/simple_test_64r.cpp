@@ -49,7 +49,7 @@ TEST_CASE_M_AP_COMP(LVB_1, 0,
 TEST_CASE_M_AP_COMP(LVB_1, 1,
                     CAP_AP_X | CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_ASR | CAP_AP_EL | CAP_AP_SL,
                     CC64R_AP_Q1 | 1)
-#if CC_NEED_RVY_VERSION >= 909
+#ifndef TEST_CC_IS_RVY093
 TEST_CASE_M_AP_COMP(LVB_1, 0, CAP_AP_X | CAP_AP_R | CAP_AP_C | CAP_AP_LM | CAP_AP_EL, CC64R_AP_Q1 | 2)
 TEST_CASE_M_AP_COMP(LVB_1, 1, CAP_AP_X | CAP_AP_R | CAP_AP_C | CAP_AP_LM | CAP_AP_EL, CC64R_AP_Q1 | 3)
 #else
@@ -73,7 +73,7 @@ TEST_CASE_M_AP_COMP(LVB_1, 0, CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_A
 // --- lvbits = 1, invalid permission set ---
 // SL without W does not exist
 TEST_CASE_M_AP_COMP_INVALID(LVB_1, 0, CAP_AP_R | CAP_AP_C | CAP_AP_LM | CAP_AP_EL | CAP_AP_SL, 0);
-#if CC_NEED_RVY_VERSION >= 909
+#ifndef TEST_CC_IS_RVY093
 TEST_CASE_M_AP_COMP_INVALID(LVB_1, 0, CAP_AP_X | CAP_AP_R | CAP_AP_C | CAP_AP_LM | CAP_AP_EL | CAP_AP_SL, 0);
 #endif
 
@@ -118,7 +118,7 @@ TEST_CASE_M_AP_DECOMP(LVB_1, CC64R_AP_Q1 | 0, 0,
                       CAP_AP_X | CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_ASR | CAP_AP_EL | CAP_AP_SL)
 TEST_CASE_M_AP_DECOMP(LVB_1, CC64R_AP_Q1 | 1, 1,
                       CAP_AP_X | CAP_AP_R | CAP_AP_W | CAP_AP_C | CAP_AP_LM | CAP_AP_ASR | CAP_AP_EL | CAP_AP_SL)
-#if CC_NEED_RVY_VERSION >= 909
+#ifndef TEST_CC_IS_RVY093
 TEST_CASE_M_AP_DECOMP(LVB_1, CC64R_AP_Q1 | 2, 0, CAP_AP_X | CAP_AP_R | CAP_AP_C | CAP_AP_LM | CAP_AP_EL)
 TEST_CASE_M_AP_DECOMP(LVB_1, CC64R_AP_Q1 | 3, 1, CAP_AP_X | CAP_AP_R | CAP_AP_C | CAP_AP_LM | CAP_AP_EL)
 #else
@@ -181,8 +181,8 @@ TEST_CASE("bounds encoding, internal exponent, T8 = 1", "[bounds]") {
      * c_t = 0, c_b = 0
      */
     CHECK(cap.cr_pesbt == 0xd2040001);
-    cc64r_update_perms(&cap, 0);
-    cc64r_update_uperms(&cap, 0);
+    _cc_N(update_perms)(&cap, 0);
+    _cc_N(update_uperms)(&cap, 0);
     CHECK(cap.cr_pesbt == 0x00040001);
 }
 
@@ -207,8 +207,8 @@ TEST_CASE("bounds encoding, exponent > 0, T8==0", "[bounds]") {
      * c_t = 0, c_b = 0
      */
     CHECK(cap.cr_pesbt == 0xd202c132);
-    cc64r_update_perms(&cap, 0);
-    cc64r_update_uperms(&cap, 0);
+    _cc_N(update_perms)(&cap, 0);
+    _cc_N(update_uperms)(&cap, 0);
     CHECK(cap.cr_pesbt == 0x0002c132);
 }
 
@@ -234,8 +234,8 @@ TEST_CASE("bounds encoding, exponent > 0, T8==0, c_b==-1", "[bounds]") {
      * c_t = 0, c_b = -1
      */
     CHECK(cap.cr_pesbt == 0xd20207e1);
-    cc64r_update_perms(&cap, 0);
-    cc64r_update_uperms(&cap, 0);
+    _cc_N(update_perms)(&cap, 0);
+    _cc_N(update_uperms)(&cap, 0);
     CHECK(cap.cr_pesbt == 0x000207e1);
 }
 
@@ -294,4 +294,15 @@ TEST_CASE("max perms value", "[perms]") {
     CHECK(cap.all_permissions() & CC128R_PERM_READ);
     CHECK(cap.all_permissions() & CC128R_PERM_STORE_LEVEL);
     CHECK(cap.all_permissions() & CC128R_PERM_WRITE);
+}
+
+TEST_CASE("Both 0.9.3 and 0.9.9 encodings available simultaneously", "[versions]") {
+    cc64r_cap_t cap_099 = CompressedCap64r::make_null_derived_cap(0);
+    cc64r093_cap_t cap_093 = CompressedCap64r093::make_null_derived_cap(0);
+    cap_099.cr_pesbt =
+        (cap_099.cr_pesbt & ~CC64R_FIELD_AP_M_MASK64) | ((uint64_t)(CC64R_AP_Q1 | 2) << CC64R_FIELD_AP_M_START);
+    cap_093.cr_pesbt = (cap_093.cr_pesbt & ~CC64R093_FIELD_AP_M_MASK64) |
+                       ((uint64_t)(CC64R093_AP_Q1 | 2) << CC64R093_FIELD_AP_M_START);
+    CHECK(!cap_099.has_permissions(CC64R_PERM_STORE_LEVEL));
+    CHECK(cap_093.has_permissions(CC64R093_PERM_STORE_LEVEL));
 }

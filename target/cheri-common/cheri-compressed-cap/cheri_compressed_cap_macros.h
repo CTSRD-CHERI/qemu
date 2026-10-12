@@ -33,14 +33,6 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
-/* Supported RVY spec versions for cc64r/cc128r: 903 (v0.9.3-v0.9.8) and 909 (v0.9.9+). */
-#ifndef CC_NEED_RVY_VERSION
-#define CC_NEED_RVY_VERSION 909
-#endif
-#if CC_NEED_RVY_VERSION != 903 && CC_NEED_RVY_VERSION != 909
-#error "Unsupported CC_NEED_RVY_VERSION, expected 903 or 909"
-#endif
-
 #ifndef _cc_debug_assert
 #ifdef cheri_debug_assert
 #define _cc_debug_assert(cond) cheri_debug_assert(cond)

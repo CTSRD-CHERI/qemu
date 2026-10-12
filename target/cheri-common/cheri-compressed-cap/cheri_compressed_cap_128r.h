@@ -70,21 +70,11 @@ typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 0, _CC_N(MODE_INT) = 1 } _CC_N(Mode
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
-#if CC_NEED_RVY_VERSION >= 909
     _CC_FIELD(SDP, 127, 124),
     _CC_FIELD(RESERVED1, 123, 117),
     _CC_FIELD(AP_M, 116, 108), // Combined architectural permissions and mode
     _CC_FIELD(AP, 116, 109),
     _CC_FIELD(MODE, 108, 108),
-    _CC_FIELD(FLAGS, 108, 108), // TODO: remove this old alias
-#else
-    _CC_FIELD(RESERVED1, 127, 121),
-    _CC_FIELD(SDP, 120, 117),
-    _CC_FIELD(FLAGS, 116, 116), // TODO: remove this old alias
-    _CC_FIELD(AP_M, 116, 108),  // Combined architectural permissions and mode
-    _CC_FIELD(MODE, 116, 116),
-    _CC_FIELD(AP, 115, 108),
-#endif
     _CC_FIELD(LEVEL, 107, 107),
     _CC_FIELD(RESERVED0, 106, 92),
     _CC_FIELD(OTYPE, 91, 91),
@@ -93,8 +83,6 @@ enum {
     _CC_FIELD(EXPONENT_FORMAT, 90, 90),
     // The FIELD_INTERNAL_EXPONENT_SIZE name is currently required by various static assertions.
     _CC_N(FIELD_INTERNAL_EXPONENT_SIZE) = _CC_N(FIELD_EXPONENT_FORMAT_SIZE),
-    _CC_FIELD(TOP_ENCODED, 89, 78),
-    _CC_FIELD(BOTTOM_ENCODED, 77, 64),
 
     // Top/bottom offsets depending on INTERNAL_EXPONENT flag:
     // Without internal exponent:
@@ -109,9 +97,6 @@ enum {
 #pragma GCC diagnostic pop
 
 #define CC128R_OTYPE_BITS CC128R_FIELD_OTYPE_SIZE
-#define CC128R_BOT_WIDTH CC128R_FIELD_EXP_ZERO_BOTTOM_SIZE
-#define CC128R_BOT_INTERNAL_EXP_WIDTH CC128R_FIELD_EXP_NONZERO_BOTTOM_SIZE
-#define CC128R_EXP_LOW_WIDTH CC128R_FIELD_EXPONENT_LOW_PART_SIZE
 
 #define CC128R_PERM_WRITE (1 << 0)
 #define CC128R_PERM_LOAD_MUTABLE (1 << 1)
@@ -149,8 +134,6 @@ enum _CC_N(OTypes) {
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)
 
-_CC_STATIC_ASSERT_SAME(CC128R_MANTISSA_WIDTH, CC128R_FIELD_EXP_ZERO_BOTTOM_SIZE);
-
 // The RISC-V extension uses an "exponent zero" flag.
 #define CC128R_ENCODE_IE(IE) _CC_ENCODE_FIELD(!(IE), EXPONENT_FORMAT)
 #define CC128R_EXTRACT_IE(value) (!_CC_EXTRACT_FIELD(value, EXPONENT_FORMAT))
@@ -161,7 +144,6 @@ _CC_STATIC_ASSERT_SAME(CC128R_MANTISSA_WIDTH, CC128R_FIELD_EXP_ZERO_BOTTOM_SIZE)
 #define CC128R_HAS_BASE_TOP_SPECIAL_CASES 1
 #define CC128R_USES_V9_CORRECTION_FACTORS 0
 #define CC128R_USES_LEN_MSB 0
-#define CC128R_MAX_LEVEL_BITS 1 // LVLBITS=2 not supported yet
 
 #include "cheri_compressed_cap_common.h"
 #include "cheri_compressed_cap_riscv_common.h"

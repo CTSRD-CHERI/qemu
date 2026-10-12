@@ -27,4 +27,6 @@ static inline _cc_addr_t _cc_N(get_reserved)(const _cc_cap_t* cap) {
     return cap->cr_pesbt & _CC_N(FIELD_RESERVED_MASK64);
 }
 
+_CC_DEFINE_PESBT_EXTRACT_DEPOSIT_WRAPPERS(FLAGS, flags, uint8_t)
+
 enum { _CC_N(PERMS_RESERVED_ONES) = 0 };

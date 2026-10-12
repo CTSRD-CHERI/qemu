@@ -40,6 +40,10 @@
 #include "sail_wrapper_api.inc"
 #undef SAIL_WRAPPER_FORMAT_LOWER
 
+#define SAIL_WRAPPER_FORMAT_LOWER 64r093
+#include "sail_wrapper_api.inc"
+#undef SAIL_WRAPPER_FORMAT_LOWER
+
 #define SAIL_WRAPPER_FORMAT_LOWER 128
 #include "sail_wrapper_api.inc"
 #undef SAIL_WRAPPER_FORMAT_LOWER
@@ -49,6 +53,10 @@
 #undef SAIL_WRAPPER_FORMAT_LOWER
 
 #define SAIL_WRAPPER_FORMAT_LOWER 128r
+#include "sail_wrapper_api.inc"
+#undef SAIL_WRAPPER_FORMAT_LOWER
+
+#define SAIL_WRAPPER_FORMAT_LOWER 128r093
 #include "sail_wrapper_api.inc"
 #undef SAIL_WRAPPER_FORMAT_LOWER
 

@@ -77,7 +77,7 @@ static inline void set_top_base_from_sail(const struct zCapability* sail, _cc_ca
 
 static _cc_addr_t _compress_sailcap_raw(struct zCapability sailcap) {
     _cc_addr_t raw = sailgen_capToMetadataBits(sailcap).zbits;
-#if _CC_N(CAP_BITS) == 128 && CC_NEED_RVY_VERSION >= 909
+#if _CC_N(CAP_BITS) == 128 && !defined(SAIL_WRAPPER_CC_IS_RVY093)
     raw = _CC_DEPOSIT_FIELD(raw, sailcap.zsd_perms, SDP);
     raw = _CC_DEPOSIT_FIELD(raw, sailcap.zreserved_1, RESERVED1);
 #endif
@@ -129,7 +129,7 @@ static struct zCapability _sail_decode(_cc_addr_t pesbt, _cc_addr_t cursor, bool
     pesbt_and_addr_to_sail_cap_bits(&sail_all_bits, pesbt, cursor);
     struct zCapability sail_result = sailgen_bitsToCap(tag, sail_all_bits);
     KILL(sail_cap_bits)(&sail_all_bits);
-#if _CC_N(CAP_BITS) == 128 && CC_NEED_RVY_VERSION >= 909
+#if _CC_N(CAP_BITS) == 128 && !defined(SAIL_WRAPPER_CC_IS_RVY093)
     sail_result.zsd_perms = _CC_EXTRACT_FIELD(pesbt, SDP);
     sail_result.zreserved_1 = _CC_EXTRACT_FIELD(pesbt, RESERVED1);
 #endif

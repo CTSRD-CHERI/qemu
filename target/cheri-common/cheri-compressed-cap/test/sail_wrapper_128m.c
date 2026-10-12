@@ -108,9 +108,6 @@ static _cc_cap_t from_sail_cap(const lbits* sail_cap) {
     _cc_N(update_otype)(&result, sailgen_CapGetObjectType(*sail_cap));
     result.cr_tag = sailgen_CapGetTag(*sail_cap);
 
-    // Fix these extra fields not really present in sail
-    _cc_N(update_flags)(&result, 0);
-    _cc_N(update_uperms)(&result, 0);
     result.cr_pesbt = extract_bits(*sail_cap, 64, 64);
     return result;
 }
