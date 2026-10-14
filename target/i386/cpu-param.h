@@ -6,7 +6,7 @@
  */
 
 #ifndef I386_CPU_PARAM_H
-#define I386_CPU_PARAM_H 1
+#define I386_CPU_PARAM_H
 
 #ifdef TARGET_X86_64
 # define TARGET_LONG_BITS             64
@@ -23,10 +23,13 @@
 # define TARGET_VIRT_ADDR_SPACE_BITS  32
 #endif
 #define TARGET_PAGE_BITS 12
-#define NB_MMU_MODES 3
+#define NB_MMU_MODES 5
 
 #ifdef CONFIG_TCG_LOG_INSTR
 #define TARGET_MAX_INSN_SIZE 16
+#endif
+#ifndef CONFIG_USER_ONLY
+# define TARGET_TB_PCREL 1
 #endif
 
 #endif

@@ -24,8 +24,8 @@
  */
 
 #include "qemu/osdep.h"
-#include "qemu-common.h"
 #include "sysemu/tcg.h"
+#include "sysemu/replay.h"
 #include "sysemu/cpu-timers.h"
 #include "tcg/tcg.h"
 #include "qapi/error.h"
@@ -86,7 +86,7 @@ static bool default_mttcg_enabled(void)
     if (icount_enabled() || TCG_OVERSIZED_GUEST) {
         return false;
     } else {
-#ifdef TARGET_SUPPORTS_MTTCG
+#if TARGET_SUPPORTS_MTTCG
         return check_tcg_memory_orders_compatible();
 #else
         return false;
@@ -154,7 +154,7 @@ static void tcg_set_thread(Object *obj, const char *value, Error **errp)
         } else if (icount_enabled()) {
             error_setg(errp, "No MTTCG when icount is enabled");
         } else {
-#ifndef TARGET_SUPPORTS_MTTCG
+#if TARGET_SUPPORTS_MTTCG != 1
             warn_report("Guest not yet converted to MTTCG - "
                         "you may get unexpected results");
 #endif
@@ -208,12 +208,28 @@ static void tcg_set_splitwx(Object *obj, bool value, Error **errp)
     s->splitwx_enabled = value;
 }
 
+static int tcg_gdbstub_supported_sstep_flags(void)
+{
+    /*
+     * In replay mode all events will come from the log and can't be
+     * suppressed otherwise we would break determinism. However as those
+     * events are tied to the number of executed instructions we won't see
+     * them occurring every time we single step.
+     */
+    if (replay_mode != REPLAY_MODE_NONE) {
+        return SSTEP_ENABLE;
+    } else {
+        return SSTEP_ENABLE | SSTEP_NOIRQ | SSTEP_NOTIMER;
+    }
+}
+
 static void tcg_accel_class_init(ObjectClass *oc, void *data)
 {
     AccelClass *ac = ACCEL_CLASS(oc);
     ac->name = "tcg";
     ac->init_machine = tcg_init_machine;
     ac->allowed = &tcg_allowed;
+    ac->gdbstub_supported_sstep_flags = tcg_gdbstub_supported_sstep_flags;
 
     object_class_property_add_str(oc, "thread",
                                   tcg_get_thread,

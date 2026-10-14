@@ -85,7 +85,7 @@ void mips_cpu_synchronize_from_tb(CPUState *cs, const TranslationBlock *tb)
     MIPSCPU *cpu = MIPS_CPU(cs);
     CPUMIPSState *env = &cpu->env;
 
-    mips_update_pc(env, tb->pc, /*can_be_unrepresentable=*/false);
+    mips_update_pc(env, tb_pc(tb), /*can_be_unrepresentable=*/false);
     env->hflags &= ~MIPS_HFLAG_BMASK;
     env->hflags |= tb->flags & MIPS_HFLAG_BMASK;
 }
@@ -128,6 +128,7 @@ static const char * const excp_names[EXCP_LAST + 1] = {
     [EXCP_TLBRI] = "TLB read-inhibit",
     [EXCP_MSADIS] = "MSA disabled",
     [EXCP_MSAFPE] = "MSA floating point",
+    [EXCP_SEMIHOST] = "Semihosting",
 };
 
 const char *mips_exception_name(int32_t exception)

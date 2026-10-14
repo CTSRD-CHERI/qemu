@@ -184,31 +184,81 @@ static int64_t net_slirp_clock_get_ns(void *opaque)
     return qemu_clock_get_ns(QEMU_CLOCK_VIRTUAL);
 }
 
+typedef struct SlirpTimer SlirpTimer;
+struct SlirpTimer {
+    QEMUTimer timer;
+#if SLIRP_CHECK_VERSION(4,7,0)
+    Slirp *slirp;
+    SlirpTimerId id;
+    void *cb_opaque;
+#endif
+};
+
+#if SLIRP_CHECK_VERSION(4,7,0)
+static void net_slirp_init_completed(Slirp *slirp, void *opaque)
+{
+    SlirpState *s = opaque;
+    s->slirp = slirp;
+}
+
+static void net_slirp_timer_cb(void *opaque)
+{
+    SlirpTimer *t = opaque;
+    slirp_handle_timer(t->slirp, t->id, t->cb_opaque);
+}
+
+static void *net_slirp_timer_new_opaque(SlirpTimerId id,
+                                        void *cb_opaque, void *opaque)
+{
+    SlirpState *s = opaque;
+    SlirpTimer *t = g_new(SlirpTimer, 1);
+    t->slirp = s->slirp;
+    t->id = id;
+    t->cb_opaque = cb_opaque;
+    timer_init_full(&t->timer, NULL, QEMU_CLOCK_VIRTUAL,
+                    SCALE_MS, QEMU_TIMER_ATTR_EXTERNAL,
+                    net_slirp_timer_cb, t);
+    return t;
+}
+#else
 static void *net_slirp_timer_new(SlirpTimerCb cb,
                                  void *cb_opaque, void *opaque)
 {
-    return timer_new_full(NULL, QEMU_CLOCK_VIRTUAL,
-                          SCALE_MS, QEMU_TIMER_ATTR_EXTERNAL,
-                          cb, cb_opaque);
+    SlirpTimer *t = g_new(SlirpTimer, 1);
+    timer_init_full(&t->timer, NULL, QEMU_CLOCK_VIRTUAL,
+                    SCALE_MS, QEMU_TIMER_ATTR_EXTERNAL,
+                    cb, cb_opaque);
+    return t;
 }
+#endif
 
 static void net_slirp_timer_free(void *timer, void *opaque)
 {
-    timer_free(timer);
+    SlirpTimer *t = timer;
+    timer_del(&t->timer);
+    g_free(t);
 }
 
 static void net_slirp_timer_mod(void *timer, int64_t expire_timer,
                                 void *opaque)
 {
-    timer_mod(timer, expire_timer);
+    SlirpTimer *t = timer;
+    timer_mod(&t->timer, expire_timer);
 }
 
-static void net_slirp_register_poll_fd(int fd, void *opaque)
+#if !SLIRP_CHECK_VERSION(4, 9, 0)
+# define slirp_os_socket int
+# define slirp_pollfds_fill_socket slirp_pollfds_fill
+# define register_poll_socket register_poll_fd
+# define unregister_poll_socket unregister_poll_fd
+#endif
+
+static void net_slirp_register_poll_sock(slirp_os_socket fd, void *opaque)
 {
     qemu_fd_register(fd);
 }
 
-static void net_slirp_unregister_poll_fd(int fd, void *opaque)
+static void net_slirp_unregister_poll_sock(slirp_os_socket fd, void *opaque)
 {
     /* no qemu_fd_unregister */
 }
@@ -222,11 +272,16 @@ static const SlirpCb slirp_cb = {
     .send_packet = net_slirp_send_packet,
     .guest_error = net_slirp_guest_error,
     .clock_get_ns = net_slirp_clock_get_ns,
+#if SLIRP_CHECK_VERSION(4,7,0)
+    .init_completed = net_slirp_init_completed,
+    .timer_new_opaque = net_slirp_timer_new_opaque,
+#else
     .timer_new = net_slirp_timer_new,
+#endif
     .timer_free = net_slirp_timer_free,
     .timer_mod = net_slirp_timer_mod,
-    .register_poll_fd = net_slirp_register_poll_fd,
-    .unregister_poll_fd = net_slirp_unregister_poll_fd,
+    .register_poll_socket = net_slirp_register_poll_sock,
+    .unregister_poll_socket = net_slirp_unregister_poll_sock,
     .notify = net_slirp_notify,
 };
 
@@ -253,7 +308,7 @@ static int slirp_poll_to_gio(int events)
     return ret;
 }
 
-static int net_slirp_add_poll(int fd, int events, void *opaque)
+static int net_slirp_add_poll(slirp_os_socket fd, int events, void *opaque)
 {
     GArray *pollfds = opaque;
     GPollFD pfd = {
@@ -302,8 +357,8 @@ static void net_slirp_poll_notify(Notifier *notifier, void *data)
 
     switch (poll->state) {
     case MAIN_LOOP_POLL_FILL:
-        slirp_pollfds_fill(s->slirp, &poll->timeout,
-                           net_slirp_add_poll, poll->pollfds);
+        slirp_pollfds_fill_socket(s->slirp, &poll->timeout,
+                                  net_slirp_add_poll, poll->pollfds);
         break;
     case MAIN_LOOP_POLL_OK:
     case MAIN_LOOP_POLL_ERR:
@@ -380,6 +435,7 @@ static int net_slirp_init(NetClientState *peer, const char *model,
 #if defined(CONFIG_SMBD_COMMAND)
     struct in_addr smbsrv = { .s_addr = 0 };
 #endif
+    SlirpConfig cfg = { 0 };
     NetClientState *nc;
     SlirpState *s;
     char buf[20];
@@ -562,18 +618,33 @@ static int net_slirp_init(NetClientState *peer, const char *model,
 
     nc = qemu_new_net_client(&net_slirp_info, peer, model, name);
 
-    snprintf(nc->info_str, sizeof(nc->info_str),
-             "net=%s,restrict=%s", inet_ntoa(net),
-             restricted ? "on" : "off");
+    qemu_set_info_str(nc, "net=%s,restrict=%s", inet_ntoa(net),
+                      restricted ? "on" : "off");
 
     s = DO_UPCAST(SlirpState, nc, nc);
 
-    s->slirp = slirp_init(restricted, ipv4, net, mask, host,
-                          ipv6, ip6_prefix, vprefix6_len, ip6_host,
-                          vhostname, tftp_server_name,
-                          tftp_export, bootfile, dhcp,
-                          dns, ip6_dns, dnssearch, vdomainname,
-                          &slirp_cb, s);
+    cfg.version =
+         SLIRP_CHECK_VERSION(4, 9, 0) ? 6 :
+         SLIRP_CHECK_VERSION(4, 7, 0) ? 4 : 1;
+    cfg.restricted = restricted;
+    cfg.in_enabled = ipv4;
+    cfg.vnetwork = net;
+    cfg.vnetmask = mask;
+    cfg.vhost = host;
+    cfg.in6_enabled = ipv6;
+    cfg.vprefix_addr6 = ip6_prefix;
+    cfg.vprefix_len = vprefix6_len;
+    cfg.vhost6 = ip6_host;
+    cfg.vhostname = vhostname;
+    cfg.tftp_server_name = tftp_server_name;
+    cfg.tftp_path = tftp_export;
+    cfg.bootfile = bootfile;
+    cfg.vdhcp_start = dhcp;
+    cfg.vnameserver = dns;
+    cfg.vnameserver6 = ip6_dns;
+    cfg.vdnssearch = dnssearch;
+    cfg.vdomainname = vdomainname;
+    s->slirp = slirp_new(&cfg, &slirp_cb, s);
     QTAILQ_INSERT_TAIL(&slirp_stacks, s, entry);
 
     /*

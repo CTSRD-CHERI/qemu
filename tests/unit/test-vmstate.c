@@ -28,7 +28,6 @@
 #include "migration/vmstate.h"
 #include "migration/qemu-file-types.h"
 #include "../migration/qemu-file.h"
-#include "../migration/qemu-file-channel.h"
 #include "../migration/savevm.h"
 #include "qemu/coroutine.h"
 #include "qemu/module.h"
@@ -52,9 +51,9 @@ static QEMUFile *open_test_file(bool write)
     }
     ioc = QIO_CHANNEL(qio_channel_file_new_fd(fd));
     if (write) {
-        f = qemu_fopen_channel_output(ioc);
+        f = qemu_file_new_output(ioc);
     } else {
-        f = qemu_fopen_channel_input(ioc);
+        f = qemu_file_new_input(ioc);
     }
     object_unref(OBJECT(ioc));
     return f;
@@ -88,17 +87,16 @@ static void save_buffer(const uint8_t *buf, size_t buf_size)
 static void compare_vmstate(const uint8_t *wire, size_t size)
 {
     QEMUFile *f = open_test_file(false);
-    uint8_t result[size];
+    g_autofree uint8_t *result = g_malloc(size);
 
     /* read back as binary */
 
-    g_assert_cmpint(qemu_get_buffer(f, result, sizeof(result)), ==,
-                    sizeof(result));
+    g_assert_cmpint(qemu_get_buffer(f, result, size), ==, size);
     g_assert(!qemu_file_get_error(f));
 
     /* Compare that what is on the file is the same that what we
        expected to be there */
-    SUCCESS(memcmp(result, wire, sizeof(result)));
+    SUCCESS(memcmp(result, wire, size));
 
     /* Must reach EOF */
     qemu_get_byte(f);

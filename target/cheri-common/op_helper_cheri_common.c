@@ -699,8 +699,16 @@ void CHERI_HELPER_IMPL(cbuildcap(CPUArchState *env, uint32_t cd, uint32_t cb,
         cap_set_perms(env, &derived,
                       cap_get_all_perms(cbp) & cap_get_all_perms(ctp));
 #ifndef TARGET_AARCH64
-        cap_set_exec_mode(&derived, cap_get_exec_mode(ctp));
+        /*
+         * Only set the mode if the capability bears X permission, as
+         * it is otherwise disallowed by the RVY spec.
+         */
+        if (!cap_set_exec_mode(&derived, cap_get_exec_mode(ctp)) &&
+            cap_get_exec_mode(ctp) == CHERI_EXEC_INTMODE) {
+            derived.cr_tag = 0;
+        }
 #endif
+
         if (cap_is_sealed_entry(ctp)) {
             cap_make_sealed_entry(&derived);
         }
@@ -1111,8 +1119,8 @@ void CHERI_HELPER_IMPL(csetboundsexact(CPUArchState *env, uint32_t cd,
     do_setbounds(true, env, cd, cb, rt, GETPC());
 }
 
-#ifndef TARGET_AARCH64
-/* Morello does not have flags in the capability metadata */
+#if !defined(TARGET_AARCH64) && !defined(TARGET_CHERI_RISCV_STD)
+/* Morello and RVY do not have flags in the capability metadata */
 target_ulong CHERI_HELPER_IMPL(cgetflags(CPUArchState *env, uint32_t cb))
 {
     /*
@@ -1139,8 +1147,9 @@ void CHERI_HELPER_IMPL(csetflags(CPUArchState *env, uint32_t cd, uint32_t cb,
     if (!RESULT_VALID) {
         result.cr_tag = 0;
     }
-    flags &= CAP_FLAGS_ALL_BITS;
-    _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
+    flags &= CAP_CC(FIELD_FLAGS_MASK_NOT_SHIFTED);
+    _Static_assert(CAP_CC(FIELD_FLAGS_MASK_NOT_SHIFTED) == 1,
+                   "Only one flag should exist");
     cap_set_exec_mode(&result, flags ? CHERI_EXEC_CAPMODE : CHERI_EXEC_INTMODE);
     update_capreg(env, cd, &result);
 }
@@ -1747,7 +1756,7 @@ target_ulong CHERI_HELPER_IMPL(cloadtags(CPUArchState *env, uint32_t cb))
     return result;
 }
 
-QEMU_NORETURN static inline void
+G_NORETURN static inline void
 raise_pcc_fault(CPUArchState *env, CheriCapExcCause cause, target_ulong addr)
 {
     cheri_debug_assert(pc_is_current(env));

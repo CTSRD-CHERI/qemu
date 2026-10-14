@@ -566,7 +566,7 @@ static void save_gpr(DisasContext *ctx, unsigned reg, TCGv_reg t)
     }
 }
 
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
 # define HI_OFS  0
 # define LO_OFS  4
 #else
@@ -4305,29 +4305,30 @@ static void hppa_tr_tb_stop(DisasContextBase *dcbase, CPUState *cs)
     }
 }
 
-static void hppa_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs)
+static void hppa_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs,
+                              FILE *logfile)
 {
     target_ulong pc = dcbase->pc_first;
 
 #ifdef CONFIG_USER_ONLY
     switch (pc) {
     case 0x00:
-        qemu_log("IN:\n0x00000000:  (null)\n");
+        fprintf(logfile, "IN:\n0x00000000:  (null)\n");
         return;
     case 0xb0:
-        qemu_log("IN:\n0x000000b0:  light-weight-syscall\n");
+        fprintf(logfile, "IN:\n0x000000b0:  light-weight-syscall\n");
         return;
     case 0xe0:
-        qemu_log("IN:\n0x000000e0:  set-thread-pointer-syscall\n");
+        fprintf(logfile, "IN:\n0x000000e0:  set-thread-pointer-syscall\n");
         return;
     case 0x100:
-        qemu_log("IN:\n0x00000100:  syscall\n");
+        fprintf(logfile, "IN:\n0x00000100:  syscall\n");
         return;
     }
 #endif
 
-    qemu_log("IN: %s\n", lookup_symbol(pc));
-    log_target_disas(cs, pc, dcbase->tb->size);
+    fprintf(logfile, "IN: %s\n", lookup_symbol(pc));
+    target_disas(logfile, cs, pc, dcbase->tb->size);
 }
 
 static const TranslatorOps hppa_tr_ops = {
@@ -4339,21 +4340,9 @@ static const TranslatorOps hppa_tr_ops = {
     .disas_log          = hppa_tr_disas_log,
 };
 
-void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns)
+void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns,
+                           target_ulong pc, void *host_pc)
 {
     DisasContext ctx;
-    translator_loop(&hppa_tr_ops, &ctx.base, cs, tb, max_insns);
-}
-
-void restore_state_to_opc(CPUHPPAState *env, TranslationBlock *tb,
-                          target_ulong *data)
-{
-    env->iaoq_f = data[0];
-    if (data[1] != (target_ureg)-1) {
-        env->iaoq_b = data[1];
-    }
-    /* Since we were executing the instruction at IAOQ_F, and took some
-       sort of action that provoked the cpu_restore_state, we can infer
-       that the instruction was not nullified.  */
-    env->psw_n = 0;
+    translator_loop(cs, tb, max_insns, pc, host_pc, &hppa_tr_ops, &ctx.base);
 }

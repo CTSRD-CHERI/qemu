@@ -1,0 +1,47 @@
+name: FreeBSD CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  checks: write
+  pull-requests: write
+
+jobs:
+  freebsd-build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v6
+    - name: Build on FreeBSD
+      uses: vmactions/freebsd-vm@v1
+      with:
+        release: "14.3"
+        usesh: true
+        sync: rsync
+        copyback: false
+        prepare: |
+          pkg install -y bash ninja pkgconf glib gmake dtc libslirp pixman python3 git meson
+        run: |
+          mkdir build
+          cd build
+          git config --global --add safe.directory '*'
+          ../configure --meson=meson --enable-werror --enable-virtfs --disable-docs --enable-fdt=system --disable-capstone --target-list="arm-softmmu,aarch64-softmmu,riscv64-softmmu,x86_64-softmmu" --extra-cflags="-I/usr/local/include -Wno-error=macro-redefined -Wno-error=deprecated-declarations" --extra-ldflags="-L/usr/local/lib"
+          gmake -j$(sysctl -n hw.ncpu)
+          meson test --print-errorlogs --timeout-multiplier=2
+
+    - name: Get test results
+      if: always()
+      run: |
+        scp freebsd:~/work/qemu/qemu/build/meson-logs/testlog.junit.xml qemu-test-results.xml || true
+
+    - name: Publish Test Results
+      uses: EnricoMi/publish-unit-test-result-action@v2
+      if: always()
+      with:
+        files: "*-test-results.xml"
+        action_fail_on_inconclusive: 'true'
+        check_run: 'false'
+        large_files: 'true'

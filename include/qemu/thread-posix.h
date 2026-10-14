@@ -6,6 +6,7 @@
 
 #ifdef __FreeBSD__
 #include <pthread_np.h>
+#undef FSCALE
 #endif
 
 struct QemuMutex {
@@ -31,14 +32,9 @@ struct QemuCond {
 };
 
 struct QemuSemaphore {
-#ifndef CONFIG_SEM_TIMEDWAIT
-    pthread_mutex_t lock;
-    pthread_cond_t cond;
+    QemuMutex mutex;
+    QemuCond cond;
     unsigned int count;
-#else
-    sem_t sem;
-#endif
-    bool initialized;
 };
 
 struct QemuEvent {

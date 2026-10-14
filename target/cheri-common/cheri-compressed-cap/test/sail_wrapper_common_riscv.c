@@ -75,7 +75,14 @@ static inline void set_top_base_from_sail(const struct zCapability* sail, _cc_ca
     _CC_CONCAT(kill_, sail_bounds_tuple)(&base_top);
 }
 
-static _cc_addr_t _compress_sailcap_raw(struct zCapability sailcap) { return sailgen_capToMetadataBits(sailcap).zbits; }
+static _cc_addr_t _compress_sailcap_raw(struct zCapability sailcap) {
+    _cc_addr_t raw = sailgen_capToMetadataBits(sailcap).zbits;
+#if _CC_N(CAP_BITS) == 128 && !defined(SAIL_WRAPPER_CC_IS_RVY093)
+    raw = _CC_DEPOSIT_FIELD(raw, sailcap.zsd_perms, SDP);
+    raw = _CC_DEPOSIT_FIELD(raw, sailcap.zreserved_1, RESERVED1);
+#endif
+    return raw;
+}
 
 static struct zCapability cap_t_to_sail_cap(const _cc_cap_t* c) {
     struct zCapability result;
@@ -122,6 +129,10 @@ static struct zCapability _sail_decode(_cc_addr_t pesbt, _cc_addr_t cursor, bool
     pesbt_and_addr_to_sail_cap_bits(&sail_all_bits, pesbt, cursor);
     struct zCapability sail_result = sailgen_bitsToCap(tag, sail_all_bits);
     KILL(sail_cap_bits)(&sail_all_bits);
+#if _CC_N(CAP_BITS) == 128 && !defined(SAIL_WRAPPER_CC_IS_RVY093)
+    sail_result.zsd_perms = _CC_EXTRACT_FIELD(pesbt, SDP);
+    sail_result.zreserved_1 = _CC_EXTRACT_FIELD(pesbt, RESERVED1);
+#endif
     return sail_result;
 }
 

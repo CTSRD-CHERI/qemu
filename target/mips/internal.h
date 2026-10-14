@@ -521,7 +521,7 @@ static inline void cpu_mips_clear_capcause_reg(CPUMIPSState *env)
     env->capcause_reg_already_set = false;
 }
 
-static inline QEMU_NORETURN void do_raise_c0_exception_impl(CPUMIPSState *env,
+static inline G_NORETURN void do_raise_c0_exception_impl(CPUMIPSState *env,
         uint16_t cause, uint64_t badvaddr, uintptr_t pc)
 {
     env->CP0_BadVAddr = badvaddr;

@@ -1,3 +1,5 @@
+.. _testing:
+
 Testing in QEMU
 ===============
 
@@ -78,6 +80,36 @@ QTest cases can be executed with
 .. code::
 
    make check-qtest
+
+Writing portable test cases
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Both unit tests and qtests can run on POSIX hosts as well as Windows hosts.
+Care must be taken when writing portable test cases that can be built and run
+successfully on various hosts. The following list shows some best practices:
+
+* Use portable APIs from glib whenever necessary, e.g.: g_setenv(),
+  g_mkdtemp(), g_mkdir().
+* Avoid using hardcoded /tmp for temporary file directory.
+  Use g_get_tmp_dir() instead.
+* Bear in mind that Windows has different special string representation for
+  stdin/stdout/stderr and null devices. For example if your test case uses
+  "/dev/fd/2" and "/dev/null" on Linux, remember to use "2" and "nul" on
+  Windows instead. Also IO redirection does not work on Windows, so avoid
+  using "2>nul" whenever necessary.
+* If your test cases uses the blkdebug feature, use relative path to pass
+  the config and image file paths in the command line as Windows absolute
+  path contains the delimiter ":" which will confuse the blkdebug parser.
+* Use double quotes in your extra QEMU command line in your test cases
+  instead of single quotes, as Windows does not drop single quotes when
+  passing the command line to QEMU.
+* Windows opens a file in text mode by default, while a POSIX compliant
+  implementation treats text files and binary files the same. So if your
+  test cases opens a file to write some data and later wants to compare the
+  written data with the original one, be sure to pass the letter 'b' as
+  part of the mode string to fopen(), or O_BINARY flag for the open() call.
+* If a certain test case can only run on POSIX or Linux hosts, use a proper
+  #ifdef in the codes. If the whole test suite cannot run on Windows, disable
+  the build in the meson.build file.
 
 QAPI schema tests
 ~~~~~~~~~~~~~~~~~
@@ -295,7 +327,7 @@ build and test QEMU in predefined and widely accessible Linux
 environments. This makes it possible to expand the test coverage
 across distros, toolchain flavors and library versions. The support
 was originally written for Docker although we also support Podman as
-an alternative container runtime. Although the many of the target
+an alternative container runtime. Although many of the target
 names and scripts are prefixed with "docker" the system will
 automatically run on whichever is configured.
 
@@ -373,7 +405,7 @@ locally by using the ``NOCACHE`` build option:
 
 .. code::
 
-   make docker-image-debian10 NOCACHE=1
+   make docker-image-debian-arm64-cross NOCACHE=1
 
 Images
 ~~~~~~
@@ -636,6 +668,44 @@ Good files to start with are: annotate_happens_before.cpp and ignore_race.cpp
 The full set of annotations can be found here:
 
 https://github.com/llvm/llvm-project/blob/master/compiler-rt/lib/tsan/rtl/tsan_interface_ann.cpp
+
+docker-binfmt-image-debian-% targets
+------------------------------------
+
+It is possible to combine Debian's bootstrap scripts with a configured
+``binfmt_misc`` to bootstrap a number of Debian's distros including
+experimental ports not yet supported by a released OS. This can
+simplify setting up a rootfs by using docker to contain the foreign
+rootfs rather than manually invoking chroot.
+
+Setting up ``binfmt_misc``
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can use the script ``qemu-binfmt-conf.sh`` to configure a QEMU
+user binary to automatically run binaries for the foreign
+architecture. While the scripts will try their best to work with
+dynamically linked QEMU's a statically linked one will present less
+potential complications when copying into the docker image. Modern
+kernels support the ``F`` (fix binary) flag which will open the QEMU
+executable on setup and avoids the need to find and re-open in the
+chroot environment. This is triggered with the ``--persistent`` flag.
+
+Example invocation
+~~~~~~~~~~~~~~~~~~
+
+For example to setup the HPPA ports builds of Debian::
+
+  make docker-binfmt-image-debian-sid-hppa \
+    DEB_TYPE=sid DEB_ARCH=hppa \
+    DEB_URL=http://ftp.ports.debian.org/debian-ports/ \
+    DEB_KEYRING=/usr/share/keyrings/debian-ports-archive-keyring.gpg \
+    EXECUTABLE=(pwd)/qemu-hppa V=1
+
+The ``DEB_`` variables are substitutions used by
+``debian-boostrap.pre`` which is called to do the initial debootstrap
+of the rootfs before it is copied into the container. The second stage
+is run as part of the build. The final image will be tagged as
+``qemu/debian-sid-hppa``.
 
 VM testing
 ----------

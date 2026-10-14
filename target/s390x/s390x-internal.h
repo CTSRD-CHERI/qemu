@@ -227,7 +227,7 @@ static inline hwaddr decode_basedisp_s(CPUS390XState *env, uint32_t ipb,
 
 /* arch_dump.c */
 int s390_cpu_write_elf64_note(WriteCoreDumpFunction f, CPUState *cs,
-                              int cpuid, void *opaque);
+                              int cpuid, DumpState *s);
 
 
 /* cc_helper.c */
@@ -280,9 +280,9 @@ void s390_cpu_record_sigbus(CPUState *cs, vaddr address,
 bool s390_cpu_tlb_fill(CPUState *cs, vaddr address, int size,
                        MMUAccessType access_type, int mmu_idx,
                        bool probe, uintptr_t retaddr);
-void s390x_cpu_do_unaligned_access(CPUState *cs, vaddr addr,
-                                   MMUAccessType access_type, int mmu_idx,
-                                   uintptr_t retaddr) QEMU_NORETURN;
+G_NORETURN void s390x_cpu_do_unaligned_access(CPUState *cs, vaddr addr,
+                                              MMUAccessType access_type, int mmu_idx,
+                                              uintptr_t retaddr);
 #endif
 
 
@@ -398,7 +398,9 @@ void handle_diag_308(CPUS390XState *env, uint64_t r1, uint64_t r3,
 
 /* translate.c */
 void s390x_translate_init(void);
-
+void s390x_restore_state_to_opc(CPUState *cs,
+                                const TranslationBlock *tb,
+                                const uint64_t *data);
 
 /* sigp.c */
 int handle_sigp(CPUS390XState *env, uint8_t order, uint64_t r1, uint64_t r3);

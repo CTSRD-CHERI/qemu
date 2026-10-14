@@ -77,7 +77,7 @@ static inline target_ulong get_lmask(CPUMIPSState *env,
 #ifdef TARGET_CHERI
 static inline target_ulong ccheck_store_right(CPUMIPSState *env, target_ulong offset, uint32_t len, uintptr_t retpc)
 {
-#ifndef TARGET_WORDS_BIGENDIAN
+#if TARGET_BIG_ENDIAN == 0
 #error "This check is only valid for big endian targets, for little endian the load/store left instructions need to be checked"
 #endif
     // For swr/sdr if offset & 3/7 == 0 we store only first byte, if all low bits are set we store the full amount

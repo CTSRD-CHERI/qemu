@@ -257,15 +257,20 @@ static void xilinx_pcie_host_realize(DeviceState *dev, Error **errp)
                                      pci_swizzle_map_irq_fn, s, &s->mmio,
                                      &s->io, 0, 4, TYPE_PCIE_BUS);
 
-    memory_region_init(&s->address_space_root,
-                       OBJECT(s),
-                       g_strdup_printf("%s-bus-address-space-root", s->name),
-                       UINT64_MAX);
-    memory_region_add_subregion(&s->address_space_root,
-                                0x0, &s->mmio);
-    address_space_init(&s->address_space,
-                       &s->address_space_root,
-                       g_strdup_printf("%s-bus-address-space", s->name));
+    {
+        g_autofree char *as_root_name =
+            g_strdup_printf("%s-bus-address-space-root", s->name);
+        g_autofree char *as_name =
+            g_strdup_printf("%s-bus-address-space", s->name);
+
+        memory_region_init(&s->address_space_root, OBJECT(s),
+                           as_root_name, UINT64_MAX);
+        memory_region_add_subregion(&s->address_space_root,
+                                    0x0, &s->mmio);
+        address_space_init(&s->address_space,
+                           &s->address_space_root,
+                           as_name);
+    }
     pci_setup_iommu(pci->bus, xilinx_pcie_host_set_iommu, s);
 
     qdev_realize(DEVICE(&s->root), BUS(pci->bus), &error_fatal);

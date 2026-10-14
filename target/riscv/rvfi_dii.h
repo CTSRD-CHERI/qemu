@@ -38,6 +38,7 @@
 #define _RISCV_RVFI_DII_H
 
 #include <stdint.h>
+#include "sysemu/cpus.h"
 
 /// The old trace packet for backwards compatibility with older TestRIG versions:
 struct rvfi_dii_trace_v1 {
@@ -226,5 +227,105 @@ typedef struct rvfi_dii_command {
     uint8_t rvfi_dii_cmd; // [63] This token is a trace command.  For example, reset device under test.
     uint8_t padding;
 } QEMU_PACKED rvfi_dii_command_t; // 8 bytes
+
+enum rvfi_dii_command_code {
+    RVFI_DII_CMD_END = 0x00,
+    RVFI_DII_CMD_INSTR = 0x01,
+    RVFI_DII_CMD_VERSION = 'v',
+    RVFI_DII_CMD_BLINK = 'B',
+    RVFI_DII_CMD_QUIT = 'Q'
+};
+
+#ifdef CONFIG_RVFI_DII
+#define RVFI_DII_RAM_START 0x80000000
+#define RVFI_DII_RAM_SIZE (8 * MiB)
+#define RVFI_DII_RAM_END (RVFI_DII_RAM_START + RVFI_DII_RAM_SIZE)
+
+extern bool rvfi_debug_output;
+
+struct CPUArchState;
+void rvfi_dii_communicate(CPUState *cs, struct CPUArchState *env, bool was_trap);
+
+#define CHECK_SAME_TYPE(a, b, msg)                                             \
+    _Static_assert(__builtin_types_compatible_p(a*, b*), msg)
+#define rvfi_dii_offset(type, field)                                           \
+    offsetof(CPURISCVState, rvfi_dii_trace.type.rvfi_##field)
+#define gen_rvfi_dii_set_field(type, field, arg)                               \
+    do {                                                                       \
+        CHECK_SAME_TYPE(                                                       \
+            typeof(((CPURISCVState *)NULL)->rvfi_dii_trace.type.rvfi_##field), \
+            uint64_t, "Should only be used for uint64_t fields");              \
+        CHECK_SAME_TYPE(TCGv_i64, typeof(arg), "Expected 64-bit store");       \
+        tcg_gen_st_i64(arg, cpu_env, rvfi_dii_offset(type, field));            \
+        tcg_gen_ori_i32(cpu_rvfi_available_fields, cpu_rvfi_available_fields,  \
+                        RVFI_##type##_DATA);                                   \
+    } while (0)
+#define gen_rvfi_dii_set_field_const_iN(n, st_op, type, field, constant)       \
+    do {                                                                       \
+        CHECK_SAME_TYPE(                                                       \
+            typeof(((CPURISCVState *)NULL)->rvfi_dii_trace.type.rvfi_##field), \
+            uint##n##_t, "Should only be used for uint64_t fields");           \
+        TCGv_i64 rvfi_tc = tcg_const_i64(constant);                            \
+        tcg_gen_##st_op(rvfi_tc, cpu_env, rvfi_dii_offset(type, field));       \
+        tcg_gen_ori_i32(cpu_rvfi_available_fields, cpu_rvfi_available_fields,  \
+                        RVFI_##type##_DATA);                                   \
+        tcg_temp_free_i64(rvfi_tc);                                            \
+    } while (0)
+#define gen_rvfi_dii_set_field_const_i8(type, field, constant)                 \
+    gen_rvfi_dii_set_field_const_iN(8, st8_i64, type, field, constant)
+#define gen_rvfi_dii_set_field_const_i16(type, field, constant)                \
+    gen_rvfi_dii_set_field_const_iN(16, tcg_gen_st16_i64, type, field, constant)
+#define gen_rvfi_dii_set_field_const_i32(type, field, constant)                \
+    gen_rvfi_dii_set_field_const_iN(32, st32_i64, type, field, constant)
+#define gen_rvfi_dii_set_field_const_i64(type, field, constant)                \
+    gen_rvfi_dii_set_field_const_iN(64, st_i64, type, field, constant)
+#define gen_rvfi_dii_set_field_zext_i32(type, field, arg)                      \
+    do {                                                                       \
+        CHECK_SAME_TYPE(TCGv_i32, typeof(arg), "Expected i32");                \
+        TCGv_i64 tmp = tcg_temp_new_i64();                                     \
+        tcg_gen_extu_i32_i64(tmp, arg);                                        \
+        gen_rvfi_dii_set_field(type, field, tmp);                              \
+        tcg_temp_free_i64(tmp);                                                \
+    } while (0)
+#if TARGET_LONG_BITS == 32
+#define gen_rvfi_dii_set_field_zext_tl(type, field, arg)                       \
+    gen_rvfi_dii_set_field_zext_i32(type, field, arg)
+#else
+#define gen_rvfi_dii_set_field_zext_tl(type, field, arg)                       \
+    gen_rvfi_dii_set_field(type, field, arg)
+#endif
+#define gen_rvfi_dii_set_field_zext_addr(type, field, arg)                     \
+    do {                                                                       \
+        CHECK_SAME_TYPE(TCGv_cap_checked_ptr, typeof(arg), "Expected addr");   \
+        TCGv_i64 tmp = tcg_temp_new_i64();                                     \
+        tcg_gen_extu_tl_i64(tmp, (TCGv)arg);                                   \
+        gen_rvfi_dii_set_field(type, field, tmp);                              \
+        tcg_temp_free_i64(tmp);                                                \
+    } while (0)
+#define gen_rvfi_dii_set_mem_data(rw, addr, val, memop, extend_to_i64)         \
+    do {                                                                       \
+        TCGv_i64 tmp = tcg_temp_new_i64();                                     \
+        extend_to_i64(tmp, val);                                               \
+        tcg_gen_andi_i64(tmp, tmp, MAKE_64BIT_MASK(0, 8 * memop_size(memop))); \
+        gen_rvfi_dii_set_field_zext_addr(MEM, mem_addr, addr);                 \
+        gen_rvfi_dii_set_field(MEM, mem_##rw##data[0], tmp);                   \
+        gen_rvfi_dii_set_field_const_i32(MEM, mem_##rw##mask,                  \
+                                         memop_rvfi_mask(memop));              \
+        tcg_temp_free_i64(tmp);                                                \
+    } while (0)
+#define gen_rvfi_dii_set_mem_data_i32(rw, addr, val_i32, memop)                \
+    gen_rvfi_dii_set_mem_data(rw, addr, val_i32, memop, tcg_gen_extu_i32_i64)
+#define gen_rvfi_dii_set_mem_data_i64(rw, addr, val_i64, memop)                \
+    gen_rvfi_dii_set_mem_data(rw, addr, val_i64, memop, tcg_gen_mov_i64)
+#else /* !defined(CONFIG_RVFI_DII) */
+#define gen_rvfi_dii_set_field(type, field, arg) ((void)0)
+#define gen_rvfi_dii_set_field_zext_i32(type, field, arg) ((void)0)
+#define gen_rvfi_dii_set_field_zext_addr(type, field, arg) ((void)0)
+#define gen_rvfi_dii_set_field_zext_tl(type, field, arg) ((void)0)
+#define gen_rvfi_dii_set_field_const_i8(type, field, constant) ((void)0)
+#define gen_rvfi_dii_set_field_const_i16(type, field, constant) ((void)0)
+#define gen_rvfi_dii_set_field_const_i32(type, field, constant) ((void)0)
+#define gen_rvfi_dii_set_field_const_i64(type, field, constant) ((void)0)
+#endif /* !defined(CONFIG_RVFI_DII) */
 
 #endif

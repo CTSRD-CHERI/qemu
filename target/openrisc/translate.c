@@ -1687,12 +1687,13 @@ static void openrisc_tr_tb_stop(DisasContextBase *dcbase, CPUState *cs)
     }
 }
 
-static void openrisc_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs)
+static void openrisc_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs,
+                                  FILE *logfile)
 {
     DisasContext *s = container_of(dcbase, DisasContext, base);
 
-    qemu_log("IN: %s\n", lookup_symbol(s->base.pc_first));
-    log_target_disas(cs, s->base.pc_first, s->base.tb->size);
+    fprintf(logfile, "IN: %s\n", lookup_symbol(s->base.pc_first));
+    target_disas(logfile, cs, s->base.pc_first, s->base.tb->size);
 }
 
 static const TranslatorOps openrisc_tr_ops = {
@@ -1704,11 +1705,13 @@ static const TranslatorOps openrisc_tr_ops = {
     .disas_log          = openrisc_tr_disas_log,
 };
 
-void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns)
+void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns,
+                           target_ulong pc, void *host_pc)
 {
     DisasContext ctx;
 
-    translator_loop(&openrisc_tr_ops, &ctx.base, cs, tb, max_insns);
+    translator_loop(cs, tb, max_insns, pc, host_pc,
+                    &openrisc_tr_ops, &ctx.base);
 }
 
 void openrisc_cpu_dump_state(CPUState *cs, FILE *f, int flags)
@@ -1721,15 +1724,5 @@ void openrisc_cpu_dump_state(CPUState *cs, FILE *f, int flags)
     for (i = 0; i < 32; ++i) {
         qemu_fprintf(f, "R%02d=%08x%c", i, cpu_get_gpr(env, i),
                      (i % 4) == 3 ? '\n' : ' ');
-    }
-}
-
-void restore_state_to_opc(CPUOpenRISCState *env, TranslationBlock *tb,
-                          target_ulong *data)
-{
-    env->pc = data[0];
-    env->dflag = data[1] & 1;
-    if (data[1] & 2) {
-        env->ppc = env->pc - 4;
     }
 }

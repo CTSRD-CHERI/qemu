@@ -174,4 +174,7 @@ config CODASIP_TRNG
 config VIRT_CTRL
     bool
 
+config LASI
+    bool
+
 source macio/Kconfig

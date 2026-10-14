@@ -377,15 +377,14 @@ static int vdi_open(BlockDriverState *bs, QDict *options, int flags,
     int ret;
     QemuUUID uuid_link, uuid_parent;
 
-    bs->file = bdrv_open_child(NULL, options, "file", bs, &child_of_bds,
-                               BDRV_CHILD_IMAGE, false, errp);
-    if (!bs->file) {
-        return -EINVAL;
+    ret = bdrv_open_file_child(NULL, options, "file", bs, errp);
+    if (ret < 0) {
+        return ret;
     }
 
     logout("\n");
 
-    ret = bdrv_pread(bs->file, 0, &header, sizeof(header));
+    ret = bdrv_pread(bs->file, 0, sizeof(header), &header, 0);
     if (ret < 0) {
         goto fail;
     }
@@ -485,8 +484,8 @@ static int vdi_open(BlockDriverState *bs, QDict *options, int flags,
         goto fail;
     }
 
-    ret = bdrv_pread(bs->file, header.offset_bmap, s->bmap,
-                     bmap_size * SECTOR_SIZE);
+    ret = bdrv_pread(bs->file, header.offset_bmap, bmap_size * SECTOR_SIZE,
+                     s->bmap, 0);
     if (ret < 0) {
         goto fail_free_bmap;
     }
@@ -664,7 +663,8 @@ vdi_co_pwritev(BlockDriverState *bs, int64_t offset, int64_t bytes,
              * so this full-cluster write does not overlap a partial write
              * of the same cluster, issued from the "else" branch.
              */
-            ret = bdrv_pwrite(bs->file, data_offset, block, s->block_size);
+            ret = bdrv_co_pwrite(bs->file, data_offset, s->block_size, block,
+                                 0);
             qemu_co_rwlock_unlock(&s->bmap_lock);
         } else {
 nonallocating_write:
@@ -709,7 +709,7 @@ nonallocating_write:
         assert(VDI_IS_ALLOCATED(bmap_first));
         *header = s->header;
         vdi_header_to_le(header);
-        ret = bdrv_pwrite(bs->file, 0, header, sizeof(*header));
+        ret = bdrv_co_pwrite(bs->file, 0, sizeof(*header), header, 0);
         g_free(header);
 
         if (ret < 0) {
@@ -726,11 +726,11 @@ nonallocating_write:
         base = ((uint8_t *)&s->bmap[0]) + bmap_first * SECTOR_SIZE;
         logout("will write %u block map sectors starting from entry %u\n",
                n_sectors, bmap_first);
-        ret = bdrv_pwrite(bs->file, offset * SECTOR_SIZE, base,
-                          n_sectors * SECTOR_SIZE);
+        ret = bdrv_co_pwrite(bs->file, offset * SECTOR_SIZE,
+                             n_sectors * SECTOR_SIZE, base, 0);
     }
 
-    return ret < 0 ? ret : 0;
+    return ret;
 }
 
 static int coroutine_fn vdi_co_do_create(BlockdevCreateOptions *create_options,
@@ -845,7 +845,7 @@ static int coroutine_fn vdi_co_do_create(BlockdevCreateOptions *create_options,
         vdi_header_print(&header);
     }
     vdi_header_to_le(&header);
-    ret = blk_pwrite(blk, offset, &header, sizeof(header), 0);
+    ret = blk_co_pwrite(blk, offset, sizeof(header), &header, 0);
     if (ret < 0) {
         error_setg(errp, "Error writing header");
         goto exit;
@@ -866,7 +866,7 @@ static int coroutine_fn vdi_co_do_create(BlockdevCreateOptions *create_options,
                 bmap[i] = VDI_UNALLOCATED;
             }
         }
-        ret = blk_pwrite(blk, offset, bmap, bmap_size, 0);
+        ret = blk_co_pwrite(blk, offset, bmap_size, bmap, 0);
         if (ret < 0) {
             error_setg(errp, "Error writing bmap");
             goto exit;
@@ -875,8 +875,8 @@ static int coroutine_fn vdi_co_do_create(BlockdevCreateOptions *create_options,
     }
 
     if (image_type == VDI_TYPE_STATIC) {
-        ret = blk_truncate(blk, offset + blocks * block_size, false,
-                           PREALLOC_MODE_OFF, 0, errp);
+        ret = blk_co_truncate(blk, offset + blocks * block_size, false,
+                              PREALLOC_MODE_OFF, 0, errp);
         if (ret < 0) {
             error_prepend(errp, "Failed to statically allocate file");
             goto exit;

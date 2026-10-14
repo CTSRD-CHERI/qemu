@@ -1453,8 +1453,6 @@ static TCGv cpu_statcounters_icount_kernel, cpu_statcounters_icount_user;
 
 #include "exec/gen-icount.h"
 
-#define DISAS_STOP       DISAS_TARGET_0
-#define DISAS_EXIT       DISAS_TARGET_1
 
 const char regnames_HI[4][4] = {
     "HI0", "HI1", "HI2", "HI3",
@@ -1816,7 +1814,7 @@ void check_cop1x(DisasContext *ctx)
  */
 void check_cp1_64bitmode(DisasContext *ctx)
 {
-    if (unlikely(~ctx->hflags & (MIPS_HFLAG_F64 | MIPS_HFLAG_COP1X))) {
+    if (unlikely(~ctx->hflags & MIPS_HFLAG_F64)) {
         gen_reserved_instruction(ctx);
     }
 }
@@ -12813,22 +12811,15 @@ static void gen_cache_operation(DisasContext *ctx, uint32_t op, int base,
     tcg_temp_free_i32(t0);
 }
 
-static inline bool is_uhi(int sdbbp_code)
+static inline bool is_uhi(DisasContext *ctx, int sdbbp_code)
 {
 #ifdef CONFIG_USER_ONLY
     return false;
 #else
-    return semihosting_enabled() && sdbbp_code == 1;
+    bool is_user = (ctx->hflags & MIPS_HFLAG_KSU) == MIPS_HFLAG_UM;
+    return semihosting_enabled(is_user) && sdbbp_code == 1;
 #endif
 }
-
-#ifdef CONFIG_USER_ONLY
-/* The above should dead-code away any calls to this..*/
-static inline void gen_helper_do_semihosting(void *env)
-{
-    g_assert_not_reached();
-}
-#endif
 
 void gen_ldxs(DisasContext *ctx, int base, int index, int rd)
 {
@@ -12914,12 +12905,16 @@ enum {
 #endif
 
 /* MIPSDSP functions. */
-static void gen_mipsdsp_ld(DisasContext *ctx, uint32_t opc,
-                           int rd, int base, int offset)
+
+/* Indexed load is not for DSP only */
+static void gen_mips_lx(DisasContext *ctx, uint32_t opc,
+                        int rd, int base, int offset)
 {
     TCGv t0;
 
-    check_dsp(ctx);
+    if (!(ctx->insn_flags & INSN_OCTEON)) {
+        check_dsp(ctx);
+    }
     t0 = tcg_temp_new();
 
     if (base == 0) {
@@ -14640,8 +14635,8 @@ static void decode_opc_special_r6(CPUMIPSState *env, DisasContext *ctx)
         }
         break;
     case R6_OPC_SDBBP:
-        if (is_uhi(extract32(ctx->opcode, 6, 20))) {
-            gen_helper_do_semihosting(cpu_env);
+        if (is_uhi(ctx, extract32(ctx->opcode, 6, 20))) {
+            ctx->base.is_jmp = DISAS_SEMIHOST;
         } else {
             if (ctx->hflags & MIPS_HFLAG_SBRI) {
                 gen_reserved_instruction(ctx);
@@ -15052,8 +15047,8 @@ static void decode_opc_special2_legacy(CPUMIPSState *env, DisasContext *ctx)
         gen_cl(ctx, op1, rd, rs);
         break;
     case OPC_SDBBP:
-        if (is_uhi(extract32(ctx->opcode, 6, 20))) {
-            gen_helper_do_semihosting(cpu_env);
+        if (is_uhi(ctx, extract32(ctx->opcode, 6, 20))) {
+            ctx->base.is_jmp = DISAS_SEMIHOST;
         } else {
             /*
              * XXX: not clear which exception should be raised
@@ -15270,7 +15265,7 @@ static void decode_opc_special3_legacy(CPUMIPSState *env, DisasContext *ctx)
         case OPC_LBUX:
         case OPC_LHX:
         case OPC_LWX:
-            gen_mipsdsp_ld(ctx, op2, rd, rs, rt);
+            gen_mips_lx(ctx, op2, rd, rs, rt);
             break;
         default:            /* Invalid */
             MIPS_INVAL("MASK LX");
@@ -16847,6 +16842,11 @@ static void decode_opc(CPUMIPSState *env, DisasContext *ctx)
     if (cpu_supports_isa(env, INSN_VR54XX) && decode_ext_vr54xx(ctx, ctx->opcode)) {
         return;
     }
+#if defined(TARGET_MIPS64)
+    if (cpu_supports_isa(env, INSN_OCTEON) && decode_ext_octeon(ctx, ctx->opcode)) {
+        return;
+    }
+#endif
 
     /* ISA extensions */
     if (ase_msa_available(env) && decode_ase_msa(ctx, ctx->opcode)) {
@@ -16910,8 +16910,9 @@ static void mips_tr_init_disas_context(DisasContextBase *dcbase, CPUState *cs)
 #if defined(CHERI_UNALIGNED)
     ctx->default_tcg_memop_mask = MO_UNALN;
 #else
-    ctx->default_tcg_memop_mask = (ctx->insn_flags & (ISA_MIPS_R6 |
-                                  INSN_LOONGSON3A)) ? MO_UNALN : MO_ALIGN;
+    ctx->default_tcg_memop_mask = (!(ctx->insn_flags & ISA_NANOMIPS32) &&
+                                  (ctx->insn_flags & (ISA_MIPS_R6 |
+                                  INSN_LOONGSON3A))) ? MO_UNALN : MO_ALIGN;
 #endif
 
     /*
@@ -17076,6 +17077,9 @@ static void mips_tr_translate_insn(DisasContextBase *dcbase, CPUState *cs)
     if (is_slot) {
         gen_branch(ctx, insn_bytes);
     }
+    if (ctx->base.is_jmp == DISAS_SEMIHOST) {
+        generate_exception_err(ctx, EXCP_SEMIHOST, insn_bytes);
+    }
     ctx->base.pc_next += insn_bytes;
 
     if (ctx->base.is_jmp != DISAS_NEXT) {
@@ -17118,10 +17122,11 @@ static void mips_tr_tb_stop(DisasContextBase *dcbase, CPUState *cs)
     }
 }
 
-static void mips_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs)
+static void mips_tr_disas_log(const DisasContextBase *dcbase, CPUState *cs,
+                              FILE *logfile)
 {
-    qemu_log("IN: %s\n", lookup_symbol(dcbase->pc_first));
-    log_target_disas(cs, dcbase->pc_first, dcbase->tb->size);
+    fprintf(logfile, "IN: %s\n", lookup_symbol(dcbase->pc_first));
+    target_disas(logfile, cs, dcbase->pc_first, dcbase->tb->size);
 }
 
 static const TranslatorOps mips_tr_ops = {
@@ -17133,11 +17138,12 @@ static const TranslatorOps mips_tr_ops = {
     .disas_log          = mips_tr_disas_log,
 };
 
-void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns)
+void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns,
+                           target_ulong pc, void *host_pc)
 {
     DisasContext ctx;
 
-    translator_loop(&mips_tr_ops, &ctx.base, cs, tb, max_insns);
+    translator_loop(cs, tb, max_insns, pc, host_pc, &mips_tr_ops, &ctx.base);
 }
 
 void mips_tcg_init(void)
@@ -17224,9 +17230,13 @@ void mips_tcg_init(void)
     }
 }
 
-void restore_state_to_opc(CPUMIPSState *env, TranslationBlock *tb,
-                          target_ulong *data)
+void mips_restore_state_to_opc(CPUState *cs,
+                               const TranslationBlock *tb,
+                               const uint64_t *data)
 {
+    MIPSCPU *cpu = MIPS_CPU(cs);
+    CPUMIPSState *env = &cpu->env;
+
     mips_update_pc(env, data[0], /*can_be_unrepresentable=*/false);
     env->hflags &= ~MIPS_HFLAG_BMASK;
     env->hflags |= data[1];

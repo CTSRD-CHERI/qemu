@@ -2,9 +2,8 @@
 #include "qemu/dbus.h"
 #include <gio/gio.h>
 #include <gio/gunixfdlist.h>
-#include "libqos/libqtest.h"
-#include "qemu-common.h"
-#include "dbus-display1.h"
+#include "libqtest.h"
+#include "ui/dbus-display1.h"
 
 static GDBusConnection*
 test_dbus_p2p_from_fd(int fd)

@@ -13,7 +13,7 @@ util_ss.add(files(
 if have_system
   util_ss.add(files('qapi-type-helpers.c'))
 endif
-if have_system or have_tools
+if have_system or have_tools or have_ga
   util_ss.add(files(
     'qmp-dispatch.c',
     'qmp-event.c',
@@ -46,8 +46,10 @@ qapi_all_modules = [
   'replay',
   'run-state',
   'sockets',
+  'stats',
   'trace',
   'transaction',
+  'virtio',
   'yank',
 ]
 if have_system
@@ -66,21 +68,6 @@ if have_system or have_tools
     'ui',
   ]
 endif
-
-qapi_storage_daemon_modules = [
-  'block-core',
-  'block-export',
-  'char',
-  'common',
-  'control',
-  'crypto',
-  'introspect',
-  'job',
-  'qom',
-  'sockets',
-  'pragma',
-  'transaction',
-]
 
 qapi_nonmodule_outputs = [
   'qapi-introspect.c', 'qapi-introspect.h',

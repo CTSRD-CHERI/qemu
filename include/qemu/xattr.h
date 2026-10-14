@@ -25,7 +25,13 @@
 #  if !defined(ENOATTR)
 #    define ENOATTR ENODATA
 #  endif
-#  include <sys/xattr.h>
+#  ifndef CONFIG_WIN32
+#    ifdef CONFIG_FREEBSD
+#      include <sys/extattr.h>
+#    else
+#      include <sys/xattr.h>
+#    endif
+#  endif
 #endif
 
 #endif

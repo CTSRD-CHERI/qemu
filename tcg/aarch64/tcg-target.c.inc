@@ -1261,7 +1261,7 @@ static inline void tcg_out_shl(TCGContext *s, TCGType ext,
 {
     int bits = ext ? 64 : 32;
     int max = bits - 1;
-    tcg_out_ubfm(s, ext, rd, rn, bits - (m & max), max - (m & max));
+    tcg_out_ubfm(s, ext, rd, rn, (bits - m) & max, (max - m) & max);
 }
 
 static inline void tcg_out_shr(TCGContext *s, TCGType ext,
@@ -1557,7 +1557,7 @@ static void tcg_out_adr(TCGContext *s, TCGReg rd, const void *target)
  */
 static void * const qemu_ld_helpers[MO_SIZE + 1] = {
     [MO_8]  = helper_ret_ldub_mmu,
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
     [MO_16] = helper_be_lduw_mmu,
     [MO_32] = helper_be_ldul_mmu,
     [MO_64] = helper_be_ldq_mmu,
@@ -1574,7 +1574,7 @@ static void * const qemu_ld_helpers[MO_SIZE + 1] = {
  */
 static void * const qemu_st_helpers[MO_SIZE + 1] = {
     [MO_8]  = helper_ret_stb_mmu,
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
     [MO_16] = helper_be_stw_mmu,
     [MO_32] = helper_be_stl_mmu,
     [MO_64] = helper_be_stq_mmu,
@@ -1916,24 +1916,21 @@ static void tcg_out_op(TCGContext *s, TCGOpcode opc,
         break;
 
     case INDEX_op_goto_tb:
-        if (s->tb_jmp_insn_offset != NULL) {
-            /* TCG_TARGET_HAS_direct_jump */
-            /* Ensure that ADRP+ADD are 8-byte aligned so that an atomic
-               write can be used to patch the target address. */
-            if ((uintptr_t)s->code_ptr & 7) {
-                tcg_out32(s, NOP);
-            }
-            s->tb_jmp_insn_offset[a0] = tcg_current_code_size(s);
-            /* actual branch destination will be patched by
-               tb_target_set_jmp_target later. */
-            tcg_out_insn(s, 3406, ADRP, TCG_REG_TMP, 0);
-            tcg_out_insn(s, 3401, ADDI, TCG_TYPE_I64, TCG_REG_TMP, TCG_REG_TMP, 0);
-        } else {
-            /* !TCG_TARGET_HAS_direct_jump */
-            tcg_debug_assert(s->tb_jmp_target_addr != NULL);
-            intptr_t offset = tcg_pcrel_diff(s, (s->tb_jmp_target_addr + a0)) >> 2;
-            tcg_out_insn(s, 3305, LDR, offset, TCG_REG_TMP);
+        tcg_debug_assert(s->tb_jmp_insn_offset != NULL);
+        /*
+         * Ensure that ADRP+ADD are 8-byte aligned so that an atomic
+         * write can be used to patch the target address.
+         */
+        if ((uintptr_t)s->code_ptr & 7) {
+            tcg_out32(s, NOP);
         }
+        s->tb_jmp_insn_offset[a0] = tcg_current_code_size(s);
+        /*
+         * actual branch destination will be patched by
+         * tb_target_set_jmp_target later
+         */
+        tcg_out_insn(s, 3406, ADRP, TCG_REG_TMP, 0);
+        tcg_out_insn(s, 3401, ADDI, TCG_TYPE_I64, TCG_REG_TMP, TCG_REG_TMP, 0);
         tcg_out_insn(s, 3207, BR, TCG_REG_TMP);
         set_jmp_reset_offset(s, a0);
         break;

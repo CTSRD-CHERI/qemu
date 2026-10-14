@@ -117,7 +117,7 @@ bool mips_io_recompile_replay_branch(CPUState *cs, const TranslationBlock *tb)
     MIPSCPU *cpu = MIPS_CPU(cs);
     CPUMIPSState *env = &cpu->env;
 
-    if ((env->hflags & MIPS_HFLAG_BMASK) != 0 && PC_ADDR(env) != tb->pc) {
+    if ((env->hflags & MIPS_HFLAG_BMASK) != 0 && PC_ADDR(env) != tb_pc(tb)) {
         mips_update_pc(env, PC_ADDR(env) - (env->hflags & MIPS_HFLAG_B16 ? 2 : 4),
                        /*can_be_unrepresentable=*/false);
         env->hflags &= ~MIPS_HFLAG_BMASK;

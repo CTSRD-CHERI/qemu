@@ -8,15 +8,16 @@
  * checking all combinations.
  */
 enum {
-    ENC_C = _CC_BIT64(0),
-    ENC_W = _CC_BIT64(1),
-    ENC_R = _CC_BIT64(2),
-    ENC_X = _CC_BIT64(3),
-    ENC_ASR = _CC_BIT64(4),
-    ENC_LM = _CC_BIT64(5),
-    ENC_EL = _CC_BIT64(6),
-    ENC_SL = _CC_BIT64(7),
-    INT_MODE_ENCODED = _CC_BIT64(_CC_N(FIELD_AP_SIZE)),
+    _AP_SHIFT = _CC_N(FIELD_AP_START) - _CC_N(FIELD_AP_M_START),
+    ENC_C = _CC_BIT64(_AP_SHIFT + 0),
+    ENC_W = _CC_BIT64(_AP_SHIFT + 1),
+    ENC_R = _CC_BIT64(_AP_SHIFT + 2),
+    ENC_X = _CC_BIT64(_AP_SHIFT + 3),
+    ENC_ASR = _CC_BIT64(_AP_SHIFT + 4),
+    ENC_LM = _CC_BIT64(_AP_SHIFT + 5),
+    ENC_EL = _CC_BIT64(_AP_SHIFT + 6),
+    ENC_SL = _CC_BIT64(_AP_SHIFT + 7),
+    INT_MODE_ENCODED = _CC_BIT64(_CC_N(FIELD_MODE_START) - _CC_N(FIELD_AP_M_START)),
 };
 // AP compression
 TEST_CASE_M_AP_COMP(LVB_0, 0, CAP_AP_R, ENC_R)
@@ -41,7 +42,11 @@ TEST_CASE_M_AP_DECOMP(LVB_1, ENC_X | ENC_R | ENC_W | ENC_EL, 0, CAP_AP_X | CAP_A
 TEST_CASE("Reprentability with TOP>MAX_TOP", "[representable]") {
     auto cap = TestAPICC::make_max_perms_cap(0xffff002d01ffc000, 0xffff002d02013ff6, 0xffff002d027fc000,
                                              TestAPICC::MODE_INT, /*lvbits=*/0);
+#ifndef TEST_CC_IS_RVY093
+    CHECK(cap.cr_pesbt == 0xf007f00003ff7ff9);
+#else
     CHECK(cap.cr_pesbt == 0x1f3f00003ff7ff9);
+#endif
     CHECK(!TestAPICC::sail_precise_is_representable(cap, 0));
     CHECK(!_cc_N(_fast_is_representable_new_addr)(&cap, 0));
     // The following line used to assert with cdp->_cr_top <= ((cc128_length_t)1u << 64)
@@ -105,9 +110,13 @@ TEST_CASE("bounds encoding exponent 0", "[bounds]") {
      *
      * top == 0x20, base == 0x0
      */
+#ifndef TEST_CC_IS_RVY093
+    CHECK(cap.cr_pesbt == 0xf007f00004080000);
+#else
     CHECK(cap.cr_pesbt == 0x01f3f00004080000);
-    CHECK(cc128r_set_execution_mode(&cap, CC128R_MODE_CAP));
-    cc128r_set_permissions(&cap, 0);
+#endif
+    CHECK(_cc_N(set_execution_mode)(&cap, _CC_N(MODE_CAP)));
+    _cc_N(set_permissions)(&cap, 0);
     CHECK(cap.cr_pesbt == 0x0000000004080000);
 }
 
@@ -126,9 +135,13 @@ TEST_CASE("bounds encoding exponent > 0", "[bounds]") {
      * LCout = 0, LMSB = 1
      * c_t = 0, c_b = 0
      */
+#ifndef TEST_CC_IS_RVY093
+    CHECK(cap.cr_pesbt == 0xf007f00001334105);
+#else
     CHECK(cap.cr_pesbt == 0x01f3f00001334105);
-    CHECK(cc128r_set_execution_mode(&cap, CC128R_MODE_CAP));
-    cc128r_set_permissions(&cap, 0);
+#endif
+    CHECK(_cc_N(set_execution_mode)(&cap, _CC_N(MODE_CAP)));
+    _cc_N(set_permissions)(&cap, 0);
     CHECK(cap.cr_pesbt == 0x0000000001334105);
 }
 
@@ -163,9 +176,18 @@ TEST_CASE("No longer using fast rep check", "[repr]") {
     CHECK(!_cc_N(_precise_is_representable_new_addr)(&cap, new_addr));
     // The sail API always uses the precise check even in the sail_fast_is_representable
     CHECK(!TestAPICC::sail_precise_is_representable(cap, new_addr));
-    CHECK(!cc128r_is_representable_with_addr(&cap, new_addr, true));
-    CHECK(!cc128r_is_representable_with_addr(&cap, new_addr, false));
+    CHECK(!_cc_N(is_representable_with_addr)(&cap, new_addr, true));
+    CHECK(!_cc_N(is_representable_with_addr)(&cap, new_addr, false));
     // TODO: should not expose the fast rep check for cc128r, for now just have it be the same as precise
     CHECK(!_cc_N(_fast_is_representable_new_addr)(&cap, new_addr));
     CHECK(!TestAPICC::sail_fast_is_representable(cap, new_addr));
+}
+
+TEST_CASE("Both 0.9.3 and 0.9.9 encodings available simultaneously", "[versions]") {
+    cc128r_cap_t cap_099 = CompressedCap128r::make_max_perms_cap(0, 0x10, 0x20, CC128R_MODE_INT, /*lvbits=*/0);
+    cc128r093_cap_t cap_093 = CompressedCap128r093::make_max_perms_cap(0, 0x10, 0x20, CC128R093_MODE_INT, /*lvbits=*/0);
+    CHECK(cap_099.cr_pesbt == 0xf007f00004080000);
+    CHECK(cap_093.cr_pesbt == 0x01f3f00004080000);
+    CHECK(CC128R_RESET_PESBT == 0xf01ff80000000000);
+    CHECK(CC128R093_RESET_PESBT == 0x01fff80000000000);
 }

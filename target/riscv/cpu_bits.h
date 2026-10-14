@@ -181,14 +181,8 @@
 #define CSR_MIREG           0x351
 
 /* Machine-Level Interrupts (AIA) */
-#define CSR_MTOPI           0xfb0
-
-/* Machine-Level IMSIC Interface (AIA) */
-#define CSR_MSETEIPNUM      0x358
-#define CSR_MCLREIPNUM      0x359
-#define CSR_MSETEIENUM      0x35a
-#define CSR_MCLREIENUM      0x35b
 #define CSR_MTOPEI          0x35c
+#define CSR_MTOPI           0xfb0
 
 /* Virtual Interrupts for Supervisor Level (AIA) */
 #define CSR_MVIEN           0x308
@@ -203,8 +197,6 @@
 
 /* Supervisor Trap Setup */
 #define CSR_SSTATUS         0x100
-#define CSR_SEDELEG         0x102
-#define CSR_SIDELEG         0x103
 #define CSR_SIE             0x104
 #define CSR_STVEC           0x105
 #define CSR_SCOUNTEREN      0x106
@@ -226,6 +218,10 @@
 #define CSR_SEPCC           CSR_SEPC
 #endif
 
+/* Sstc supervisor CSRs */
+#define CSR_STIMECMP        0x14D
+#define CSR_STIMECMPH       0x15D
+
 /* Supervisor Protection and Translation */
 #define CSR_SPTBR           0x180
 #define CSR_SATP            0x180
@@ -235,14 +231,8 @@
 #define CSR_SIREG           0x151
 
 /* Supervisor-Level Interrupts (AIA) */
-#define CSR_STOPI           0xdb0
-
-/* Supervisor-Level IMSIC Interface (AIA) */
-#define CSR_SSETEIPNUM      0x158
-#define CSR_SCLREIPNUM      0x159
-#define CSR_SSETEIENUM      0x15a
-#define CSR_SCLREIENUM      0x15b
 #define CSR_STOPEI          0x15c
+#define CSR_STOPI           0xdb0
 
 /* Supervisor-Level High-Half CSRs (AIA) */
 #define CSR_SIEH            0x114
@@ -285,14 +275,13 @@
 #define CSR_VSEPCC          CSR_VSEPC
 #endif
 
-/* Machine Configuration CSRs */
-#define CSR_MENVCFG         0x30A
-#define CSR_MENVCFGH        0x31A
-
 #ifdef TARGET_CHERI_RISCV_STD_093
 #define CSR_STVAL2          0x14b
 #define CSR_VSTVAL2         0x24b
 #endif
+/* Sstc virtual CSRs */
+#define CSR_VSTIMECMP       0x24D
+#define CSR_VSTIMECMPH      0x25D
 
 #define CSR_MTINST          0x34a
 #define CSR_MTVAL2          0x34b
@@ -308,14 +297,8 @@
 #define CSR_VSIREG          0x251
 
 /* VS-Level Interrupts (H-extension with AIA) */
-#define CSR_VSTOPI          0xeb0
-
-/* VS-Level IMSIC Interface (H-extension with AIA) */
-#define CSR_VSSETEIPNUM     0x258
-#define CSR_VSCLREIPNUM     0x259
-#define CSR_VSSETEIENUM     0x25a
-#define CSR_VSCLREIENUM     0x25b
 #define CSR_VSTOPEI         0x25c
+#define CSR_VSTOPI          0xeb0
 
 /* Hypervisor and VS-Level High-Half CSRs (H-extension with AIA) */
 #define CSR_HIDELEGH        0x613
@@ -325,6 +308,10 @@
 #define CSR_HVIPRIO2H       0x657
 #define CSR_VSIEH           0x214
 #define CSR_VSIPH           0x254
+
+/* Machine Configuration CSRs */
+#define CSR_MENVCFG         0x30A
+#define CSR_MENVCFGH        0x31A
 
 /* Enhanced Physical Memory Protection (ePMP) */
 #define CSR_MSECCFG         0x747
@@ -356,6 +343,7 @@
 #define CSR_TDATA1          0x7a1
 #define CSR_TDATA2          0x7a2
 #define CSR_TDATA3          0x7a3
+#define CSR_TINFO           0x7a4
 
 /* Debug Mode Registers */
 #define CSR_DCSR            0x7b0
@@ -468,6 +456,37 @@
 #define CSR_MHPMEVENT29     0x33d
 #define CSR_MHPMEVENT30     0x33e
 #define CSR_MHPMEVENT31     0x33f
+
+#define CSR_MHPMEVENT3H     0x723
+#define CSR_MHPMEVENT4H     0x724
+#define CSR_MHPMEVENT5H     0x725
+#define CSR_MHPMEVENT6H     0x726
+#define CSR_MHPMEVENT7H     0x727
+#define CSR_MHPMEVENT8H     0x728
+#define CSR_MHPMEVENT9H     0x729
+#define CSR_MHPMEVENT10H    0x72a
+#define CSR_MHPMEVENT11H    0x72b
+#define CSR_MHPMEVENT12H    0x72c
+#define CSR_MHPMEVENT13H    0x72d
+#define CSR_MHPMEVENT14H    0x72e
+#define CSR_MHPMEVENT15H    0x72f
+#define CSR_MHPMEVENT16H    0x730
+#define CSR_MHPMEVENT17H    0x731
+#define CSR_MHPMEVENT18H    0x732
+#define CSR_MHPMEVENT19H    0x733
+#define CSR_MHPMEVENT20H    0x734
+#define CSR_MHPMEVENT21H    0x735
+#define CSR_MHPMEVENT22H    0x736
+#define CSR_MHPMEVENT23H    0x737
+#define CSR_MHPMEVENT24H    0x738
+#define CSR_MHPMEVENT25H    0x739
+#define CSR_MHPMEVENT26H    0x73a
+#define CSR_MHPMEVENT27H    0x73b
+#define CSR_MHPMEVENT28H    0x73c
+#define CSR_MHPMEVENT29H    0x73d
+#define CSR_MHPMEVENT30H    0x73e
+#define CSR_MHPMEVENT31H    0x73f
+
 #define CSR_MHPMCOUNTER3H   0xb83
 #define CSR_MHPMCOUNTER4H   0xb84
 #define CSR_MHPMCOUNTER5H   0xb85
@@ -543,6 +562,10 @@
 #define CSR_VSMTE           0x2c0
 #define CSR_VSPMMASK        0x2c1
 #define CSR_VSPMBASE        0x2c2
+#define CSR_SCOUNTOVF       0xda0
+
+/* Crypto Extension */
+#define CSR_SEED            0x015
 
 /* mstatus CSR bits */
 #define MSTATUS_UIE         0x00000001
@@ -764,6 +787,7 @@ typedef enum RISCVException {
 #define IRQ_VS_EXT                         10
 #define IRQ_M_EXT                          11
 #define IRQ_S_GEXT                         12
+#define IRQ_PMU_OVF                        13
 #define IRQ_LOCAL_MAX                      16
 #define IRQ_LOCAL_GUEST_MAX                (TARGET_LONG_BITS - 1)
 
@@ -781,11 +805,13 @@ typedef enum RISCVException {
 #define MIP_VSEIP                          (1 << IRQ_VS_EXT)
 #define MIP_MEIP                           (1 << IRQ_M_EXT)
 #define MIP_SGEIP                          (1 << IRQ_S_GEXT)
+#define MIP_LCOFIP                         (1 << IRQ_PMU_OVF)
 
 /* sip masks */
 #define SIP_SSIP                           MIP_SSIP
 #define SIP_STIP                           MIP_STIP
 #define SIP_SEIP                           MIP_SEIP
+#define SIP_LCOFIP                         MIP_LCOFIP
 
 /* MIE masks */
 #define MIE_SEIE                           (1 << IRQ_S_EXT)
@@ -921,7 +947,7 @@ typedef enum RISCVException {
 #define IPRIO_IRQ_BITS                     8
 #define IPRIO_MMAXIPRIO                    255
 #define IPRIO_DEFAULT_UPPER                4
-#define IPRIO_DEFAULT_MIDDLE               (IPRIO_DEFAULT_UPPER + 24)
+#define IPRIO_DEFAULT_MIDDLE               (IPRIO_DEFAULT_UPPER + 12)
 #define IPRIO_DEFAULT_M                    IPRIO_DEFAULT_MIDDLE
 #define IPRIO_DEFAULT_S                    (IPRIO_DEFAULT_M + 3)
 #define IPRIO_DEFAULT_SGEXT                (IPRIO_DEFAULT_S + 3)
@@ -935,5 +961,31 @@ typedef enum RISCVException {
 #define HVICTL_IPRIO                       0x000000ff
 #define HVICTL_VALID_MASK                  \
     (HVICTL_VTI | HVICTL_IID | HVICTL_IPRIOM | HVICTL_IPRIO)
+
+/* seed CSR bits */
+#define SEED_OPST                        (0b11 << 30)
+#define SEED_OPST_BIST                   (0b00 << 30)
+#define SEED_OPST_WAIT                   (0b01 << 30)
+#define SEED_OPST_ES16                   (0b10 << 30)
+#define SEED_OPST_DEAD                   (0b11 << 30)
+/* PMU related bits */
+#define MIE_LCOFIE                         (1 << IRQ_PMU_OVF)
+
+#define MHPMEVENT_BIT_OF                   BIT_ULL(63)
+#define MHPMEVENTH_BIT_OF                  BIT(31)
+#define MHPMEVENT_BIT_MINH                 BIT_ULL(62)
+#define MHPMEVENTH_BIT_MINH                BIT(30)
+#define MHPMEVENT_BIT_SINH                 BIT_ULL(61)
+#define MHPMEVENTH_BIT_SINH                BIT(29)
+#define MHPMEVENT_BIT_UINH                 BIT_ULL(60)
+#define MHPMEVENTH_BIT_UINH                BIT(28)
+#define MHPMEVENT_BIT_VSINH                BIT_ULL(59)
+#define MHPMEVENTH_BIT_VSINH               BIT(27)
+#define MHPMEVENT_BIT_VUINH                BIT_ULL(58)
+#define MHPMEVENTH_BIT_VUINH               BIT(26)
+
+#define MHPMEVENT_SSCOF_MASK               _ULL(0xFFFF000000000000)
+#define MHPMEVENT_IDX_MASK                 0xFFFFF
+#define MHPMEVENT_SSCOF_RESVD              16
 
 #endif

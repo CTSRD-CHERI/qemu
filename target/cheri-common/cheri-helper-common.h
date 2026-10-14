@@ -59,7 +59,7 @@ DEF_HELPER_3(raise_exception_ddc_bounds, noreturn, env, tl, i32)
 // Two-operand capability inspection
 DEF_HELPER_FLAGS_2(cgetaddr, TCG_CALL_NO_WG, tl, env, i32)
 DEF_HELPER_2(cgetbase, tl, env, i32)
-#ifndef TARGET_AARCH64
+#if !defined(TARGET_AARCH64) && !defined(TARGET_CHERI_RISCV_STD)
 DEF_HELPER_2(cgetflags, tl, env, i32)
 #endif
 DEF_HELPER_2(cgethigh, tl, env, i32)
@@ -121,7 +121,7 @@ DEF_HELPER_4(csetaddr, void, env, i32, i32, tl)
 DEF_HELPER_4(csethigh, void, env, i32, i32, tl)
 DEF_HELPER_4(csetbounds, void, env, i32, i32, tl)
 DEF_HELPER_4(csetboundsexact, void, env, i32, i32, tl)
-#ifndef TARGET_AARCH64
+#if !defined(TARGET_AARCH64) && !defined(TARGET_CHERI_RISCV_STD)
 DEF_HELPER_4(csetflags, void, env, i32, i32, tl)
 #endif
 DEF_HELPER_4(csetoffset, void, env, i32, i32, tl)

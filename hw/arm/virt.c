@@ -56,7 +56,7 @@
 #include "qemu/module.h"
 #include "hw/pci-host/gpex.h"
 #include "hw/virtio/virtio-pci.h"
-#include "hw/arm/sysbus-fdt.h"
+#include "hw/core/sysbus-fdt.h"
 #include "hw/platform-bus.h"
 #include "hw/qdev-properties.h"
 #include "hw/arm/fdt.h"
@@ -203,11 +203,14 @@ static const int a15irqmap[] = {
 static const char *valid_cpus[] = {
     ARM_CPU_TYPE_NAME("cortex-a7"),
     ARM_CPU_TYPE_NAME("cortex-a15"),
+    ARM_CPU_TYPE_NAME("cortex-a35"),
     ARM_CPU_TYPE_NAME("cortex-a53"),
     ARM_CPU_TYPE_NAME("cortex-a57"),
     ARM_CPU_TYPE_NAME("cortex-a72"),
+    ARM_CPU_TYPE_NAME("cortex-a76"),
     ARM_CPU_TYPE_NAME("morello"),
     ARM_CPU_TYPE_NAME("a64fx"),
+    ARM_CPU_TYPE_NAME("neoverse-n1"),
     ARM_CPU_TYPE_NAME("host"),
     ARM_CPU_TYPE_NAME("max"),
 };
@@ -224,14 +227,18 @@ static bool cpu_type_valid(const char *cpu)
     return false;
 }
 
-static void create_kaslr_seed(MachineState *ms, const char *node)
+static void create_randomness(MachineState *ms, const char *node)
 {
-    uint64_t seed;
+    struct {
+        uint64_t kaslr;
+        uint8_t rng[32];
+    } seed;
 
     if (qemu_guest_getrandom(&seed, sizeof(seed), NULL)) {
         return;
     }
-    qemu_fdt_setprop_u64(ms->fdt, node, "kaslr-seed", seed);
+    qemu_fdt_setprop_u64(ms->fdt, node, "kaslr-seed", seed.kaslr);
+    qemu_fdt_setprop(ms->fdt, node, "rng-seed", seed.rng, sizeof(seed.rng));
 }
 
 static void create_fdt(VirtMachineState *vms)
@@ -251,17 +258,18 @@ static void create_fdt(VirtMachineState *vms)
     qemu_fdt_setprop_string(fdt, "/", "compatible", "linux,dummy-virt");
     qemu_fdt_setprop_cell(fdt, "/", "#address-cells", 0x2);
     qemu_fdt_setprop_cell(fdt, "/", "#size-cells", 0x2);
+    qemu_fdt_setprop_string(fdt, "/", "model", "linux,dummy-virt");
 
     /* /chosen must exist for load_dtb to fill in necessary properties later */
     qemu_fdt_add_subnode(fdt, "/chosen");
-    if (vms->dtb_kaslr_seed) {
-        create_kaslr_seed(ms, "/chosen");
+    if (vms->dtb_randomness) {
+        create_randomness(ms, "/chosen");
     }
 
     if (vms->secure) {
         qemu_fdt_add_subnode(fdt, "/secure-chosen");
-        if (vms->dtb_kaslr_seed) {
-            create_kaslr_seed(ms, "/secure-chosen");
+        if (vms->dtb_randomness) {
+            create_randomness(ms, "/secure-chosen");
         }
     }
 
@@ -485,6 +493,7 @@ static void fdt_add_its_gic_node(VirtMachineState *vms)
     qemu_fdt_setprop_string(ms->fdt, nodename, "compatible",
                             "arm,gic-v3-its");
     qemu_fdt_setprop(ms->fdt, nodename, "msi-controller", NULL, 0);
+    qemu_fdt_setprop_cell(ms->fdt, nodename, "#msi-cells", 1);
     qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
                                  2, vms->memmap[VIRT_GIC_ITS].base,
                                  2, vms->memmap[VIRT_GIC_ITS].size);
@@ -527,7 +536,7 @@ static void fdt_add_gic_node(VirtMachineState *vms)
     qemu_fdt_setprop_cell(ms->fdt, nodename, "#address-cells", 0x2);
     qemu_fdt_setprop_cell(ms->fdt, nodename, "#size-cells", 0x2);
     qemu_fdt_setprop(ms->fdt, nodename, "ranges", NULL, 0);
-    if (vms->gic_version == VIRT_GIC_VERSION_3) {
+    if (vms->gic_version != VIRT_GIC_VERSION_2) {
         int nb_redist_regions = virt_gicv3_redist_region_count(vms);
 
         qemu_fdt_setprop_string(ms->fdt, nodename, "compatible",
@@ -695,14 +704,32 @@ static void create_gic(VirtMachineState *vms, MemoryRegion *mem)
     /* We create a standalone GIC */
     SysBusDevice *gicbusdev;
     const char *gictype;
-    int type = vms->gic_version, i;
+    int i;
     unsigned int smp_cpus = ms->smp.cpus;
     uint32_t nb_redist_regions = 0;
+    int revision;
 
-    gictype = (type == 3) ? gicv3_class_name() : gic_class_name();
+    if (vms->gic_version == VIRT_GIC_VERSION_2) {
+        gictype = gic_class_name();
+    } else {
+        gictype = gicv3_class_name();
+    }
 
+    switch (vms->gic_version) {
+    case VIRT_GIC_VERSION_2:
+        revision = 2;
+        break;
+    case VIRT_GIC_VERSION_3:
+        revision = 3;
+        break;
+    case VIRT_GIC_VERSION_4:
+        revision = 4;
+        break;
+    default:
+        g_assert_not_reached();
+    }
     vms->gic = qdev_new(gictype);
-    qdev_prop_set_uint32(vms->gic, "revision", type);
+    qdev_prop_set_uint32(vms->gic, "revision", revision);
     qdev_prop_set_uint32(vms->gic, "num-cpu", smp_cpus);
     /* Note that the num-irq property counts both internal and external
      * interrupts; there are always 32 of the former (mandated by GIC spec).
@@ -712,9 +739,8 @@ static void create_gic(VirtMachineState *vms, MemoryRegion *mem)
         qdev_prop_set_bit(vms->gic, "has-security-extensions", vms->secure);
     }
 
-    if (type == 3) {
-        uint32_t redist0_capacity =
-                    vms->memmap[VIRT_GIC_REDIST].size / GICV3_REDIST_SIZE;
+    if (vms->gic_version != VIRT_GIC_VERSION_2) {
+        uint32_t redist0_capacity = virt_redist_capacity(vms, VIRT_GIC_REDIST);
         uint32_t redist0_count = MIN(smp_cpus, redist0_capacity);
 
         nb_redist_regions = virt_gicv3_redist_region_count(vms);
@@ -733,7 +759,7 @@ static void create_gic(VirtMachineState *vms, MemoryRegion *mem)
 
         if (nb_redist_regions == 2) {
             uint32_t redist1_capacity =
-                    vms->memmap[VIRT_HIGH_GIC_REDIST2].size / GICV3_REDIST_SIZE;
+                virt_redist_capacity(vms, VIRT_HIGH_GIC_REDIST2);
 
             qdev_prop_set_uint32(vms->gic, "redist-region-count[1]",
                 MIN(smp_cpus - redist0_count, redist1_capacity));
@@ -747,7 +773,7 @@ static void create_gic(VirtMachineState *vms, MemoryRegion *mem)
     gicbusdev = SYS_BUS_DEVICE(vms->gic);
     sysbus_realize_and_unref(gicbusdev, &error_fatal);
     sysbus_mmio_map(gicbusdev, 0, vms->memmap[VIRT_GIC_DIST].base);
-    if (type == 3) {
+    if (vms->gic_version != VIRT_GIC_VERSION_2) {
         sysbus_mmio_map(gicbusdev, 1, vms->memmap[VIRT_GIC_REDIST].base);
         if (nb_redist_regions == 2) {
             sysbus_mmio_map(gicbusdev, 2,
@@ -785,7 +811,7 @@ static void create_gic(VirtMachineState *vms, MemoryRegion *mem)
                                                    ppibase + timer_irq[irq]));
         }
 
-        if (type == 3) {
+        if (vms->gic_version != VIRT_GIC_VERSION_2) {
             qemu_irq irq = qdev_get_gpio_in(vms->gic,
                                             ppibase + ARCH_GIC_MAINT_IRQ);
             qdev_connect_gpio_out_named(cpudev, "gicv3-maintenance-interrupt",
@@ -811,9 +837,9 @@ static void create_gic(VirtMachineState *vms, MemoryRegion *mem)
 
     fdt_add_gic_node(vms);
 
-    if (type == 3 && vms->its) {
+    if (vms->gic_version != VIRT_GIC_VERSION_2 && vms->its) {
         create_its(vms);
-    } else if (type == 2) {
+    } else if (vms->gic_version == VIRT_GIC_VERSION_2) {
         create_v2m(vms);
     }
 }
@@ -911,8 +937,6 @@ static void create_gpio_keys(char *fdt, DeviceState *pl061_dev,
 
     qemu_fdt_add_subnode(fdt, "/gpio-keys");
     qemu_fdt_setprop_string(fdt, "/gpio-keys", "compatible", "gpio-keys");
-    qemu_fdt_setprop_cell(fdt, "/gpio-keys", "#size-cells", 0);
-    qemu_fdt_setprop_cell(fdt, "/gpio-keys", "#address-cells", 1);
 
     qemu_fdt_add_subnode(fdt, "/gpio-keys/poweroff");
     qemu_fdt_setprop_string(fdt, "/gpio-keys/poweroff",
@@ -1181,7 +1205,7 @@ static void virt_flash_fdt(VirtMachineState *vms,
         qemu_fdt_setprop_string(ms->fdt, nodename, "secure-status", "okay");
         g_free(nodename);
 
-        nodename = g_strdup_printf("/flash@%" PRIx64, flashbase);
+        nodename = g_strdup_printf("/flash@%" PRIx64, flashbase + flashsize);
         qemu_fdt_add_subnode(ms->fdt, nodename);
         qemu_fdt_setprop_string(ms->fdt, nodename, "compatible", "cfi-flash");
         qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
@@ -1342,8 +1366,6 @@ static void create_smmu(const VirtMachineState *vms,
     qemu_fdt_setprop(ms->fdt, node, "interrupt-names", irq_names,
                      sizeof(irq_names));
 
-    qemu_fdt_setprop_cell(ms->fdt, node, "clocks", vms->clock_phandle);
-    qemu_fdt_setprop_string(ms->fdt, node, "clock-names", "apb_pclk");
     qemu_fdt_setprop(ms->fdt, node, "dma-coherent", NULL, 0);
 
     qemu_fdt_setprop_cell(ms->fdt, node, "#iommu-cells", 1);
@@ -1354,14 +1376,15 @@ static void create_smmu(const VirtMachineState *vms,
 
 static void create_virtio_iommu_dt_bindings(VirtMachineState *vms)
 {
-    const char compat[] = "virtio,pci-iommu";
+    const char compat[] = "virtio,pci-iommu\0pci1af4,1057";
     uint16_t bdf = vms->virtio_iommu_bdf;
     MachineState *ms = MACHINE(vms);
     char *node;
 
     vms->iommu_phandle = qemu_fdt_alloc_phandle(ms->fdt);
 
-    node = g_strdup_printf("%s/virtio_iommu@%d", vms->pciehb_nodename, bdf);
+    node = g_strdup_printf("%s/virtio_iommu@%x,%x", vms->pciehb_nodename,
+                           PCI_SLOT(bdf), PCI_FUNC(bdf));
     qemu_fdt_add_subnode(ms->fdt, node);
     qemu_fdt_setprop(ms->fdt, node, "compatible", compat, sizeof(compat));
     qemu_fdt_setprop_sized_cells(ms->fdt, node, "reg",
@@ -1471,8 +1494,8 @@ static void create_pcie(VirtMachineState *vms)
     qemu_fdt_setprop(ms->fdt, nodename, "dma-coherent", NULL, 0);
 
     if (vms->msi_phandle) {
-        qemu_fdt_setprop_cells(ms->fdt, nodename, "msi-parent",
-                               vms->msi_phandle);
+        qemu_fdt_setprop_cells(ms->fdt, nodename, "msi-map",
+                               0, vms->msi_phandle, 0, 0x10000);
     }
 
     qemu_fdt_setprop_sized_cells(ms->fdt, nodename, "reg",
@@ -1668,10 +1691,10 @@ static uint64_t virt_cpu_mp_affinity(VirtMachineState *vms, int idx)
          * purposes are to make TCG consistent (with 64-bit KVM hosts)
          * and to improve SGI efficiency.
          */
-        if (vms->gic_version == VIRT_GIC_VERSION_3) {
-            clustersz = GICV3_TARGETLIST_BITS;
-        } else {
+        if (vms->gic_version == VIRT_GIC_VERSION_2) {
             clustersz = GIC_TARGETLIST_BITS;
+        } else {
+            clustersz = GICV3_TARGETLIST_BITS;
         }
     }
     return arm_cpu_mp_affinity(idx, clustersz);
@@ -1804,6 +1827,10 @@ static void finalize_gic_version(VirtMachineState *vms)
                 error_report(
                     "gic-version=3 is not supported with kernel-irqchip=off");
                 exit(1);
+            case VIRT_GIC_VERSION_4:
+                error_report(
+                    "gic-version=4 is not supported with kernel-irqchip=off");
+                exit(1);
             }
         }
 
@@ -1841,6 +1868,9 @@ static void finalize_gic_version(VirtMachineState *vms)
         case VIRT_GIC_VERSION_2:
         case VIRT_GIC_VERSION_3:
             break;
+        case VIRT_GIC_VERSION_4:
+            error_report("gic-version=4 is not supported with KVM");
+            exit(1);
         }
 
         /* Check chosen version is effectively supported by the host */
@@ -1864,7 +1894,12 @@ static void finalize_gic_version(VirtMachineState *vms)
     case VIRT_GIC_VERSION_MAX:
         if (module_object_class_by_name("arm-gicv3")) {
             /* CONFIG_ARM_GICV3_TCG was set */
-            vms->gic_version = VIRT_GIC_VERSION_3;
+            if (vms->virt) {
+                /* GICv4 only makes sense if CPU has EL2 */
+                vms->gic_version = VIRT_GIC_VERSION_4;
+            } else {
+                vms->gic_version = VIRT_GIC_VERSION_3;
+            }
         } else {
             vms->gic_version = VIRT_GIC_VERSION_2;
         }
@@ -1872,6 +1907,12 @@ static void finalize_gic_version(VirtMachineState *vms)
     case VIRT_GIC_VERSION_HOST:
         error_report("gic-version=host requires KVM");
         exit(1);
+    case VIRT_GIC_VERSION_4:
+        if (!vms->virt) {
+            error_report("gic-version=4 requires virtualization enabled");
+            exit(1);
+        }
+        break;
     case VIRT_GIC_VERSION_2:
     case VIRT_GIC_VERSION_3:
         break;
@@ -1985,15 +2026,7 @@ static void machvirt_init(MachineState *machine)
         cpuobj = object_new(possible_cpus->cpus[0].type);
         armcpu = ARM_CPU(cpuobj);
 
-        if (object_property_get_bool(cpuobj, "aarch64", NULL)) {
-            pa_bits = arm_pamax(armcpu);
-        } else if (arm_feature(&armcpu->env, ARM_FEATURE_LPAE)) {
-            /* v7 with LPAE */
-            pa_bits = 40;
-        } else {
-            /* Anything else */
-            pa_bits = 32;
-        }
+        pa_bits = arm_pamax(armcpu);
 
         object_unref(cpuobj);
 
@@ -2039,22 +2072,29 @@ static void machvirt_init(MachineState *machine)
         vms->psci_conduit = QEMU_PSCI_CONDUIT_HVC;
     }
 
-    /* The maximum number of CPUs depends on the GIC version, or on how
-     * many redistributors we can fit into the memory map.
+    /*
+     * The maximum number of CPUs depends on the GIC version, or on how
+     * many redistributors we can fit into the memory map (which in turn
+     * depends on whether this is a GICv3 or v4).
      */
-    if (vms->gic_version == VIRT_GIC_VERSION_3) {
-        virt_max_cpus =
-            vms->memmap[VIRT_GIC_REDIST].size / GICV3_REDIST_SIZE;
-        virt_max_cpus +=
-            vms->memmap[VIRT_HIGH_GIC_REDIST2].size / GICV3_REDIST_SIZE;
-    } else {
+    if (vms->gic_version == VIRT_GIC_VERSION_2) {
         virt_max_cpus = GIC_NCPU;
+    } else {
+        virt_max_cpus = virt_redist_capacity(vms, VIRT_GIC_REDIST) +
+            virt_redist_capacity(vms, VIRT_HIGH_GIC_REDIST2);
     }
 
     if (max_cpus > virt_max_cpus) {
         error_report("Number of SMP CPUs requested (%d) exceeds max CPUs "
                      "supported by machine 'mach-virt' (%d)",
                      max_cpus, virt_max_cpus);
+        exit(1);
+    }
+
+    if (vms->secure && (kvm_enabled() || hvf_enabled())) {
+        error_report("mach-virt: %s does not support providing "
+                     "Security extensions (TrustZone) to the guest CPU",
+                     kvm_enabled() ? "KVM" : "HVF");
         exit(1);
     }
 
@@ -2317,18 +2357,18 @@ static void virt_set_its(Object *obj, bool value, Error **errp)
     vms->its = value;
 }
 
-static bool virt_get_dtb_kaslr_seed(Object *obj, Error **errp)
+static bool virt_get_dtb_randomness(Object *obj, Error **errp)
 {
     VirtMachineState *vms = VIRT_MACHINE(obj);
 
-    return vms->dtb_kaslr_seed;
+    return vms->dtb_randomness;
 }
 
-static void virt_set_dtb_kaslr_seed(Object *obj, bool value, Error **errp)
+static void virt_set_dtb_randomness(Object *obj, bool value, Error **errp)
 {
     VirtMachineState *vms = VIRT_MACHINE(obj);
 
-    vms->dtb_kaslr_seed = value;
+    vms->dtb_randomness = value;
 }
 
 static char *virt_get_oem_id(Object *obj, Error **errp)
@@ -2430,8 +2470,19 @@ static void virt_set_mte(Object *obj, bool value, Error **errp)
 static char *virt_get_gic_version(Object *obj, Error **errp)
 {
     VirtMachineState *vms = VIRT_MACHINE(obj);
-    const char *val = vms->gic_version == VIRT_GIC_VERSION_3 ? "3" : "2";
+    const char *val;
 
+    switch (vms->gic_version) {
+    case VIRT_GIC_VERSION_4:
+        val = "4";
+        break;
+    case VIRT_GIC_VERSION_3:
+        val = "3";
+        break;
+    default:
+        val = "2";
+        break;
+    }
     return g_strdup(val);
 }
 
@@ -2439,7 +2490,9 @@ static void virt_set_gic_version(Object *obj, const char *value, Error **errp)
 {
     VirtMachineState *vms = VIRT_MACHINE(obj);
 
-    if (!strcmp(value, "3")) {
+    if (!strcmp(value, "4")) {
+        vms->gic_version = VIRT_GIC_VERSION_4;
+    } else if (!strcmp(value, "3")) {
         vms->gic_version = VIRT_GIC_VERSION_3;
     } else if (!strcmp(value, "2")) {
         vms->gic_version = VIRT_GIC_VERSION_2;
@@ -2508,7 +2561,9 @@ virt_cpu_index_to_props(MachineState *ms, unsigned cpu_index)
 
 static int64_t virt_get_default_cpu_node_id(const MachineState *ms, int idx)
 {
-    return idx % ms->numa_state->num_nodes;
+    int64_t socket_id = ms->possible_cpus->cpus[idx].props.socket_id;
+
+    return socket_id % ms->numa_state->num_nodes;
 }
 
 static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
@@ -2516,6 +2571,7 @@ static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
     int n;
     unsigned int max_cpus = ms->smp.max_cpus;
     VirtMachineState *vms = VIRT_MACHINE(ms);
+    MachineClass *mc = MACHINE_GET_CLASS(vms);
 
     if (ms->possible_cpus) {
         assert(ms->possible_cpus->len == max_cpus);
@@ -2529,8 +2585,20 @@ static const CPUArchIdList *virt_possible_cpu_arch_ids(MachineState *ms)
         ms->possible_cpus->cpus[n].type = ms->cpu_type;
         ms->possible_cpus->cpus[n].arch_id =
             virt_cpu_mp_affinity(vms, n);
+
+        assert(!mc->smp_props.dies_supported);
+        ms->possible_cpus->cpus[n].props.has_socket_id = true;
+        ms->possible_cpus->cpus[n].props.socket_id =
+            n / (ms->smp.clusters * ms->smp.cores * ms->smp.threads);
+        ms->possible_cpus->cpus[n].props.has_cluster_id = true;
+        ms->possible_cpus->cpus[n].props.cluster_id =
+            (n / (ms->smp.cores * ms->smp.threads)) % ms->smp.clusters;
+        ms->possible_cpus->cpus[n].props.has_core_id = true;
+        ms->possible_cpus->cpus[n].props.core_id =
+            (n / ms->smp.threads) % ms->smp.cores;
         ms->possible_cpus->cpus[n].props.has_thread_id = true;
-        ms->possible_cpus->cpus[n].props.thread_id = n;
+        ms->possible_cpus->cpus[n].props.thread_id =
+            n % ms->smp.threads;
     }
     return ms->possible_cpus;
 }
@@ -2901,7 +2969,7 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
                                   virt_set_gic_version);
     object_class_property_set_description(oc, "gic-version",
                                           "Set GIC version. "
-                                          "Valid values are 2, 3, host and max");
+                                          "Valid values are 2, 3, 4, host and max");
 
     object_class_property_add_str(oc, "iommu", virt_get_iommu, virt_set_iommu);
     object_class_property_set_description(oc, "iommu",
@@ -2933,12 +3001,18 @@ static void virt_machine_class_init(ObjectClass *oc, void *data)
                                           "Set on/off to enable/disable "
                                           "ITS instantiation");
 
+    object_class_property_add_bool(oc, "dtb-randomness",
+                                   virt_get_dtb_randomness,
+                                   virt_set_dtb_randomness);
+    object_class_property_set_description(oc, "dtb-randomness",
+                                          "Set off to disable passing random or "
+                                          "non-deterministic dtb nodes to guest");
+
     object_class_property_add_bool(oc, "dtb-kaslr-seed",
-                                   virt_get_dtb_kaslr_seed,
-                                   virt_set_dtb_kaslr_seed);
+                                   virt_get_dtb_randomness,
+                                   virt_set_dtb_randomness);
     object_class_property_set_description(oc, "dtb-kaslr-seed",
-                                          "Set off to disable passing of kaslr-seed "
-                                          "dtb node to guest");
+                                          "Deprecated synonym of dtb-randomness");
 
     object_class_property_add_str(oc, "x-oem-id",
                                   virt_get_oem_id,
@@ -3006,8 +3080,8 @@ static void virt_instance_init(Object *obj)
     /* MTE is disabled by default.  */
     vms->mte = false;
 
-    /* Supply a kaslr-seed by default */
-    vms->dtb_kaslr_seed = true;
+    /* Supply kaslr-seed and rng-seed by default */
+    vms->dtb_randomness = true;
 
     vms->irqmap = a15irqmap;
 
@@ -3037,10 +3111,24 @@ static void machvirt_machine_init(void)
 }
 type_init(machvirt_machine_init);
 
-static void virt_machine_7_0_options(MachineClass *mc)
+static void virt_machine_7_2_options(MachineClass *mc)
 {
 }
-DEFINE_VIRT_MACHINE_AS_LATEST(7, 0)
+DEFINE_VIRT_MACHINE_AS_LATEST(7, 2)
+
+static void virt_machine_7_1_options(MachineClass *mc)
+{
+    virt_machine_7_2_options(mc);
+    compat_props_add(mc->compat_props, hw_compat_7_1, hw_compat_7_1_len);
+}
+DEFINE_VIRT_MACHINE(7, 1)
+
+static void virt_machine_7_0_options(MachineClass *mc)
+{
+    virt_machine_7_1_options(mc);
+    compat_props_add(mc->compat_props, hw_compat_7_0, hw_compat_7_0_len);
+}
+DEFINE_VIRT_MACHINE(7, 0)
 
 static void virt_machine_6_2_options(MachineClass *mc)
 {

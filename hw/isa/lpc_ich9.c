@@ -34,6 +34,7 @@
 #include "qapi/error.h"
 #include "qapi/visitor.h"
 #include "qemu/range.h"
+#include "hw/dma/i8257.h"
 #include "hw/isa/isa.h"
 #include "migration/vmstate.h"
 #include "hw/irq.h"
@@ -50,6 +51,7 @@
 #include "hw/core/cpu.h"
 #include "hw/nvram/fw_cfg.h"
 #include "qemu/cutils.h"
+#include "hw/acpi/acpi_aml_interface.h"
 
 /*****************************************************************************/
 /* ICH9 LPC PCI to ISA bridge */
@@ -721,6 +723,8 @@ static void ich9_lpc_realize(PCIDevice *d, Error **errp)
     qdev_init_gpio_out_named(dev, lpc->gsi, ICH9_GPIO_GSI, GSI_NUM_PINS);
 
     isa_bus_irqs(isa_bus, lpc->gsi);
+
+    i8257_dma_init(isa_bus, 0);
 }
 
 static bool ich9_rst_cnt_needed(void *opaque)
@@ -803,12 +807,43 @@ static void ich9_send_gpe(AcpiDeviceIf *adev, AcpiEventStatusBits ev)
     acpi_send_gpe_event(&s->pm.acpi_regs, s->pm.irq, ev);
 }
 
+static void build_ich9_isa_aml(AcpiDevAmlIf *adev, Aml *scope)
+{
+    Aml *field;
+    BusChild *kid;
+    ICH9LPCState *s = ICH9_LPC_DEVICE(adev);
+    BusState *bus = BUS(s->isa_bus);
+    Aml *sb_scope = aml_scope("\\_SB");
+
+    /* ICH9 PCI to ISA irq remapping */
+    aml_append(scope, aml_operation_region("PIRQ", AML_PCI_CONFIG,
+                                           aml_int(0x60), 0x0C));
+    /* Fields declarion has to happen *after* operation region */
+    field = aml_field("PCI0.SF8.PIRQ", AML_BYTE_ACC, AML_NOLOCK, AML_PRESERVE);
+    aml_append(field, aml_named_field("PRQA", 8));
+    aml_append(field, aml_named_field("PRQB", 8));
+    aml_append(field, aml_named_field("PRQC", 8));
+    aml_append(field, aml_named_field("PRQD", 8));
+    aml_append(field, aml_reserved_field(0x20));
+    aml_append(field, aml_named_field("PRQE", 8));
+    aml_append(field, aml_named_field("PRQF", 8));
+    aml_append(field, aml_named_field("PRQG", 8));
+    aml_append(field, aml_named_field("PRQH", 8));
+    aml_append(sb_scope, field);
+    aml_append(scope, sb_scope);
+
+    QTAILQ_FOREACH(kid, &bus->children, sibling) {
+            call_dev_aml_func(DEVICE(kid->child), scope);
+    }
+}
+
 static void ich9_lpc_class_init(ObjectClass *klass, void *data)
 {
     DeviceClass *dc = DEVICE_CLASS(klass);
     PCIDeviceClass *k = PCI_DEVICE_CLASS(klass);
     HotplugHandlerClass *hc = HOTPLUG_HANDLER_CLASS(klass);
     AcpiDeviceIfClass *adevc = ACPI_DEVICE_IF_CLASS(klass);
+    AcpiDevAmlIfClass *amldevc = ACPI_DEV_AML_IF_CLASS(klass);
 
     set_bit(DEVICE_CATEGORY_BRIDGE, dc->categories);
     dc->reset = ich9_lpc_reset;
@@ -833,6 +868,7 @@ static void ich9_lpc_class_init(ObjectClass *klass, void *data)
     adevc->ospm_status = ich9_pm_ospm_status;
     adevc->send_event = ich9_send_gpe;
     adevc->madt_cpu = pc_madt_cpu_entry;
+    amldevc->build_dev_aml = build_ich9_isa_aml;
 }
 
 static const TypeInfo ich9_lpc_info = {
@@ -845,6 +881,7 @@ static const TypeInfo ich9_lpc_info = {
         { TYPE_HOTPLUG_HANDLER },
         { TYPE_ACPI_DEVICE_IF },
         { INTERFACE_CONVENTIONAL_PCI_DEVICE },
+        { TYPE_ACPI_DEV_AML_IF },
         { }
     }
 };

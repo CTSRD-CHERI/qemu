@@ -18,11 +18,10 @@
  */
 
 #include "qemu/osdep.h"
-#include "qemu-common.h"
 #include "qapi/qmp/qstring.h"
 #include "qapi/qmp/qdict.h"
 #include "qapi/qmp/qlist.h"
-#include "libqos/libqtest.h"
+#include "libqtest.h"
 
 const char common_args[] = "-nodefaults -machine none";
 
@@ -267,7 +266,6 @@ static void test_device_intro_concrete(const void *args)
 
     qobject_unref(types);
     qtest_quit(qts);
-    g_free((void *)args);
 }
 
 static void test_abstract_interfaces(void)
@@ -311,12 +309,12 @@ static void add_machine_test_case(const char *mname)
 
     path = g_strdup_printf("device/introspect/concrete/defaults/%s", mname);
     args = g_strdup_printf("-M %s", mname);
-    qtest_add_data_func(path, args, test_device_intro_concrete);
+    qtest_add_data_func_full(path, args, test_device_intro_concrete, g_free);
     g_free(path);
 
     path = g_strdup_printf("device/introspect/concrete/nodefaults/%s", mname);
     args = g_strdup_printf("-nodefaults -M %s", mname);
-    qtest_add_data_func(path, args, test_device_intro_concrete);
+    qtest_add_data_func_full(path, args, test_device_intro_concrete, g_free);
     g_free(path);
 }
 
@@ -331,7 +329,7 @@ int main(int argc, char **argv)
     qtest_add_func("device/introspect/abstract-interfaces", test_abstract_interfaces);
     if (g_test_quick()) {
         qtest_add_data_func("device/introspect/concrete/defaults/none",
-                            g_strdup(common_args), test_device_intro_concrete);
+                            common_args, test_device_intro_concrete);
     } else {
         qtest_cb_for_every_machine(add_machine_test_case, true);
     }

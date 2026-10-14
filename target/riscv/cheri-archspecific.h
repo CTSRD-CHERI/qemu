@@ -41,7 +41,7 @@ extern bool cheri_debugger_on_trap;
  * TODO: Remove this function once we no longer need to support the 0.9.3
  * version of the CHERI specification.
  */
-static inline void QEMU_NORETURN raise_cheri_exception_with_093_type(
+static inline void G_NORETURN raise_cheri_exception_with_093_type(
     CPUArchState *env, CheriCapExcCause cause, uint8_t type093, unsigned regnum,
     target_ulong addr, bool instavail, uintptr_t hostpc)
 {
@@ -61,7 +61,7 @@ static inline void QEMU_NORETURN raise_cheri_exception_with_093_type(
     riscv_raise_exception(env, RISCV_EXCP_CHERI, hostpc);
 }
 
-static inline void QEMU_NORETURN raise_cheri_exception_impl(
+static inline void G_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
     target_ulong addr, bool instavail, uintptr_t hostpc)
 {
@@ -75,7 +75,7 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
                                         instavail, hostpc);
 }
 
-static inline void QEMU_NORETURN raise_load_tag_exception(
+static inline void G_NORETURN raise_load_tag_exception(
     CPUArchState *env, target_ulong va, int cb, uintptr_t retpc)
 {
 #ifdef TARGET_RISCV32
@@ -91,7 +91,7 @@ static inline void QEMU_NORETURN raise_load_tag_exception(
 #endif
 }
 
-static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
+static inline void G_NORETURN raise_store_tag_exception(CPUArchState *env,
                                                            target_ulong va,
                                                            int reg,
                                                            uintptr_t retpc)
@@ -109,14 +109,14 @@ static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
 #endif
 }
 
-static inline void QEMU_NORETURN raise_unaligned_load_exception(
+static inline void G_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
     env->badaddr = addr;
     riscv_raise_exception(env, RISCV_EXCP_LOAD_ADDR_MIS, retpc);
 }
 
-static inline void QEMU_NORETURN raise_unaligned_store_exception(
+static inline void G_NORETURN raise_unaligned_store_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
     env->badaddr = addr;

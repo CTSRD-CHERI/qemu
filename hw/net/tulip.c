@@ -70,7 +70,7 @@ static const VMStateDescription vmstate_pci_tulip = {
 static void tulip_desc_read(TULIPState *s, hwaddr p,
         struct tulip_descriptor *desc)
 {
-    const MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
+    const MemTxAttrs attrs = { .memory = true };
 
     if (s->csr[0] & CSR0_DBO) {
         ldl_be_pci_dma(&s->dev, p, &desc->status, attrs);
@@ -88,7 +88,7 @@ static void tulip_desc_read(TULIPState *s, hwaddr p,
 static void tulip_desc_write(TULIPState *s, hwaddr p,
         struct tulip_descriptor *desc)
 {
-    const MemTxAttrs attrs = MEMTXATTRS_UNSPECIFIED;
+    const MemTxAttrs attrs = { .memory = true };
 
     if (s->csr[0] & CSR0_DBO) {
         stl_be_pci_dma(&s->dev, p, desc->status, attrs);
@@ -965,6 +965,8 @@ static void pci_tulip_realize(PCIDevice *pci_dev, Error **errp)
     pci_conf = s->dev.config;
     pci_conf[PCI_INTERRUPT_PIN] = 1; /* interrupt pin A */
 
+    qemu_macaddr_default_if_unset(&s->c.macaddr);
+
     s->eeprom = eeprom93xx_new(&pci_dev->qdev, 64);
     tulip_fill_eeprom(s);
 
@@ -978,8 +980,6 @@ static void pci_tulip_realize(PCIDevice *pci_dev, Error **errp)
     pci_register_bar(&s->dev, 1, PCI_BASE_ADDRESS_SPACE_MEMORY, &s->memory);
 
     s->irq = pci_allocate_irq(&s->dev);
-
-    qemu_macaddr_default_if_unset(&s->c.macaddr);
 
     s->nic = qemu_new_nic(&net_tulip_info, &s->c,
                           object_get_typename(OBJECT(pci_dev)),

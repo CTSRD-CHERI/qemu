@@ -135,7 +135,7 @@ static int coroutine_fn commit_run(Job *job, Error **errp)
     }
 
     if (base_len < len) {
-        ret = blk_truncate(s->base, len, false, PREALLOC_MODE_OFF, 0, NULL);
+        ret = blk_co_truncate(s->base, len, false, PREALLOC_MODE_OFF, 0, NULL);
         if (ret) {
             return ret;
         }
@@ -238,6 +238,7 @@ static BlockDriver bdrv_commit_top = {
     .bdrv_child_perm            = bdrv_commit_top_child_perm,
 
     .is_filter                  = true,
+    .filtered_child_is_backing  = true,
 };
 
 void commit_start(const char *job_id, BlockDriverState *bs,
@@ -527,12 +528,12 @@ int bdrv_commit(BlockDriverState *bs)
             goto ro_cleanup;
         }
         if (ret) {
-            ret = blk_pread(src, offset, buf, n);
+            ret = blk_pread(src, offset, n, buf, 0);
             if (ret < 0) {
                 goto ro_cleanup;
             }
 
-            ret = blk_pwrite(backing, offset, buf, n, 0);
+            ret = blk_pwrite(backing, offset, n, buf, 0);
             if (ret < 0) {
                 goto ro_cleanup;
             }

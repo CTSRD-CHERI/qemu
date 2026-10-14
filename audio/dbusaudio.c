@@ -82,7 +82,7 @@ static void *dbus_get_buffer_out(HWVoiceOut *hw, size_t *size)
     }
 
     *size = MIN(vo->buf_size - vo->buf_pos, *size);
-    *size = audio_rate_get_bytes(&hw->info, &vo->rate, *size);
+    *size = audio_rate_get_bytes(&vo->rate, &hw->info, *size);
 
     return vo->buf + vo->buf_pos;
 
@@ -122,7 +122,7 @@ static size_t dbus_put_buffer_out(HWVoiceOut *hw, void *buf, size_t size)
     return size;
 }
 
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
 #define AUDIO_HOST_BE TRUE
 #else
 #define AUDIO_HOST_BE FALSE
@@ -343,7 +343,7 @@ dbus_read(HWVoiceIn *hw, void *buf, size_t size)
 
     trace_dbus_audio_read(size);
 
-    /* size = audio_rate_get_bytes(&hw->info, &vo->rate, size); */
+    /* size = audio_rate_get_bytes(&vo->rate, &hw->info, size); */
 
     g_hash_table_iter_init(&iter, da->in_listeners);
     while (g_hash_table_iter_next(&iter, NULL, (void **)&listener)) {

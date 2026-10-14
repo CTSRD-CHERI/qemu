@@ -166,6 +166,13 @@ static void mips_cpu_set_pc(CPUState *cs, vaddr value)
     mips_env_set_pc(&cpu->env, value);
 }
 
+static vaddr mips_cpu_get_pc(CPUState *cs)
+{
+    MIPSCPU *cpu = MIPS_CPU(cs);
+
+    return cpu_get_recent_pc(&cpu->env);
+}
+
 static bool mips_cpu_has_work(CPUState *cs)
 {
     MIPSCPU *cpu = MIPS_CPU(cs);
@@ -229,7 +236,7 @@ static void mips_cpu_reset(DeviceState *dev)
     /* Reset registers to their default values */
     env->CP0_PRid = env->cpu_model->CP0_PRid;
     env->CP0_Config0 = env->cpu_model->CP0_Config0;
-#ifdef TARGET_WORDS_BIGENDIAN
+#if TARGET_BIG_ENDIAN
     env->CP0_Config0 |= (1 << CP0C0_BE);
 #endif
     env->CP0_Config1 = env->cpu_model->CP0_Config1;
@@ -377,6 +384,12 @@ static void mips_cpu_reset(DeviceState *dev)
 #else
     env->CP0_Status = (1 << CP0St_BEV) | (1 << CP0St_ERL);
 #endif
+    if (env->insn_flags & INSN_LOONGSON2F) {
+        /* Loongson-2F has those bits hardcoded to 1 */
+        env->CP0_Status |= (1 << CP0St_KX) | (1 << CP0St_SX) |
+                            (1 << CP0St_UX);
+    }
+
     /*
      * Vectored interrupts not implemented, timer on int 7,
      * no performance counters.
@@ -387,7 +400,7 @@ static void mips_cpu_reset(DeviceState *dev)
 
         for (i = 0; i < 7; i++) {
             env->CP0_WatchLo[i] = 0;
-            env->CP0_WatchHi[i] = 0x80000000;
+            env->CP0_WatchHi[i] = 1 << CP0WH_M;
         }
         env->CP0_WatchLo[7] = 0;
         env->CP0_WatchHi[7] = 0;
@@ -510,7 +523,7 @@ static void mips_cpu_disas_set_info(CPUState *s, disassemble_info *info)
     CPUMIPSState *env = &cpu->env;
 
     if (!(env->insn_flags & ISA_NANOMIPS32)) {
-#ifdef TARGET_WORDS_BIGENDIAN
+#if TARGET_BIG_ENDIAN
         info->print_insn = print_insn_big_mips;
 #else
         info->print_insn = print_insn_little_mips;
@@ -654,7 +667,7 @@ static void dump_cpu_ips_on_exit(void) {
 static void dump_stats_on_exit(void)
 {
     if (qemu_log_enabled() && qemu_loglevel_mask(CPU_LOG_INSTR | CPU_LOG_CHERI_BOUNDS)) {
-        FILE* logf = qemu_log_lock();
+        FILE *logf = qemu_log_trylock();
         cheri_cpu_dump_statistics_f(NULL, logf, 0);
         qemu_log_unlock(logf);
     } else
@@ -681,6 +694,7 @@ static const struct SysemuCPUOps mips_sysemu_ops = {
 static const struct TCGCPUOps mips_tcg_ops = {
     .initialize = mips_tcg_init,
     .synchronize_from_tb = mips_cpu_synchronize_from_tb,
+    .restore_state_to_opc = mips_restore_state_to_opc,
 
 #if !defined(CONFIG_USER_ONLY)
     .tlb_fill = mips_cpu_tlb_fill,
@@ -707,6 +721,7 @@ static void mips_cpu_class_init(ObjectClass *c, void *data)
     cc->has_work = mips_cpu_has_work;
     cc->dump_state = mips_cpu_dump_state;
     cc->set_pc = mips_cpu_set_pc;
+    cc->get_pc = mips_cpu_get_pc;
     cc->gdb_read_register = mips_cpu_gdb_read_register;
     cc->gdb_write_register = mips_cpu_gdb_write_register;
 #ifndef CONFIG_USER_ONLY

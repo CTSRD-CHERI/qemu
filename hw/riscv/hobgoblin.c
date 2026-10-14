@@ -334,7 +334,7 @@ static int hobgoblin_load_images(HobgoblinState *s, const memmapEntry_t *dram)
      */
     riscv_setup_rom_reset_vec(machine, &s->soc, start_addr,
             memmap[HOBGOBLIN_MROM].base, memmap[HOBGOBLIN_MROM].size,
-            kernel_entry, fdt_load_addr, machine->fdt);
+            kernel_entry, fdt_load_addr);
 
     return 0;
 }
@@ -674,8 +674,8 @@ static void hobgoblin_add_axi_ethernet(HobgoblinState *s, int eth_num,
     const memmapEntry_t *mem_dma = &memmap[dma_memmap];
     NICInfo *nd = &nd_table[eth_num];
     const char *eth_model = TYPE_XILINX_AXI_ETHERNET;
-    const char *eth_name = g_strdup_printf("xilinx-eth%d", eth_num);
-    const char *dma_name = g_strdup_printf("xilinx-dma%d", eth_num);
+    g_autofree char *eth_name = g_strdup_printf("xilinx-eth%d", eth_num);
+    g_autofree char *dma_name = g_strdup_printf("xilinx-dma%d", eth_num);
 
     qemu_check_nic_model(nd, eth_model);
 
@@ -755,6 +755,7 @@ static void hobgoblin_add_nvemu(HobgoblinState *s)
      * missing mem backend).
      */
     if (!sysbus_realize_and_unref(ss, &e)) {
+        error_free(e);
         object_unparent(OBJECT(s->nvemu));
         s->nvemu = NULL;
         return;
@@ -976,6 +977,7 @@ static void create_fdt_socket_cpus(HobgoblinState *s, int socket,
     size_t ext_len;
 
     for (cpu = 0; cpu < mc->smp.cores; cpu++) {
+        g_autofree char *isa_base = NULL;
 
         cpu_name = g_strdup_printf("/cpus/cpu@%d", s->soc.hartid_base + cpu);
         qemu_fdt_add_subnode(mc->fdt, cpu_name);
@@ -984,8 +986,8 @@ static void create_fdt_socket_cpus(HobgoblinState *s, int socket,
         name = custom_riscv_isa_string(&s->soc.harts[cpu], is_32_bit);
         qemu_fdt_setprop_string(mc->fdt, cpu_name, "riscv,isa", name);
 
-        qemu_fdt_setprop_string(mc->fdt, cpu_name, "riscv,isa-base",
-                                g_strndup(name, 5));
+        isa_base = g_strndup(name, 5);
+        qemu_fdt_setprop_string(mc->fdt, cpu_name, "riscv,isa-base", isa_base);
 
         formatted_ext = format_extensions(name + 4, &ext_len);
         qemu_fdt_setprop(mc->fdt, cpu_name, "riscv,isa-extensions",
@@ -1041,12 +1043,15 @@ static void create_fdt_socket_memory(HobgoblinState *s,
     HobgoblinClass *hc = HOBGOBLIN_MACHINE_GET_CLASS(s);
 
     uint64_t dram0_base = hc->dram[0].base;
-    uint64_t dram1_base = hc->dram[1].base;
+    uint64_t dram_size = 0;
+    for (int i = 0; i < hc->dram_banks; i++) {
+        dram_size += hc->dram[i].size;
+    }
 
     char *name = g_strdup_printf("/memory@%" PRIx64, dram0_base);
     qemu_fdt_add_subnode(mc->fdt, name);
     qemu_fdt_setprop_cells(mc->fdt, name, "reg", dram0_base >> 32, dram0_base,
-                           dram1_base >> 32, dram1_base);
+                           dram_size >> 32, dram_size);
     qemu_fdt_setprop_string(mc->fdt, name, "device_type", "memory");
     riscv_socket_fdt_write_id(mc, mc->fdt, name, socket);
     g_free(name);
@@ -1837,13 +1842,17 @@ static void create_fdt(HobgoblinState *s, const memmapEntry_t *memmap,
         qemu_fdt_setprop_string(mc->fdt, "/chosen", "stdout-path",
                                 "serial0:115200n8");
 
+        HobgoblinClass *hc = HOBGOBLIN_MACHINE_GET_CLASS(s);
+
         create_fdt_aliases(s, memmap);
         create_fdt_sockets(s, memmap, is_32_bit, l2cache_phandle,
                            intc_phandles);
         create_fdt_l2cache(s, l2cache_phandle);
         create_fdt_virtio(s, memmap, irq_mmio_phandle);
-        create_fdt_pcie(s, memmap, irq_mmio_phandle, pcie0_phandle,
-                        pcie1_phandle);
+        if (hc->board_type == BOARD_TYPE_VCU118 && MAPVERSION(s) == V2) {
+            create_fdt_pcie(s, memmap, irq_mmio_phandle, pcie0_phandle,
+                            pcie1_phandle);
+        }
         create_fdt_plic(s, memmap, irq_mmio_phandle, intc_phandles);
         create_fdt_axi(s, memmap, irq_mmio_phandle, fmc_axi_phandle,
                        axi_phandle);

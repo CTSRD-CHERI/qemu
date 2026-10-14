@@ -468,8 +468,8 @@ vubr_queue_set_started(VuDev *dev, int qidx, bool started)
 
     if (started && vubr->notifier.fd >= 0) {
         vu_set_queue_host_notifier(dev, vq, vubr->notifier.fd,
-                                   qemu_real_host_page_size,
-                                   qidx * qemu_real_host_page_size);
+                                   qemu_real_host_page_size(),
+                                   qidx * qemu_real_host_page_size());
     }
 
     if (qidx % 2 == 1) {
@@ -601,7 +601,7 @@ static void *notifier_thread(void *arg)
 {
     VuDev *dev = (VuDev *)arg;
     VubrDev *vubr = container_of(dev, VubrDev, vudev);
-    int pagesize = qemu_real_host_page_size;
+    int pagesize = qemu_real_host_page_size();
     int qidx;
 
     while (true) {
@@ -631,15 +631,14 @@ static void *notifier_thread(void *arg)
 static void
 vubr_host_notifier_setup(VubrDev *dev)
 {
-    char template[] = "/tmp/vubr-XXXXXX";
     pthread_t thread;
     size_t length;
     void *addr;
     int fd;
 
-    length = qemu_real_host_page_size * VHOST_USER_BRIDGE_MAX_QUEUES;
+    length = qemu_real_host_page_size() * VHOST_USER_BRIDGE_MAX_QUEUES;
 
-    fd = mkstemp(template);
+    fd = g_file_open_tmp("vubr-XXXXXX", NULL, NULL);
     if (fd < 0) {
         vubr_die("mkstemp()");
     }
@@ -749,14 +748,12 @@ vubr_run(VubrDev *dev)
 static int
 vubr_parse_host_port(const char **host, const char **port, const char *buf)
 {
-    char *p = strchr(buf, ':');
-
-    if (!p) {
+    g_auto(GStrv) tokens = g_strsplit(buf, ":", 2);
+    if (!tokens[0] || !tokens[1]) {
         return -1;
     }
-    *p = '\0';
-    *host = strdup(buf);
-    *port = strdup(p + 1);
+    *host = g_steal_pointer(&tokens[0]);
+    *port = g_steal_pointer(&tokens[1]);
     return 0;
 }
 

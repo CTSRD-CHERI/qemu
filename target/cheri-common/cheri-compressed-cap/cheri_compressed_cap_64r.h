@@ -64,11 +64,6 @@
 // The encoding allows for up to two levels, but the current implementation is limited to one level bit.
 #define CC64R_MAX_LEVEL_BITS 1
 
-/* Use uint64_t to represent 33 bit length */
-typedef uint64_t cc64r_length_t;
-typedef int64_t cc64r_offset_t;
-typedef uint32_t cc64r_addr_t;
-typedef int32_t cc64r_saddr_t;
 #include "cheri_compressed_cap_macros.h"
 typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 0, _CC_N(MODE_INT) = 1 } _CC_N(Mode);
 
@@ -77,9 +72,8 @@ typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 0, _CC_N(MODE_INT) = 1 } _CC_N(Mode
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
     _CC_FIELD(SDP, 63, 62),
-    _CC_FIELD(AP_M, 61, 57),  // combined architectural permissions and mode
-    _CC_FIELD(MODE, 57, 57),  // Only valid if AP_M grant execute (quadrant 1)
-    _CC_FIELD(FLAGS, 57, 57), // TODO: remove this field
+    _CC_FIELD(AP_M, 61, 57), // combined architectural permissions and mode
+    _CC_FIELD(MODE, 57, 57), // Only valid if AP_M grant execute (quadrant 1)
     _CC_FIELD(LEVEL, 56, 56),
     _CC_FIELD(RESERVED1, 55, 55),
     _CC_FIELD(RESERVED0, 54, 53),
@@ -90,8 +84,6 @@ enum {
     _CC_FIELD(LEN_MSB, 50, 50), // Either MSB of exponent or MSB of length depending on EXPONENT_FORMAT.
     // The FIELD_INTERNAL_EXPONENT_SIZE name is currently required by various static assertions.
     _CC_N(FIELD_INTERNAL_EXPONENT_SIZE) = _CC_N(FIELD_EXPONENT_FORMAT_SIZE),
-    _CC_FIELD(TOP_ENCODED, 49, 42),
-    _CC_FIELD(BOTTOM_ENCODED, 41, 32),
 
     // Top/bottom offsets depending on INTERNAL_EXPONENT flag:
     // Without internal exponent:
@@ -106,9 +98,6 @@ enum {
 #pragma GCC diagnostic pop
 
 #define CC64R_OTYPE_BITS CC64R_FIELD_OTYPE_SIZE
-#define CC64R_BOT_WIDTH CC64R_FIELD_EXP_ZERO_BOTTOM_SIZE
-#define CC64R_BOT_INTERNAL_EXP_WIDTH CC64R_FIELD_EXP_NONZERO_BOTTOM_SIZE
-#define CC64R_EXP_LOW_WIDTH CC64R_FIELD_EXPONENT_LOW_PART_SIZE
 
 #define CC64R_PERM_WRITE (1 << 0)
 #define CC64R_PERM_LOAD_MUTABLE (1 << 1)
@@ -151,8 +140,6 @@ enum _CC_N(OTypes) {
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)
 
-_CC_STATIC_ASSERT_SAME(CC64R_MANTISSA_WIDTH, CC64R_FIELD_EXP_ZERO_BOTTOM_SIZE);
-
 // The RISC-V extension uses an "exponent zero" flag.
 #define CC64R_ENCODE_IE(IE) _CC_ENCODE_FIELD(!(IE), EXPONENT_FORMAT)
 #define CC64R_EXTRACT_IE(value) (!_CC_EXTRACT_FIELD(value, EXPONENT_FORMAT))
@@ -162,11 +149,10 @@ _CC_STATIC_ASSERT_SAME(CC64R_MANTISSA_WIDTH, CC64R_FIELD_EXP_ZERO_BOTTOM_SIZE);
     ((_CC_EXTRACT_FIELD(pesbt, LEN_MSB) << 4) | _CC_EXTRACT_SPLIT_EXPONENT(pesbt))
 #define CC64R_ENCODE_EXPONENT(E) _CC64R_ENCODE_EXPONENT_RAW(CC64R_MAX_EXPONENT - (E))
 #define CC64R_EXTRACT_EXPONENT(pesbt) (CC64R_MAX_EXPONENT - _CC64R_EXTRACT_EXPONENT_RAW(pesbt))
-#define CC64R_RESERVED_BITS (CC128R_FIELD_RESERVED0_SIZE + CC128R_FIELD_RESERVED1_SIZE)
+#define CC64R_RESERVED_BITS (CC64R_FIELD_RESERVED0_SIZE + CC64R_FIELD_RESERVED1_SIZE)
 #define CC64R_HAS_BASE_TOP_SPECIAL_CASES 1
 #define CC64R_USES_V9_CORRECTION_FACTORS 0
 #define CC64R_USES_LEN_MSB 1
-#define CC64R_MAX_LEVEL_BITS 1 // LVLBITS=2 not supported yet
 
 #include "cheri_compressed_cap_common.h"
 #include "cheri_compressed_cap_riscv_common.h"
@@ -228,7 +214,7 @@ static inline _cc_addr_t _cc_N(get_all_permissions)(const _cc_cap_t* cap) {
                    CC64R_PERM_ELEVATE_LEVEL | CC64R_PERM_STORE_LEVEL;
             break;
         case 1: // Execute + Data & Cap RO
-            res |= CC64R_PERM_CAPABILITY | CC64R_PERM_LOAD_MUTABLE | CC64R_PERM_ELEVATE_LEVEL | CC64R_PERM_STORE_LEVEL;
+            res |= CC64R_PERM_CAPABILITY | CC64R_PERM_LOAD_MUTABLE | CC64R_PERM_ELEVATE_LEVEL;
             break;
         case 2: // Execute + Data & Cap RW
             res |= CC64R_PERM_WRITE | CC64R_PERM_CAPABILITY | CC64R_PERM_LOAD_MUTABLE | CC64R_PERM_ELEVATE_LEVEL |
@@ -331,7 +317,11 @@ static inline bool _cc_N(set_permissions)(_cc_cap_t* cap, _cc_addr_t permissions
             CC64R_PERM_ACCESS_SYS_REGS:
             res |= 0;
             break;
-        case CC64R_PERM_READ | CC64R_PERM_CAPABILITY | CC64R_PERM_LOAD_MUTABLE: res |= 2; break;
+        case CC64R_PERM_READ | CC64R_PERM_CAPABILITY | CC64R_PERM_LOAD_MUTABLE:
+            if (permissions & maybe_sl)
+                valid = false;
+            res |= 2;
+            break;
         case CC64R_PERM_READ | CC64R_PERM_WRITE | CC64R_PERM_CAPABILITY | CC64R_PERM_LOAD_MUTABLE: res |= 4; break;
         case CC64R_PERM_READ | CC64R_PERM_WRITE: res |= 6; break;
         default: valid = false;

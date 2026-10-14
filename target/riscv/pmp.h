@@ -57,6 +57,8 @@ typedef enum {
 #ifdef TARGET_CHERI_RISCV_STD_093
     MSECCFG_CRE  = 1 << 3,
 #endif
+    MSECCFG_USEED = 1 << 8,
+    MSECCFG_SSEED = 1 << 9
 } mseccfg_field_t;
 
 typedef struct {

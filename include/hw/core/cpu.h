@@ -52,6 +52,13 @@ typedef int (*WriteCoreDumpFunction)(const void *buf, size_t size,
  */
 #define CPU(obj) ((CPUState *)(obj))
 
+/*
+ * The class checkers bring in CPU_GET_CLASS() which is potentially
+ * expensive given the eventual call to
+ * object_class_dynamic_cast_assert(). Because of this the CPUState
+ * has a cached value for the class in cs->cc which is set up in
+ * cpu_exec_realizefn() for use in hot code paths.
+ */
 typedef struct CPUClass CPUClass;
 DECLARE_CLASS_CHECKERS(CPUClass, CPU,
                        TYPE_CPU)
@@ -111,6 +118,8 @@ struct SysemuCPUOps;
  *       If the target behaviour here is anything other than "set
  *       the PC register to the value passed in" then the target must
  *       also implement the synchronize_from_tb hook.
+ * @get_pc: Callback for getting the Program Counter register.
+ *       As above, with the semantics of the target architecture.
  * @gdb_read_register: Callback for letting GDB read a register.
  * @gdb_write_register: Callback for letting GDB write a register.
  * @gdb_adjust_breakpoint: Callback for adjusting the address of a
@@ -147,6 +156,7 @@ struct CPUClass {
     void (*dump_state)(CPUState *cpu, FILE *, int flags);
     int64_t (*get_arch_id)(CPUState *cpu);
     void (*set_pc)(CPUState *cpu, vaddr value);
+    vaddr (*get_pc)(CPUState *cpu);
     int (*gdb_read_register)(CPUState *cpu, GByteArray *buf, int reg);
     int (*gdb_write_register)(CPUState *cpu, uint8_t *buf, int reg);
     vaddr (*gdb_adjust_breakpoint)(CPUState *cpu, vaddr addr);
@@ -190,7 +200,7 @@ struct CPUClass {
 typedef union IcountDecr {
     uint32_t u32;
     struct {
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
         uint16_t high;
         uint16_t low;
 #else
@@ -221,7 +231,6 @@ struct CPUWatchpoint {
  * the memory regions get moved around  by io_writex.
  */
 typedef struct SavedIOTLB {
-    hwaddr addr;
     MemoryRegionSection *section;
     hwaddr mr_offset;
 } SavedIOTLB;
@@ -232,9 +241,6 @@ struct kvm_run;
 
 struct hax_vcpu_state;
 struct hvf_vcpu_state;
-
-#define TB_JMP_CACHE_BITS 12
-#define TB_JMP_CACHE_SIZE (1 << TB_JMP_CACHE_BITS)
 
 /* work queue */
 
@@ -321,6 +327,8 @@ struct qemu_work_item;
 struct CPUState {
     /*< private >*/
     DeviceState parent_obj;
+    /* cache to avoid expensive CPU_GET_CLASS */
+    CPUClass *cc;
     /*< public >*/
 
     int nr_cores;
@@ -329,6 +337,7 @@ struct CPUState {
     struct QemuThread *thread;
 #ifdef _WIN32
     HANDLE hThread;
+    QemuSemaphore sem;
 #endif
     int thread_id;
     bool running, has_waiter;
@@ -366,8 +375,7 @@ struct CPUState {
     CPUArchState *env_ptr;
     IcountDecr *icount_decr_ptr;
 
-    /* Accessed in parallel; all accesses must be atomic */
-    TranslationBlock *tb_jmp_cache[TB_JMP_CACHE_SIZE];
+    CPUJumpCache *tb_jmp_cache;
 
     struct GDBRegisterState *gdb_regs;
     int gdb_num_regs;
@@ -423,6 +431,12 @@ struct CPUState {
      */
     bool throttle_thread_scheduled;
 
+    /*
+     * Sleep throttle_us_per_full microseconds once dirty ring is full
+     * if dirty page rate limit is enabled.
+     */
+    int64_t throttle_us_per_full;
+
     bool ignore_memory_transaction_failures;
 
     /* Used for user-only emulation of prctl(PR_SET_UNALIGN). */
@@ -450,15 +464,6 @@ extern CPUTailQ cpus;
     QTAILQ_FOREACH_SAFE_RCU(cpu, &cpus, node, next_cpu)
 
 extern __thread CPUState *current_cpu;
-
-static inline void cpu_tb_jmp_cache_clear(CPUState *cpu)
-{
-    unsigned int i;
-
-    for (i = 0; i < TB_JMP_CACHE_SIZE; i++) {
-        qatomic_set(&cpu->tb_jmp_cache[i], NULL);
-    }
-}
 
 /**
  * qemu_tcg_mttcg_enabled:
@@ -1025,7 +1030,7 @@ int cpu_watchpoint_address_matches(CPUState *cpu, vaddr addr, vaddr len);
  */
 AddressSpace *cpu_get_address_space(CPUState *cpu, int asidx);
 
-void QEMU_NORETURN cpu_abort(CPUState *cpu, const char *fmt, ...)
+G_NORETURN void cpu_abort(CPUState *cpu, const char *fmt, ...)
     G_GNUC_PRINTF(2, 3);
 
 /* $(top_srcdir)/cpu.c */
@@ -1038,12 +1043,14 @@ void cpu_exec_unrealizefn(CPUState *cpu);
  * target_words_bigendian:
  * Returns true if the (default) endianness of the target is big endian,
  * false otherwise. Note that in target-specific code, you can use
- * TARGET_WORDS_BIGENDIAN directly instead. On the other hand, common
+ * TARGET_BIG_ENDIAN directly instead. On the other hand, common
  * code should normally never need to know about the endianness of the
  * target, so please do *not* use this function unless you know very well
  * what you are doing!
  */
 bool target_words_bigendian(void);
+
+void page_size_init(void);
 
 #ifdef NEED_CPU_H
 

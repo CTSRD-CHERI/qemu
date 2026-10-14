@@ -173,7 +173,7 @@ static void gen_mtvscr(DisasContext *ctx)
 
     val = tcg_temp_new_i32();
     bofs = avr_full_offset(rB(ctx->opcode));
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
     bofs += 3 * 4;
 #endif
 
@@ -431,21 +431,6 @@ GEN_VXFORM_V(vminsb, MO_8, tcg_gen_gvec_smin, 1, 12);
 GEN_VXFORM_V(vminsh, MO_16, tcg_gen_gvec_smin, 1, 13);
 GEN_VXFORM_V(vminsw, MO_32, tcg_gen_gvec_smin, 1, 14);
 GEN_VXFORM_V(vminsd, MO_64, tcg_gen_gvec_smin, 1, 15);
-GEN_VXFORM(vavgub, 1, 16);
-GEN_VXFORM(vabsdub, 1, 16);
-GEN_VXFORM_DUAL(vavgub, PPC_ALTIVEC, PPC_NONE, \
-                vabsdub, PPC_NONE, PPC2_ISA300)
-GEN_VXFORM(vavguh, 1, 17);
-GEN_VXFORM(vabsduh, 1, 17);
-GEN_VXFORM_DUAL(vavguh, PPC_ALTIVEC, PPC_NONE, \
-                vabsduh, PPC_NONE, PPC2_ISA300)
-GEN_VXFORM(vavguw, 1, 18);
-GEN_VXFORM(vabsduw, 1, 18);
-GEN_VXFORM_DUAL(vavguw, PPC_ALTIVEC, PPC_NONE, \
-                vabsduw, PPC_NONE, PPC2_ISA300)
-GEN_VXFORM(vavgsb, 1, 20);
-GEN_VXFORM(vavgsh, 1, 21);
-GEN_VXFORM(vavgsw, 1, 22);
 GEN_VXFORM(vmrghb, 6, 0);
 GEN_VXFORM(vmrghh, 6, 1);
 GEN_VXFORM(vmrghw, 6, 2);
@@ -803,8 +788,6 @@ GEN_VXFORM(vsrv, 2, 28);
 GEN_VXFORM(vslv, 2, 29);
 GEN_VXFORM(vslo, 6, 16);
 GEN_VXFORM(vsro, 6, 17);
-GEN_VXFORM(vaddcuw, 0, 6);
-GEN_VXFORM(vsubcuw, 0, 22);
 
 static bool do_vector_gvec3_VX(DisasContext *ctx, arg_VX *a, int vece,
                                void (*gen_gvec)(unsigned, uint32_t, uint32_t,
@@ -1234,18 +1217,6 @@ GEN_VXFORM_SAT(vsubuws, MO_32, sub, ussub, 0, 26);
 GEN_VXFORM_SAT(vsubsbs, MO_8, sub, sssub, 0, 28);
 GEN_VXFORM_SAT(vsubshs, MO_16, sub, sssub, 0, 29);
 GEN_VXFORM_SAT(vsubsws, MO_32, sub, sssub, 0, 30);
-GEN_VXFORM(vadduqm, 0, 4);
-GEN_VXFORM(vaddcuq, 0, 5);
-GEN_VXFORM3(vaddeuqm, 30, 0);
-GEN_VXFORM3(vaddecuq, 30, 0);
-GEN_VXFORM_DUAL(vaddeuqm, PPC_NONE, PPC2_ALTIVEC_207, \
-            vaddecuq, PPC_NONE, PPC2_ALTIVEC_207)
-GEN_VXFORM(vsubuqm, 0, 20);
-GEN_VXFORM(vsubcuq, 0, 21);
-GEN_VXFORM3(vsubeuqm, 31, 0);
-GEN_VXFORM3(vsubecuq, 31, 0);
-GEN_VXFORM_DUAL(vsubeuqm, PPC_NONE, PPC2_ALTIVEC_207, \
-            vsubecuq, PPC_NONE, PPC2_ALTIVEC_207)
 GEN_VXFORM_TRANS(vsl, 2, 7);
 GEN_VXFORM_TRANS(vsr, 2, 11);
 GEN_VXFORM_ENV(vpkuhum, 7, 0);
@@ -1673,9 +1644,71 @@ GEN_VXFORM_NOA_ENV(vrfim, 5, 11);
 GEN_VXFORM_NOA_ENV(vrfin, 5, 8);
 GEN_VXFORM_NOA_ENV(vrfip, 5, 10);
 GEN_VXFORM_NOA_ENV(vrfiz, 5, 9);
-GEN_VXFORM_NOA(vprtybw, 1, 24);
-GEN_VXFORM_NOA(vprtybd, 1, 24);
-GEN_VXFORM_NOA(vprtybq, 1, 24);
+
+static void gen_vprtyb_vec(unsigned vece, TCGv_vec t, TCGv_vec b)
+{
+    int i;
+    TCGv_vec tmp = tcg_temp_new_vec_matching(b);
+    /* MO_32 is 2, so 2 iteractions for MO_32 and 3 for MO_64 */
+    for (i = 0; i < vece; i++) {
+        tcg_gen_shri_vec(vece, tmp, b, (4 << (vece - i)));
+        tcg_gen_xor_vec(vece, b, tmp, b);
+    }
+    tcg_gen_and_vec(vece, t, b, tcg_constant_vec_matching(t, vece, 1));
+    tcg_temp_free_vec(tmp);
+}
+
+/* vprtybw */
+static void gen_vprtyb_i32(TCGv_i32 t, TCGv_i32 b)
+{
+    tcg_gen_ctpop_i32(t, b);
+    tcg_gen_and_i32(t, t, tcg_constant_i32(1));
+}
+
+/* vprtybd */
+static void gen_vprtyb_i64(TCGv_i64 t, TCGv_i64 b)
+{
+    tcg_gen_ctpop_i64(t, b);
+    tcg_gen_and_i64(t, t, tcg_constant_i64(1));
+}
+
+static bool do_vx_vprtyb(DisasContext *ctx, arg_VX_tb *a, unsigned vece)
+{
+    static const TCGOpcode vecop_list[] = {
+        INDEX_op_shri_vec, 0
+    };
+
+    static const GVecGen2 op[] = {
+        {
+            .fniv = gen_vprtyb_vec,
+            .fni4 = gen_vprtyb_i32,
+            .opt_opc = vecop_list,
+            .vece = MO_32
+        },
+        {
+            .fniv = gen_vprtyb_vec,
+            .fni8 = gen_vprtyb_i64,
+            .opt_opc = vecop_list,
+            .vece = MO_64
+        },
+        {
+            .fno = gen_helper_VPRTYBQ,
+            .vece = MO_128
+        },
+    };
+
+    REQUIRE_INSNS_FLAGS2(ctx, ISA300);
+    REQUIRE_VECTOR(ctx);
+
+    tcg_gen_gvec_2(avr_full_offset(a->vrt), avr_full_offset(a->vrb),
+                   16, 16, &op[vece - MO_32]);
+
+    return true;
+}
+
+TRANS(VPRTYBW, do_vx_vprtyb, MO_32)
+TRANS(VPRTYBD, do_vx_vprtyb, MO_64)
+TRANS(VPRTYBQ, do_vx_vprtyb, MO_128)
 
 static void gen_vsplt(DisasContext *ctx, int vece)
 {
@@ -1692,7 +1725,7 @@ static void gen_vsplt(DisasContext *ctx, int vece)
 
     /* Experimental testing shows that hardware masks the immediate.  */
     bofs += (uimm << vece) & 15;
-#ifndef HOST_WORDS_BIGENDIAN
+#if !HOST_BIG_ENDIAN
     bofs ^= 15;
     bofs &= ~((1 << vece) - 1);
 #endif
@@ -2533,40 +2566,19 @@ static void glue(gen_, name0##_##name1)(DisasContext *ctx)              \
         tcg_temp_free_ptr(rd);                                          \
     }
 
-GEN_VAFORM_PAIRED(vmhaddshs, vmhraddshs, 16)
+GEN_VAFORM_PAIRED(vmaddfp, vnmsubfp, 23)
 
-static void gen_vmladduhm(DisasContext *ctx)
-{
-    TCGv_ptr ra, rb, rc, rd;
-    if (unlikely(!ctx->altivec_enabled)) {
-        gen_exception(ctx, POWERPC_EXCP_VPU);
-        return;
-    }
-    ra = gen_avr_ptr(rA(ctx->opcode));
-    rb = gen_avr_ptr(rB(ctx->opcode));
-    rc = gen_avr_ptr(rC(ctx->opcode));
-    rd = gen_avr_ptr(rD(ctx->opcode));
-    gen_helper_vmladduhm(rd, ra, rb, rc);
-    tcg_temp_free_ptr(ra);
-    tcg_temp_free_ptr(rb);
-    tcg_temp_free_ptr(rc);
-    tcg_temp_free_ptr(rd);
-}
-
-static bool trans_VPERM(DisasContext *ctx, arg_VA *a)
+static bool do_va_helper(DisasContext *ctx, arg_VA *a,
+    void (*gen_helper)(TCGv_ptr, TCGv_ptr, TCGv_ptr, TCGv_ptr))
 {
     TCGv_ptr vrt, vra, vrb, vrc;
-
-    REQUIRE_INSNS_FLAGS(ctx, ALTIVEC);
     REQUIRE_VECTOR(ctx);
 
     vrt = gen_avr_ptr(a->vrt);
     vra = gen_avr_ptr(a->vra);
     vrb = gen_avr_ptr(a->vrb);
     vrc = gen_avr_ptr(a->rc);
-
-    gen_helper_VPERM(vrt, vra, vrb, vrc);
-
+    gen_helper(vrt, vra, vrb, vrc);
     tcg_temp_free_ptr(vrt);
     tcg_temp_free_ptr(vra);
     tcg_temp_free_ptr(vrb);
@@ -2575,24 +2587,41 @@ static bool trans_VPERM(DisasContext *ctx, arg_VA *a)
     return true;
 }
 
-static bool trans_VPERMR(DisasContext *ctx, arg_VA *a)
-{
-    TCGv_ptr vrt, vra, vrb, vrc;
+TRANS_FLAGS2(ALTIVEC_207, VADDECUQ, do_va_helper, gen_helper_VADDECUQ)
+TRANS_FLAGS2(ALTIVEC_207, VADDEUQM, do_va_helper, gen_helper_VADDEUQM)
 
-    REQUIRE_INSNS_FLAGS2(ctx, ISA300);
+TRANS_FLAGS2(ALTIVEC_207, VSUBEUQM, do_va_helper, gen_helper_VSUBEUQM)
+TRANS_FLAGS2(ALTIVEC_207, VSUBECUQ, do_va_helper, gen_helper_VSUBECUQ)
+
+TRANS_FLAGS(ALTIVEC, VPERM, do_va_helper, gen_helper_VPERM)
+TRANS_FLAGS2(ISA300, VPERMR, do_va_helper, gen_helper_VPERMR)
+
+static void gen_vmladduhm_vec(unsigned vece, TCGv_vec t, TCGv_vec a, TCGv_vec b,
+                              TCGv_vec c)
+{
+    tcg_gen_mul_vec(vece, t, a, b);
+    tcg_gen_add_vec(vece, t, t, c);
+}
+
+static bool trans_VMLADDUHM(DisasContext *ctx, arg_VA *a)
+{
+    static const TCGOpcode vecop_list[] = {
+        INDEX_op_add_vec, INDEX_op_mul_vec, 0
+    };
+
+    static const GVecGen4 op = {
+        .fno = gen_helper_VMLADDUHM,
+        .fniv = gen_vmladduhm_vec,
+        .opt_opc = vecop_list,
+        .vece = MO_16
+    };
+
+    REQUIRE_INSNS_FLAGS(ctx, ALTIVEC);
     REQUIRE_VECTOR(ctx);
 
-    vrt = gen_avr_ptr(a->vrt);
-    vra = gen_avr_ptr(a->vra);
-    vrb = gen_avr_ptr(a->vrb);
-    vrc = gen_avr_ptr(a->rc);
-
-    gen_helper_VPERMR(vrt, vra, vrb, vrc);
-
-    tcg_temp_free_ptr(vrt);
-    tcg_temp_free_ptr(vra);
-    tcg_temp_free_ptr(vrb);
-    tcg_temp_free_ptr(vrc);
+    tcg_gen_gvec_4(avr_full_offset(a->vrt), avr_full_offset(a->vra),
+                   avr_full_offset(a->vrb), avr_full_offset(a->rc),
+                   16, 16, &op);
 
     return true;
 }
@@ -2609,17 +2638,53 @@ static bool trans_VSEL(DisasContext *ctx, arg_VA *a)
     return true;
 }
 
-GEN_VAFORM_PAIRED(vmsumubm, vmsummbm, 18)
-GEN_VAFORM_PAIRED(vmsumuhm, vmsumuhs, 19)
-GEN_VAFORM_PAIRED(vmsumshm, vmsumshs, 20)
-GEN_VAFORM_PAIRED(vmaddfp, vnmsubfp, 23)
+TRANS_FLAGS(ALTIVEC, VMSUMUBM, do_va_helper, gen_helper_VMSUMUBM)
+TRANS_FLAGS(ALTIVEC, VMSUMMBM, do_va_helper, gen_helper_VMSUMMBM)
+TRANS_FLAGS(ALTIVEC, VMSUMSHM, do_va_helper, gen_helper_VMSUMSHM)
+TRANS_FLAGS(ALTIVEC, VMSUMUHM, do_va_helper, gen_helper_VMSUMUHM)
+
+static bool do_va_env_helper(DisasContext *ctx, arg_VA *a,
+    void (*gen_helper)(TCGv_ptr, TCGv_ptr, TCGv_ptr, TCGv_ptr, TCGv_ptr))
+{
+    TCGv_ptr vrt, vra, vrb, vrc;
+    REQUIRE_VECTOR(ctx);
+
+    vrt = gen_avr_ptr(a->vrt);
+    vra = gen_avr_ptr(a->vra);
+    vrb = gen_avr_ptr(a->vrb);
+    vrc = gen_avr_ptr(a->rc);
+    gen_helper(cpu_env, vrt, vra, vrb, vrc);
+    tcg_temp_free_ptr(vrt);
+    tcg_temp_free_ptr(vra);
+    tcg_temp_free_ptr(vrb);
+    tcg_temp_free_ptr(vrc);
+
+    return true;
+}
+
+TRANS_FLAGS(ALTIVEC, VMSUMUHS, do_va_env_helper, gen_helper_VMSUMUHS)
+TRANS_FLAGS(ALTIVEC, VMSUMSHS, do_va_env_helper, gen_helper_VMSUMSHS)
+
+TRANS_FLAGS(ALTIVEC, VMHADDSHS, do_va_env_helper, gen_helper_VMHADDSHS)
+TRANS_FLAGS(ALTIVEC, VMHRADDSHS, do_va_env_helper, gen_helper_VMHRADDSHS)
 
 GEN_VXFORM_NOA(vclzb, 1, 28)
 GEN_VXFORM_NOA(vclzh, 1, 29)
 GEN_VXFORM_TRANS(vclzw, 1, 30)
 GEN_VXFORM_TRANS(vclzd, 1, 31)
-GEN_VXFORM_NOA_2(vnegw, 1, 24, 6)
-GEN_VXFORM_NOA_2(vnegd, 1, 24, 7)
+
+static bool do_vneg(DisasContext *ctx, arg_VX_tb *a, unsigned vece)
+{
+    REQUIRE_INSNS_FLAGS2(ctx, ISA300);
+    REQUIRE_VECTOR(ctx);
+
+    tcg_gen_gvec_neg(vece, avr_full_offset(a->vrt), avr_full_offset(a->vrb),
+                     16, 16);
+    return true;
+}
+
+TRANS(VNEGW, do_vneg, MO_32)
+TRANS(VNEGD, do_vneg, MO_64)
 
 static void gen_vexts_i64(TCGv_i64 t, TCGv_i64 b, int64_t s)
 {
@@ -2715,7 +2780,6 @@ GEN_VXFORM_TRANS(vgbbd, 6, 20);
 GEN_VXFORM(vpmsumb, 4, 16)
 GEN_VXFORM(vpmsumh, 4, 17)
 GEN_VXFORM(vpmsumw, 4, 18)
-GEN_VXFORM(vpmsumd, 4, 19)
 
 #define GEN_BCD(op)                                 \
 static void gen_##op(DisasContext *ctx)             \
@@ -2839,8 +2903,6 @@ static void gen_xpnd04_2(DisasContext *ctx)
 }
 
 
-GEN_VXFORM_DUAL(vsubcuw, PPC_ALTIVEC, PPC_NONE, \
-                xpnd04_1, PPC_NONE, PPC2_ISA300)
 GEN_VXFORM_DUAL(vsubsws, PPC_ALTIVEC, PPC_NONE, \
                 xpnd04_2, PPC_NONE, PPC2_ISA300)
 
@@ -2860,11 +2922,6 @@ GEN_VXFORM_DUAL(vsubuwm, PPC_ALTIVEC, PPC_NONE, \
                 bcdus, PPC_NONE, PPC2_ISA300)
 GEN_VXFORM_DUAL(vsubsbs, PPC_ALTIVEC, PPC_NONE, \
                 bcdtrunc, PPC_NONE, PPC2_ISA300)
-GEN_VXFORM_DUAL(vsubuqm, PPC2_ALTIVEC_207, PPC_NONE, \
-                bcdtrunc, PPC_NONE, PPC2_ISA300)
-GEN_VXFORM_DUAL(vsubcuq, PPC2_ALTIVEC_207, PPC_NONE, \
-                bcdutrunc, PPC_NONE, PPC2_ISA300)
-
 
 static void gen_vsbox(DisasContext *ctx)
 {
@@ -3099,6 +3156,71 @@ static bool do_vx_helper(DisasContext *ctx, arg_VX *a,
     return true;
 }
 
+TRANS_FLAGS2(ALTIVEC_207, VADDCUQ, do_vx_helper, gen_helper_VADDCUQ)
+TRANS_FLAGS2(ALTIVEC_207, VADDUQM, do_vx_helper, gen_helper_VADDUQM)
+
+TRANS_FLAGS2(ALTIVEC_207, VPMSUMD, do_vx_helper, gen_helper_VPMSUMD)
+
+TRANS_FLAGS2(ALTIVEC_207, VSUBCUQ, do_vx_helper, gen_helper_VSUBCUQ)
+TRANS_FLAGS2(ALTIVEC_207, VSUBUQM, do_vx_helper, gen_helper_VSUBUQM)
+
+static void gen_VADDCUW_vec(unsigned vece, TCGv_vec t, TCGv_vec a, TCGv_vec b)
+{
+    tcg_gen_not_vec(vece, a, a);
+    tcg_gen_cmp_vec(TCG_COND_LTU, vece, t, a, b);
+    tcg_gen_and_vec(vece, t, t, tcg_constant_vec_matching(t, vece, 1));
+}
+
+static void gen_VADDCUW_i32(TCGv_i32 t, TCGv_i32 a, TCGv_i32 b)
+{
+    tcg_gen_not_i32(a, a);
+    tcg_gen_setcond_i32(TCG_COND_LTU, t, a, b);
+}
+
+static void gen_VSUBCUW_vec(unsigned vece, TCGv_vec t, TCGv_vec a, TCGv_vec b)
+{
+    tcg_gen_cmp_vec(TCG_COND_GEU, vece, t, a, b);
+    tcg_gen_and_vec(vece, t, t, tcg_constant_vec_matching(t, vece, 1));
+}
+
+static void gen_VSUBCUW_i32(TCGv_i32 t, TCGv_i32 a, TCGv_i32 b)
+{
+    tcg_gen_setcond_i32(TCG_COND_GEU, t, a, b);
+}
+
+static bool do_vx_vaddsubcuw(DisasContext *ctx, arg_VX *a, int add)
+{
+    static const TCGOpcode vecop_list[] = {
+        INDEX_op_cmp_vec, 0
+    };
+
+    static const GVecGen3 op[] = {
+        {
+            .fniv = gen_VSUBCUW_vec,
+            .fni4 = gen_VSUBCUW_i32,
+            .opt_opc = vecop_list,
+            .vece = MO_32
+        },
+        {
+            .fniv = gen_VADDCUW_vec,
+            .fni4 = gen_VADDCUW_i32,
+            .opt_opc = vecop_list,
+            .vece = MO_32
+        },
+    };
+
+    REQUIRE_INSNS_FLAGS(ctx, ALTIVEC);
+    REQUIRE_VECTOR(ctx);
+
+    tcg_gen_gvec_3(avr_full_offset(a->vrt), avr_full_offset(a->vra),
+                   avr_full_offset(a->vrb), 16, 16, &op[add]);
+
+    return true;
+}
+
+TRANS(VSUBCUW, do_vx_vaddsubcuw, 0)
+TRANS(VADDCUW, do_vx_vaddsubcuw, 1)
+
 static bool do_vx_vmuleo(DisasContext *ctx, arg_VX *a, bool even,
                          void (*gen_mul)(TCGv_i64, TCGv_i64, TCGv_i64, TCGv_i64))
 {
@@ -3235,6 +3357,297 @@ TRANS(VMULHSW, do_vx_mulh, true , do_vx_vmulhw_i64)
 TRANS(VMULHSD, do_vx_mulh, true , do_vx_vmulhd_i64)
 TRANS(VMULHUW, do_vx_mulh, false, do_vx_vmulhw_i64)
 TRANS(VMULHUD, do_vx_mulh, false, do_vx_vmulhd_i64)
+
+static void do_vavg(unsigned vece, TCGv_vec t, TCGv_vec a, TCGv_vec b,
+                    void (*gen_shr_vec)(unsigned, TCGv_vec, TCGv_vec, int64_t))
+{
+    TCGv_vec tmp = tcg_temp_new_vec_matching(t);
+    tcg_gen_or_vec(vece, tmp, a, b);
+    tcg_gen_and_vec(vece, tmp, tmp, tcg_constant_vec_matching(t, vece, 1));
+    gen_shr_vec(vece, a, a, 1);
+    gen_shr_vec(vece, b, b, 1);
+    tcg_gen_add_vec(vece, t, a, b);
+    tcg_gen_add_vec(vece, t, t, tmp);
+    tcg_temp_free_vec(tmp);
+}
+
+QEMU_FLATTEN
+static void gen_vavgu(unsigned vece, TCGv_vec t, TCGv_vec a, TCGv_vec b)
+{
+    do_vavg(vece, t, a, b, tcg_gen_shri_vec);
+}
+
+QEMU_FLATTEN
+static void gen_vavgs(unsigned vece, TCGv_vec t, TCGv_vec a, TCGv_vec b)
+{
+    do_vavg(vece, t, a, b, tcg_gen_sari_vec);
+}
+
+static bool do_vx_vavg(DisasContext *ctx, arg_VX *a, int sign, int vece)
+{
+    static const TCGOpcode vecop_list_s[] = {
+        INDEX_op_add_vec, INDEX_op_sari_vec, 0
+    };
+    static const TCGOpcode vecop_list_u[] = {
+        INDEX_op_add_vec, INDEX_op_shri_vec, 0
+    };
+
+    static const GVecGen3 op[2][3] = {
+        {
+            {
+                .fniv = gen_vavgu,
+                .fno = gen_helper_VAVGUB,
+                .opt_opc = vecop_list_u,
+                .vece = MO_8
+            },
+            {
+                .fniv = gen_vavgu,
+                .fno = gen_helper_VAVGUH,
+                .opt_opc = vecop_list_u,
+                .vece = MO_16
+            },
+            {
+                .fniv = gen_vavgu,
+                .fno = gen_helper_VAVGUW,
+                .opt_opc = vecop_list_u,
+                .vece = MO_32
+            },
+        },
+        {
+            {
+                .fniv = gen_vavgs,
+                .fno = gen_helper_VAVGSB,
+                .opt_opc = vecop_list_s,
+                .vece = MO_8
+            },
+            {
+                .fniv = gen_vavgs,
+                .fno = gen_helper_VAVGSH,
+                .opt_opc = vecop_list_s,
+                .vece = MO_16
+            },
+            {
+                .fniv = gen_vavgs,
+                .fno = gen_helper_VAVGSW,
+                .opt_opc = vecop_list_s,
+                .vece = MO_32
+            },
+        },
+    };
+
+    REQUIRE_VECTOR(ctx);
+
+    tcg_gen_gvec_3(avr_full_offset(a->vrt), avr_full_offset(a->vra),
+                   avr_full_offset(a->vrb), 16, 16, &op[sign][vece]);
+
+
+    return true;
+}
+
+
+TRANS_FLAGS(ALTIVEC, VAVGSB, do_vx_vavg, 1, MO_8)
+TRANS_FLAGS(ALTIVEC, VAVGSH, do_vx_vavg, 1, MO_16)
+TRANS_FLAGS(ALTIVEC, VAVGSW, do_vx_vavg, 1, MO_32)
+TRANS_FLAGS(ALTIVEC, VAVGUB, do_vx_vavg, 0, MO_8)
+TRANS_FLAGS(ALTIVEC, VAVGUH, do_vx_vavg, 0, MO_16)
+TRANS_FLAGS(ALTIVEC, VAVGUW, do_vx_vavg, 0, MO_32)
+
+static void gen_vabsdu(unsigned vece, TCGv_vec t, TCGv_vec a, TCGv_vec b)
+{
+    tcg_gen_umax_vec(vece, t, a, b);
+    tcg_gen_umin_vec(vece, a, a, b);
+    tcg_gen_sub_vec(vece, t, t, a);
+}
+
+static bool do_vabsdu(DisasContext *ctx, arg_VX *a, const int vece)
+{
+    static const TCGOpcode vecop_list[] = {
+        INDEX_op_umax_vec, INDEX_op_umin_vec, INDEX_op_sub_vec, 0
+    };
+
+    static const GVecGen3 op[] = {
+        {
+            .fniv = gen_vabsdu,
+            .fno = gen_helper_VABSDUB,
+            .opt_opc = vecop_list,
+            .vece = MO_8
+        },
+        {
+            .fniv = gen_vabsdu,
+            .fno = gen_helper_VABSDUH,
+            .opt_opc = vecop_list,
+            .vece = MO_16
+        },
+        {
+            .fniv = gen_vabsdu,
+            .fno = gen_helper_VABSDUW,
+            .opt_opc = vecop_list,
+            .vece = MO_32
+        },
+    };
+
+    REQUIRE_VECTOR(ctx);
+
+    tcg_gen_gvec_3(avr_full_offset(a->vrt), avr_full_offset(a->vra),
+                   avr_full_offset(a->vrb), 16, 16, &op[vece]);
+
+    return true;
+}
+
+TRANS_FLAGS2(ISA300, VABSDUB, do_vabsdu, MO_8)
+TRANS_FLAGS2(ISA300, VABSDUH, do_vabsdu, MO_16)
+TRANS_FLAGS2(ISA300, VABSDUW, do_vabsdu, MO_32)
+
+static bool do_vdiv_vmod(DisasContext *ctx, arg_VX *a, const int vece,
+                         void (*func_32)(TCGv_i32 t, TCGv_i32 a, TCGv_i32 b),
+                         void (*func_64)(TCGv_i64 t, TCGv_i64 a, TCGv_i64 b))
+{
+    const GVecGen3 op = {
+        .fni4 = func_32,
+        .fni8 = func_64,
+        .vece = vece
+    };
+
+    REQUIRE_VECTOR(ctx);
+
+    tcg_gen_gvec_3(avr_full_offset(a->vrt), avr_full_offset(a->vra),
+                   avr_full_offset(a->vrb), 16, 16, &op);
+
+    return true;
+}
+
+#define DIVU32(NAME, DIV)                                               \
+static void NAME(TCGv_i32 t, TCGv_i32 a, TCGv_i32 b)                    \
+{                                                                       \
+    TCGv_i32 zero = tcg_constant_i32(0);                                \
+    TCGv_i32 one = tcg_constant_i32(1);                                 \
+    tcg_gen_movcond_i32(TCG_COND_EQ, b, b, zero, one, b);               \
+    DIV(t, a, b);                                                       \
+}
+
+#define DIVS32(NAME, DIV)                                               \
+static void NAME(TCGv_i32 t, TCGv_i32 a, TCGv_i32 b)                    \
+{                                                                       \
+    TCGv_i32 t0 = tcg_temp_new_i32();                                   \
+    TCGv_i32 t1 = tcg_temp_new_i32();                                   \
+    tcg_gen_setcondi_i32(TCG_COND_EQ, t0, a, INT32_MIN);                \
+    tcg_gen_setcondi_i32(TCG_COND_EQ, t1, b, -1);                       \
+    tcg_gen_and_i32(t0, t0, t1);                                        \
+    tcg_gen_setcondi_i32(TCG_COND_EQ, t1, b, 0);                        \
+    tcg_gen_or_i32(t0, t0, t1);                                         \
+    tcg_gen_movi_i32(t1, 0);                                            \
+    tcg_gen_movcond_i32(TCG_COND_NE, b, t0, t1, t0, b);                 \
+    DIV(t, a, b);                                                       \
+    tcg_temp_free_i32(t0);                                              \
+    tcg_temp_free_i32(t1);                                              \
+}
+
+#define DIVU64(NAME, DIV)                                               \
+static void NAME(TCGv_i64 t, TCGv_i64 a, TCGv_i64 b)                    \
+{                                                                       \
+    TCGv_i64 zero = tcg_constant_i64(0);                                \
+    TCGv_i64 one = tcg_constant_i64(1);                                 \
+    tcg_gen_movcond_i64(TCG_COND_EQ, b, b, zero, one, b);               \
+    DIV(t, a, b);                                                       \
+}
+
+#define DIVS64(NAME, DIV)                                               \
+static void NAME(TCGv_i64 t, TCGv_i64 a, TCGv_i64 b)                    \
+{                                                                       \
+    TCGv_i64 t0 = tcg_temp_new_i64();                                   \
+    TCGv_i64 t1 = tcg_temp_new_i64();                                   \
+    tcg_gen_setcondi_i64(TCG_COND_EQ, t0, a, INT64_MIN);                \
+    tcg_gen_setcondi_i64(TCG_COND_EQ, t1, b, -1);                       \
+    tcg_gen_and_i64(t0, t0, t1);                                        \
+    tcg_gen_setcondi_i64(TCG_COND_EQ, t1, b, 0);                        \
+    tcg_gen_or_i64(t0, t0, t1);                                         \
+    tcg_gen_movi_i64(t1, 0);                                            \
+    tcg_gen_movcond_i64(TCG_COND_NE, b, t0, t1, t0, b);                 \
+    DIV(t, a, b);                                                       \
+    tcg_temp_free_i64(t0);                                              \
+    tcg_temp_free_i64(t1);                                              \
+}
+
+DIVS32(do_divsw, tcg_gen_div_i32)
+DIVU32(do_divuw, tcg_gen_divu_i32)
+DIVS64(do_divsd, tcg_gen_div_i64)
+DIVU64(do_divud, tcg_gen_divu_i64)
+
+TRANS_FLAGS2(ISA310, VDIVSW, do_vdiv_vmod, MO_32, do_divsw, NULL)
+TRANS_FLAGS2(ISA310, VDIVUW, do_vdiv_vmod, MO_32, do_divuw, NULL)
+TRANS_FLAGS2(ISA310, VDIVSD, do_vdiv_vmod, MO_64, NULL, do_divsd)
+TRANS_FLAGS2(ISA310, VDIVUD, do_vdiv_vmod, MO_64, NULL, do_divud)
+TRANS_FLAGS2(ISA310, VDIVSQ, do_vx_helper, gen_helper_VDIVSQ)
+TRANS_FLAGS2(ISA310, VDIVUQ, do_vx_helper, gen_helper_VDIVUQ)
+
+static void do_dives_i32(TCGv_i32 t, TCGv_i32 a, TCGv_i32 b)
+{
+    TCGv_i64 val1, val2;
+
+    val1 = tcg_temp_new_i64();
+    val2 = tcg_temp_new_i64();
+
+    tcg_gen_ext_i32_i64(val1, a);
+    tcg_gen_ext_i32_i64(val2, b);
+
+    /* (a << 32)/b */
+    tcg_gen_shli_i64(val1, val1, 32);
+    tcg_gen_div_i64(val1, val1, val2);
+
+    /* if quotient doesn't fit in 32 bits the result is undefined */
+    tcg_gen_extrl_i64_i32(t, val1);
+
+    tcg_temp_free_i64(val1);
+    tcg_temp_free_i64(val2);
+}
+
+static void do_diveu_i32(TCGv_i32 t, TCGv_i32 a, TCGv_i32 b)
+{
+    TCGv_i64 val1, val2;
+
+    val1 = tcg_temp_new_i64();
+    val2 = tcg_temp_new_i64();
+
+    tcg_gen_extu_i32_i64(val1, a);
+    tcg_gen_extu_i32_i64(val2, b);
+
+    /* (a << 32)/b */
+    tcg_gen_shli_i64(val1, val1, 32);
+    tcg_gen_divu_i64(val1, val1, val2);
+
+    /* if quotient doesn't fit in 32 bits the result is undefined */
+    tcg_gen_extrl_i64_i32(t, val1);
+
+    tcg_temp_free_i64(val1);
+    tcg_temp_free_i64(val2);
+}
+
+DIVS32(do_divesw, do_dives_i32)
+DIVU32(do_diveuw, do_diveu_i32)
+
+DIVS32(do_modsw, tcg_gen_rem_i32)
+DIVU32(do_moduw, tcg_gen_remu_i32)
+DIVS64(do_modsd, tcg_gen_rem_i64)
+DIVU64(do_modud, tcg_gen_remu_i64)
+
+TRANS_FLAGS2(ISA310, VDIVESW, do_vdiv_vmod, MO_32, do_divesw, NULL)
+TRANS_FLAGS2(ISA310, VDIVEUW, do_vdiv_vmod, MO_32, do_diveuw, NULL)
+TRANS_FLAGS2(ISA310, VDIVESD, do_vx_helper, gen_helper_VDIVESD)
+TRANS_FLAGS2(ISA310, VDIVEUD, do_vx_helper, gen_helper_VDIVEUD)
+TRANS_FLAGS2(ISA310, VDIVESQ, do_vx_helper, gen_helper_VDIVESQ)
+TRANS_FLAGS2(ISA310, VDIVEUQ, do_vx_helper, gen_helper_VDIVEUQ)
+
+TRANS_FLAGS2(ISA310, VMODSW, do_vdiv_vmod, MO_32, do_modsw , NULL)
+TRANS_FLAGS2(ISA310, VMODUW, do_vdiv_vmod, MO_32, do_moduw, NULL)
+TRANS_FLAGS2(ISA310, VMODSD, do_vdiv_vmod, MO_64, NULL, do_modsd)
+TRANS_FLAGS2(ISA310, VMODUD, do_vdiv_vmod, MO_64, NULL, do_modud)
+TRANS_FLAGS2(ISA310, VMODSQ, do_vx_helper, gen_helper_VMODSQ)
+TRANS_FLAGS2(ISA310, VMODUQ, do_vx_helper, gen_helper_VMODUQ)
+
+#undef DIVS32
+#undef DIVU32
+#undef DIVS64
+#undef DIVU64
 
 #undef GEN_VR_LDX
 #undef GEN_VR_STX

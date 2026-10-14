@@ -23,7 +23,6 @@
  */
 
 #include "qemu/osdep.h"
-#include "qemu-common.h"
 #include "qemu/error-report.h"
 #include "qemu/module.h"
 #include "qemu/sockets.h"
@@ -212,7 +211,7 @@ static size_t tpm_passthrough_get_buffer_size(TPMBackend *tb)
 static int tpm_passthrough_open_sysfs_cancel(TPMPassthruState *tpm_pt)
 {
     int fd = -1;
-    char *dev;
+    const char *dev;
     char path[PATH_MAX];
 
     if (tpm_pt->options->cancel_path) {

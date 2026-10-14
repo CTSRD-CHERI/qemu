@@ -51,7 +51,7 @@
 #else
 # define ELF_CLASS  ELFCLASS64
 #endif
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
 # define ELF_DATA   ELFDATA2MSB
 #else
 # define ELF_DATA   ELFDATA2LSB
@@ -168,7 +168,7 @@ unsigned int tcg_cur_ctxs;
 unsigned int tcg_max_ctxs;
 TCGv_env cpu_env = 0;
 const void *tcg_code_gen_epilogue;
-uintptr_t tcg_splitwx_diff;
+ptrdiff_t tcg_splitwx_diff;
 
 #ifndef CONFIG_TCG_INTERPRETER
 tcg_prologue_fn *tcg_qemu_tb_exec;
@@ -326,7 +326,8 @@ static void set_jmp_reset_offset(TCGContext *s, int which)
 }
 
 /* Signal overflow, starting over with fewer guest insns. */
-static void QEMU_NORETURN tcg_raise_tb_overflow(TCGContext *s)
+static G_NORETURN
+void tcg_raise_tb_overflow(TCGContext *s)
 {
     siglongjmp(s->jmp_trans, -2);
 }
@@ -513,8 +514,9 @@ void *tcg_malloc_internal(TCGContext *s, int size)
         p = s->pool_current;
         if (!p) {
             p = s->pool_first;
-            if (!p)
+            if (!p) {
                 goto new_pool;
+            }
         } else {
             if (!p->next) {
             new_pool:
@@ -532,8 +534,8 @@ void *tcg_malloc_internal(TCGContext *s, int size)
         }
     }
     s->pool_current = p;
-    s->pool_cur = p->data + size;
-    s->pool_end = p->data + p->size;
+    s->pool_cur = (uintptr_t)p->data + size;
+    s->pool_end = (uintptr_t)p->data + p->size;
     return p->data;
 }
 
@@ -545,7 +547,7 @@ void tcg_pool_reset(TCGContext *s)
         g_free(p);
     }
     s->pool_first_large = NULL;
-    s->pool_cur = s->pool_end = NULL;
+    s->pool_cur = s->pool_end = 0;
     s->pool_current = NULL;
 }
 
@@ -640,9 +642,9 @@ static void tcg_context_init(unsigned max_cpus)
 
         if (nargs != 0) {
             ca->cif.arg_types = ca->args;
-            for (i = 0; i < nargs; ++i) {
-                int typecode = extract32(typemask, (i + 1) * 3, 3);
-                ca->args[i] = typecode_to_ffi[typecode];
+            for (int j = 0; j < nargs; ++j) {
+                int typecode = extract32(typemask, (j + 1) * 3, 3);
+                ca->args[j] = typecode_to_ffi[typecode];
             }
         }
 
@@ -763,32 +765,35 @@ void tcg_prologue_init(TCGContext *s)
 
 #ifdef DEBUG_DISAS
     if (qemu_loglevel_mask(CPU_LOG_TB_OUT_ASM)) {
-        FILE *logfile = qemu_log_lock();
-        qemu_log("PROLOGUE: [size=%zu]\n", prologue_size);
-        if (s->data_gen_ptr) {
-            size_t code_size = s->data_gen_ptr - s->code_gen_ptr;
-            size_t data_size = prologue_size - code_size;
-            size_t i;
+        FILE *logfile = qemu_log_trylock();
+        if (logfile) {
+            fprintf(logfile, "PROLOGUE: [size=%zu]\n", prologue_size);
+            if (s->data_gen_ptr) {
+                size_t code_size = s->data_gen_ptr - s->code_gen_ptr;
+                size_t data_size = prologue_size - code_size;
+                size_t i;
 
-            log_disas(s->code_gen_ptr, code_size);
+                disas(logfile, s->code_gen_ptr, code_size);
 
-            for (i = 0; i < data_size; i += sizeof(tcg_target_ulong)) {
-                if (sizeof(tcg_target_ulong) == 8) {
-                    qemu_log("0x%08" PRIxPTR ":  .quad  0x%016" PRIx64 "\n",
-                             (uintptr_t)s->data_gen_ptr + i,
-                             *(uint64_t *)(s->data_gen_ptr + i));
-                } else {
-                    qemu_log("0x%08" PRIxPTR ":  .long  0x%08x\n",
-                             (uintptr_t)s->data_gen_ptr + i,
-                             *(uint32_t *)(s->data_gen_ptr + i));
+                for (i = 0; i < data_size; i += sizeof(tcg_target_ulong)) {
+                    if (sizeof(tcg_target_ulong) == 8) {
+                        fprintf(logfile,
+                                "0x%08" PRIxPTR ":  .quad  0x%016" PRIx64 "\n",
+                                (uintptr_t)s->data_gen_ptr + i,
+                                *(uint64_t *)(s->data_gen_ptr + i));
+                    } else {
+                        fprintf(logfile,
+                                "0x%08" PRIxPTR ":  .long  0x%08x\n",
+                                (uintptr_t)s->data_gen_ptr + i,
+                                *(uint32_t *)(s->data_gen_ptr + i));
+                    }
                 }
+            } else {
+                disas(logfile, s->code_gen_ptr, prologue_size);
             }
-        } else {
-            log_disas(s->code_gen_ptr, prologue_size);
+            fprintf(logfile, "\n");
+            qemu_log_unlock(logfile);
         }
-        qemu_log("\n");
-        qemu_log_flush();
-        qemu_log_unlock(logfile);
     }
 #endif
 
@@ -890,7 +895,7 @@ TCGTemp *tcg_global_mem_new_internal(TCGType type, TCGv_ptr base,
     TCGTemp *base_ts = tcgv_ptr_temp(base);
     TCGTemp *ts = tcg_global_alloc(s);
     int indirect_reg = 0, bigendian = 0;
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
     bigendian = 1;
 #endif
 
@@ -1031,9 +1036,18 @@ void tcg_temp_free_internal(TCGTemp *ts)
     TCGContext *s = tcg_ctx;
     int k, idx;
 
-    /* In order to simplify users of tcg_constant_*, silently ignore free. */
-    if (ts->kind == TEMP_CONST) {
+    switch (ts->kind) {
+    case TEMP_CONST:
+        /*
+         * In order to simplify users of tcg_constant_*,
+         * silently ignore free.
+         */
         return;
+    case TEMP_NORMAL:
+    case TEMP_LOCAL:
+        break;
+    default:
+        g_assert_not_reached();
     }
 
 #if defined(CONFIG_DEBUG_TCG)
@@ -1043,7 +1057,6 @@ void tcg_temp_free_internal(TCGTemp *ts)
     }
 #endif
 
-    tcg_debug_assert(ts->kind < TEMP_GLOBAL);
     tcg_debug_assert(ts->temp_allocated != 0);
     ts->temp_allocated = 0;
 
@@ -1483,39 +1496,7 @@ void tcg_gen_callN(void *func, TCGTemp *ret, int nargs, TCGTemp **args)
     }
 #endif
 
-#if defined(__sparc__) && !defined(__arch64__) \
-    && !defined(CONFIG_TCG_INTERPRETER)
-    /* We have 64-bit values in one register, but need to pass as two
-       separate parameters.  Split them.  */
-    int orig_typemask = typemask;
-    int orig_nargs = nargs;
-    TCGv_i64 retl, reth;
-    TCGTemp *split_args[MAX_OPC_PARAM];
-
-    retl = NULL;
-    reth = NULL;
-    typemask = 0;
-    for (i = real_args = 0; i < nargs; ++i) {
-        int argtype = extract32(orig_typemask, (i + 1) * 3, 3);
-        bool is_64bit = (argtype & ~1) == dh_typecode_i64;
-
-        if (is_64bit) {
-            TCGv_i64 orig = temp_tcgv_i64(args[i]);
-            TCGv_i32 h = tcg_temp_new_i32();
-            TCGv_i32 l = tcg_temp_new_i32();
-            tcg_gen_extr_i64_i32(l, h, orig);
-            split_args[real_args++] = tcgv_i32_temp(h);
-            typemask |= dh_typecode_i32 << (real_args * 3);
-            split_args[real_args++] = tcgv_i32_temp(l);
-            typemask |= dh_typecode_i32 << (real_args * 3);
-        } else {
-            split_args[real_args++] = args[i];
-            typemask |= argtype << (real_args * 3);
-        }
-    }
-    nargs = real_args;
-    args = split_args;
-#elif defined(TCG_TARGET_EXTEND_ARGS) && TCG_TARGET_REG_BITS == 64
+#if defined(TCG_TARGET_EXTEND_ARGS) && TCG_TARGET_REG_BITS == 64
     for (i = 0; i < nargs; ++i) {
         int argtype = extract32(typemask, (i + 1) * 3, 3);
         bool is_32bit = (argtype & ~1) == dh_typecode_i32;
@@ -1538,24 +1519,8 @@ void tcg_gen_callN(void *func, TCGTemp *ret, int nargs, TCGTemp **args)
 
     pi = 0;
     if (ret != NULL) {
-#if defined(__sparc__) && !defined(__arch64__) \
-    && !defined(CONFIG_TCG_INTERPRETER)
-        if ((typemask & 6) == dh_typecode_i64) {
-            /* The 32-bit ABI is going to return the 64-bit value in
-               the %o0/%o1 register pair.  Prepare for this by using
-               two return temporaries, and reassemble below.  */
-            retl = tcg_temp_new_i64();
-            reth = tcg_temp_new_i64();
-            op->args[pi++] = tcgv_i64_arg(reth);
-            op->args[pi++] = tcgv_i64_arg(retl);
-            nb_rets = 2;
-        } else {
-            op->args[pi++] = temp_arg(ret);
-            nb_rets = 1;
-        }
-#else
         if (TCG_TARGET_REG_BITS < 64 && (typemask & 6) == dh_typecode_i64) {
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
             op->args[pi++] = temp_arg(ret + 1);
             op->args[pi++] = temp_arg(ret);
 #else
@@ -1567,7 +1532,6 @@ void tcg_gen_callN(void *func, TCGTemp *ret, int nargs, TCGTemp **args)
             op->args[pi++] = temp_arg(ret);
             nb_rets = 1;
         }
-#endif
     } else {
         nb_rets = 0;
     }
@@ -1608,7 +1572,7 @@ void tcg_gen_callN(void *func, TCGTemp *ret, int nargs, TCGTemp **args)
              * have to get more complicated to differentiate between
              * stack arguments and register arguments.
              */
-#if defined(HOST_WORDS_BIGENDIAN) != defined(TCG_TARGET_STACK_GROWSUP)
+#if HOST_BIG_ENDIAN != defined(TCG_TARGET_STACK_GROWSUP)
             op->args[pi++] = temp_arg(args[i] + 1);
             op->args[pi++] = temp_arg(args[i]);
 #else
@@ -1630,29 +1594,7 @@ void tcg_gen_callN(void *func, TCGTemp *ret, int nargs, TCGTemp **args)
     tcg_debug_assert(TCGOP_CALLI(op) == real_args);
     tcg_debug_assert(pi <= ARRAY_SIZE(op->args));
 
-#if defined(__sparc__) && !defined(__arch64__) \
-    && !defined(CONFIG_TCG_INTERPRETER)
-    /* Free all of the parts we allocated above.  */
-    for (i = real_args = 0; i < orig_nargs; ++i) {
-        int argtype = extract32(orig_typemask, (i + 1) * 3, 3);
-        bool is_64bit = (argtype & ~1) == dh_typecode_i64;
-
-        if (is_64bit) {
-            tcg_temp_free_internal(args[real_args++]);
-            tcg_temp_free_internal(args[real_args++]);
-        } else {
-            real_args++;
-        }
-    }
-    if ((orig_typemask & 6) == dh_typecode_i64) {
-        /* The 32-bit ABI returned two 32-bit pieces.  Re-assemble them.
-           Note that describing these as TCGv_i64 eliminates an unnecessary
-           zero-extension that tcg_gen_concat_i32_i64 would create.  */
-        tcg_gen_concat32_i64(temp_tcgv_i64(ret), retl, reth);
-        tcg_temp_free_i64(retl);
-        tcg_temp_free_i64(reth);
-    }
-#elif defined(TCG_TARGET_EXTEND_ARGS) && TCG_TARGET_REG_BITS == 64
+#if defined(TCG_TARGET_EXTEND_ARGS) && TCG_TARGET_REG_BITS == 64
     for (i = 0; i < nargs; ++i) {
         int argtype = extract32(typemask, (i + 1) * 3, 3);
         bool is_32bit = (argtype & ~1) == dh_typecode_i32;
@@ -1682,6 +1624,7 @@ static void tcg_reg_alloc_start(TCGContext *s)
         case TEMP_GLOBAL:
             break;
         case TEMP_NORMAL:
+        case TEMP_EBB:
             val = TEMP_VAL_DEAD;
             /* fall through */
         case TEMP_LOCAL:
@@ -1708,6 +1651,9 @@ static char *tcg_get_arg_str_ptr(TCGContext *s, char *buf, int buf_size,
         break;
     case TEMP_LOCAL:
         snprintf(buf, buf_size, "loc%d", idx - s->nb_globals);
+        break;
+    case TEMP_EBB:
+        snprintf(buf, buf_size, "ebb%d", idx - s->nb_globals);
         break;
     case TEMP_NORMAL:
         snprintf(buf, buf_size, "tmp%d", idx - s->nb_globals);
@@ -1812,7 +1758,11 @@ static inline TCGReg tcg_regset_first(TCGRegSet d)
     }
 }
 
-static void tcg_dump_ops(TCGContext *s, bool have_prefs)
+/* Return only the number of characters output -- no error return. */
+#define ne_fprintf(...) \
+    ({ int ret_ = fprintf(__VA_ARGS__); ret_ >= 0 ? ret_ : 0; })
+
+static void tcg_dump_ops(TCGContext *s, FILE *f, bool have_prefs)
 {
     char buf[128];
     TCGOp *op;
@@ -1828,7 +1778,7 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
 
         if (c == INDEX_op_insn_start) {
             nb_oargs = 0;
-            col += qemu_log("\n ----");
+            col += ne_fprintf(f, "\n ----");
 
             for (i = 0; i < TARGET_INSN_START_WORDS; ++i) {
                 target_ulong a;
@@ -1837,7 +1787,7 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
 #else
                 a = op->args[i];
 #endif
-                col += qemu_log(" " TARGET_FMT_lx, a);
+                col += ne_fprintf(f, " " TARGET_FMT_lx, a);
             }
         } else if (c == INDEX_op_call) {
             const TCGHelperInfo *info = tcg_call_info(op);
@@ -1848,7 +1798,7 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
             nb_iargs = TCGOP_CALLI(op);
             nb_cargs = def->nb_cargs;
 
-            col += qemu_log(" %s ", def->name);
+            col += ne_fprintf(f, " %s ", def->name);
 
             /*
              * Print the function name from TCGHelperInfo, if available.
@@ -1856,15 +1806,15 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
              * but the actual function pointer comes from the plugin.
              */
             if (func == info->func) {
-                col += qemu_log("%s", info->name);
+                col += ne_fprintf(f, "%s", info->name);
             } else {
-                col += qemu_log("plugin(%p)", func);
+                col += ne_fprintf(f, "plugin(%p)", func);
             }
 
-            col += qemu_log(",$0x%x,$%d", info->flags, nb_oargs);
+            col += ne_fprintf(f, ",$0x%x,$%d", info->flags, nb_oargs);
             for (i = 0; i < nb_oargs; i++) {
-                col += qemu_log(",%s", tcg_get_arg_str(s, buf, sizeof(buf),
-                                                       op->args[i]));
+                col += ne_fprintf(f, ",%s", tcg_get_arg_str(s, buf, sizeof(buf),
+                                                            op->args[i]));
             }
             for (i = 0; i < nb_iargs; i++) {
                 TCGArg arg = op->args[nb_oargs + i];
@@ -1872,34 +1822,32 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
                 if (arg != TCG_CALL_DUMMY_ARG) {
                     t = tcg_get_arg_str(s, buf, sizeof(buf), arg);
                 }
-                col += qemu_log(",%s", t);
+                col += ne_fprintf(f, ",%s", t);
             }
         } else {
-            col += qemu_log(" %s ", def->name);
+            col += ne_fprintf(f, " %s ", def->name);
 
             nb_oargs = def->nb_oargs;
             nb_iargs = def->nb_iargs;
             nb_cargs = def->nb_cargs;
 
             if (def->flags & TCG_OPF_VECTOR) {
-                col += qemu_log("v%d,e%d,", 64 << TCGOP_VECL(op),
-                                8 << TCGOP_VECE(op));
+                col += ne_fprintf(f, "v%d,e%d,", 64 << TCGOP_VECL(op),
+                                  8 << TCGOP_VECE(op));
             }
 
             k = 0;
             for (i = 0; i < nb_oargs; i++) {
-                if (k != 0) {
-                    col += qemu_log(",");
-                }
-                col += qemu_log("%s", tcg_get_arg_str(s, buf, sizeof(buf),
-                                                      op->args[k++]));
+                const char *sep =  k ? "," : "";
+                col += ne_fprintf(f, "%s%s", sep,
+                                  tcg_get_arg_str(s, buf, sizeof(buf),
+                                                  op->args[k++]));
             }
             for (i = 0; i < nb_iargs; i++) {
-                if (k != 0) {
-                    col += qemu_log(",");
-                }
-                col += qemu_log("%s", tcg_get_arg_str(s, buf, sizeof(buf),
-                                                      op->args[k++]));
+                const char *sep =  k ? "," : "";
+                col += ne_fprintf(f, "%s%s", sep,
+                                  tcg_get_arg_str(s, buf, sizeof(buf),
+                                                  op->args[k++]));
             }
             switch (c) {
             case INDEX_op_brcond_i32:
@@ -1914,9 +1862,9 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
             case INDEX_op_cmpsel_vec:
                 if (op->args[k] < ARRAY_SIZE(cond_name)
                     && cond_name[op->args[k]]) {
-                    col += qemu_log(",%s", cond_name[op->args[k++]]);
+                    col += ne_fprintf(f, ",%s", cond_name[op->args[k++]]);
                 } else {
-                    col += qemu_log(",$0x%" TCG_PRIlx, op->args[k++]);
+                    col += ne_fprintf(f, ",$0x%" TCG_PRIlx, op->args[k++]);
                 }
                 i = 1;
                 break;
@@ -1931,12 +1879,12 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
                     unsigned ix = get_mmuidx(oi);
 
                     if (op & ~(MO_AMASK | MO_BSWAP | MO_SSIZE)) {
-                        col += qemu_log(",$0x%x,%u", op, ix);
+                        col += ne_fprintf(f, ",$0x%x,%u", op, ix);
                     } else {
                         const char *s_al, *s_op;
                         s_al = alignment_name[(op & MO_AMASK) >> MO_ASHIFT];
                         s_op = ldst_name[op & (MO_BSWAP | MO_SSIZE)];
-                        col += qemu_log(",%s%s,%u", s_al, s_op, ix);
+                        col += ne_fprintf(f, ",%s%s,%u", s_al, s_op, ix);
                     }
                     i = 1;
                 }
@@ -1954,9 +1902,9 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
                         name = bswap_flag_name[flags];
                     }
                     if (name) {
-                        col += qemu_log(",%s", name);
+                        col += ne_fprintf(f, ",%s", name);
                     } else {
-                        col += qemu_log(",$0x%" TCG_PRIlx, flags);
+                        col += ne_fprintf(f, ",$0x%" TCG_PRIlx, flags);
                     }
                     i = k = 1;
                 }
@@ -1971,49 +1919,42 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
             case INDEX_op_brcond_i32:
             case INDEX_op_brcond_i64:
             case INDEX_op_brcond2_i32:
-                col += qemu_log("%s$L%d", k ? "," : "",
-                                arg_label(op->args[k])->id);
+                col += ne_fprintf(f, "%s$L%d", k ? "," : "",
+                                  arg_label(op->args[k])->id);
                 i++, k++;
                 break;
             default:
                 break;
             }
             for (; i < nb_cargs; i++, k++) {
-                col += qemu_log("%s$0x%" TCG_PRIlx, k ? "," : "", op->args[k]);
+                col += ne_fprintf(f, "%s$0x%" TCG_PRIlx, k ? "," : "",
+                                  op->args[k]);
             }
         }
 
         if (have_prefs || op->life) {
-
-            QemuLogFile *logfile;
-
-            rcu_read_lock();
-            logfile = qatomic_rcu_read(&qemu_logfile);
-            if (logfile) {
-                for (; col < 40; ++col) {
-                    putc(' ', logfile->fd);
-                }
+            for (; col < 40; ++col) {
+                putc(' ', f);
             }
-            rcu_read_unlock();
         }
 
         if (op->life) {
             unsigned life = op->life;
 
             if (life & (SYNC_ARG * 3)) {
-                qemu_log("  sync:");
+                ne_fprintf(f, "  sync:");
                 for (i = 0; i < 2; ++i) {
                     if (life & (SYNC_ARG << i)) {
-                        qemu_log(" %d", i);
+                        ne_fprintf(f, " %d", i);
                     }
                 }
             }
             life /= DEAD_ARG;
             if (life) {
-                qemu_log("  dead:");
+                ne_fprintf(f, "  dead:");
                 for (i = 0; life; ++i, life >>= 1) {
                     if (life & 1) {
-                        qemu_log(" %d", i);
+                        ne_fprintf(f, " %d", i);
                     }
                 }
             }
@@ -2024,28 +1965,28 @@ static void tcg_dump_ops(TCGContext *s, bool have_prefs)
                 TCGRegSet set = op->output_pref[i];
 
                 if (i == 0) {
-                    qemu_log("  pref=");
+                    ne_fprintf(f, "  pref=");
                 } else {
-                    qemu_log(",");
+                    ne_fprintf(f, ",");
                 }
                 if (set == 0) {
-                    qemu_log("none");
+                    ne_fprintf(f, "none");
                 } else if (set == MAKE_64BIT_MASK(0, TCG_TARGET_NB_REGS)) {
-                    qemu_log("all");
+                    ne_fprintf(f, "all");
 #ifdef CONFIG_DEBUG_TCG
                 } else if (tcg_regset_single(set)) {
                     TCGReg reg = tcg_regset_first(set);
-                    qemu_log("%s", tcg_target_reg_names[reg]);
+                    ne_fprintf(f, "%s", tcg_target_reg_names[reg]);
 #endif
                 } else if (TCG_TARGET_NB_REGS <= 32) {
-                    qemu_log("%#x", (uint32_t)set);
+                    ne_fprintf(f, "0x%x", (uint32_t)set);
                 } else {
-                    qemu_log("%#" PRIx64, (uint64_t)set);
+                    ne_fprintf(f, "0x%" PRIx64, (uint64_t)set);
                 }
             }
         }
 
-        qemu_log("\n");
+        putc('\n', f);
     }
 }
 
@@ -2389,6 +2330,7 @@ static void la_bb_end(TCGContext *s, int ng, int nt)
             state = TS_DEAD | TS_MEM;
             break;
         case TEMP_NORMAL:
+        case TEMP_EBB:
         case TEMP_CONST:
             state = TS_DEAD;
             break;
@@ -2416,8 +2358,9 @@ static void la_global_sync(TCGContext *s, int ng)
 }
 
 /*
- * liveness analysis: conditional branch: all temps are dead,
- * globals and local temps should be synced.
+ * liveness analysis: conditional branch: all temps are dead unless
+ * explicitly live-across-conditional-branch, globals and local temps
+ * should be synced.
  */
 static void la_bb_sync(TCGContext *s, int ng, int nt)
 {
@@ -2438,6 +2381,7 @@ static void la_bb_sync(TCGContext *s, int ng, int nt)
         case TEMP_NORMAL:
             s->temps[i].state = TS_DEAD;
             break;
+        case TEMP_EBB:
         case TEMP_CONST:
             continue;
         default:
@@ -2813,6 +2757,7 @@ static bool liveness_pass_2(TCGContext *s)
             TCGTemp *dts = tcg_temp_alloc(s);
             dts->type = its->type;
             dts->base_type = its->base_type;
+            dts->kind = TEMP_EBB;
             its->state_ptr = dts;
         } else {
             its->state_ptr = NULL;
@@ -3122,6 +3067,7 @@ static void temp_free_or_dead(TCGContext *s, TCGTemp *ts, int free_or_dead)
         new_type = TEMP_VAL_MEM;
         break;
     case TEMP_NORMAL:
+    case TEMP_EBB:
         new_type = free_or_dead < 0 ? TEMP_VAL_MEM : TEMP_VAL_DEAD;
         break;
     case TEMP_CONST:
@@ -3368,6 +3314,7 @@ static void tcg_reg_alloc_bb_end(TCGContext *s, TCGRegSet allocated_regs)
             temp_save(s, ts, allocated_regs);
             break;
         case TEMP_NORMAL:
+        case TEMP_EBB:
             /* The liveness analysis already ensures that temps are dead.
                Keep an tcg_debug_assert for safety. */
             tcg_debug_assert(ts->val_type == TEMP_VAL_DEAD);
@@ -3385,8 +3332,9 @@ static void tcg_reg_alloc_bb_end(TCGContext *s, TCGRegSet allocated_regs)
 }
 
 /*
- * At a conditional branch, we assume all temporaries are dead and
- * all globals and local temps are synced to their location.
+ * At a conditional branch, we assume all temporaries are dead unless
+ * explicitly live-across-conditional-branch; all globals and local
+ * temps are synced to their location.
  */
 static void tcg_reg_alloc_cbranch(TCGContext *s, TCGRegSet allocated_regs)
 {
@@ -3405,6 +3353,7 @@ static void tcg_reg_alloc_cbranch(TCGContext *s, TCGRegSet allocated_regs)
         case TEMP_NORMAL:
             tcg_debug_assert(ts->val_type == TEMP_VAL_DEAD);
             break;
+        case TEMP_EBB:
         case TEMP_CONST:
             break;
         default:
@@ -3613,7 +3562,7 @@ static void tcg_reg_alloc_dup(TCGContext *s, const TCGOp *op)
         /* fall through */
 
     case TEMP_VAL_MEM:
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
         endian_fixup = itype == TCG_TYPE_I32 ? 4 : 8;
         endian_fixup -= 1 << vece;
 #else
@@ -3894,7 +3843,7 @@ static bool tcg_reg_alloc_dup2(TCGContext *s, const TCGOp *op)
         if (!itsh->mem_coherent) {
             temp_sync(s, itsh, s->reserved_regs, 0, 0);
         }
-#ifdef HOST_WORDS_BIGENDIAN
+#if HOST_BIG_ENDIAN
         TCGTemp *its = itsh;
 #else
         TCGTemp *its = itsl;
@@ -4194,7 +4143,7 @@ static void sync_global(TCGContext *s, TCGOp *op)
     tcg_debug_assert((ts->val_type != TEMP_VAL_REG) || (ts->mem_coherent));
 }
 
-int tcg_gen_code(TCGContext *s, TranslationBlock *tb)
+int tcg_gen_code(TCGContext *s, TranslationBlock *tb, target_ulong pc_start)
 {
 #ifdef CONFIG_PROFILER
     TCGProfile *prof = &s->prof;
@@ -4224,12 +4173,14 @@ int tcg_gen_code(TCGContext *s, TranslationBlock *tb)
 
 #ifdef DEBUG_DISAS
     if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP)
-                 && qemu_log_in_addr_range(tb->pc))) {
-        FILE *logfile = qemu_log_lock();
-        qemu_log("OP:\n");
-        tcg_dump_ops(s, false);
-        qemu_log("\n");
-        qemu_log_unlock(logfile);
+                 && qemu_log_in_addr_range(pc_start))) {
+        FILE *logfile = qemu_log_trylock();
+        if (logfile) {
+            fprintf(logfile, "OP:\n");
+            tcg_dump_ops(s, logfile, false);
+            fprintf(logfile, "\n");
+            qemu_log_unlock(logfile);
+        }
     }
 #endif
 
@@ -4269,12 +4220,14 @@ int tcg_gen_code(TCGContext *s, TranslationBlock *tb)
     if (s->nb_indirects > 0) {
 #ifdef DEBUG_DISAS
         if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP_IND)
-                     && qemu_log_in_addr_range(tb->pc))) {
-            FILE *logfile = qemu_log_lock();
-            qemu_log("OP before indirect lowering:\n");
-            tcg_dump_ops(s, false);
-            qemu_log("\n");
-            qemu_log_unlock(logfile);
+                     && qemu_log_in_addr_range(pc_start))) {
+            FILE *logfile = qemu_log_trylock();
+            if (logfile) {
+                fprintf(logfile, "OP before indirect lowering:\n");
+                tcg_dump_ops(s, logfile, false);
+                fprintf(logfile, "\n");
+                qemu_log_unlock(logfile);
+            }
         }
 #endif
         /* Replace indirect temps with direct temps.  */
@@ -4290,14 +4243,28 @@ int tcg_gen_code(TCGContext *s, TranslationBlock *tb)
 
 #ifdef DEBUG_DISAS
     if (unlikely(qemu_loglevel_mask(CPU_LOG_TB_OP_OPT)
-                 && qemu_log_in_addr_range(tb->pc))) {
-        FILE *logfile = qemu_log_lock();
-        qemu_log("OP after optimization and liveness analysis:\n");
-        tcg_dump_ops(s, true);
-        qemu_log("\n");
-        qemu_log_unlock(logfile);
+                 && qemu_log_in_addr_range(pc_start))) {
+        FILE *logfile = qemu_log_trylock();
+        if (logfile) {
+            fprintf(logfile, "OP after optimization and liveness analysis:\n");
+            tcg_dump_ops(s, logfile, true);
+            fprintf(logfile, "\n");
+            qemu_log_unlock(logfile);
+        }
     }
 #endif
+
+    /* Initialize goto_tb jump offsets. */
+    tb->jmp_reset_offset[0] = TB_JMP_RESET_OFFSET_INVALID;
+    tb->jmp_reset_offset[1] = TB_JMP_RESET_OFFSET_INVALID;
+    tcg_ctx->tb_jmp_reset_offset = tb->jmp_reset_offset;
+    if (TCG_TARGET_HAS_direct_jump) {
+        tcg_ctx->tb_jmp_insn_offset = tb->jmp_target_arg;
+        tcg_ctx->tb_jmp_target_addr = NULL;
+    } else {
+        tcg_ctx->tb_jmp_insn_offset = NULL;
+        tcg_ctx->tb_jmp_target_addr = tb->jmp_target_arg;
+    }
 
     tcg_reg_alloc_start(s);
 
@@ -4732,7 +4699,8 @@ static void tcg_register_jit_int(const void *buf_ptr, size_t buf_size,
     /* Enable this block to be able to debug the ELF image file creation.
        One can use readelf, objdump, or other inspection utilities.  */
     {
-        FILE *f = fopen("/tmp/qemu.jit", "w+b");
+        g_autofree char *jit = g_strdup_printf("%s/qemu.jit", g_get_tmp_dir());
+        FILE *f = fopen(jit, "w+b");
         if (f) {
             if (fwrite(img, img_size, 1, f) != img_size) {
                 /* Avoid stupid unused return value warning for fwrite.  */

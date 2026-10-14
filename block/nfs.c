@@ -223,7 +223,7 @@ static void nfs_process_write(void *arg)
     qemu_mutex_unlock(&client->mutex);
 }
 
-static void nfs_co_init_task(BlockDriverState *bs, NFSRPC *task)
+static void coroutine_fn nfs_co_init_task(BlockDriverState *bs, NFSRPC *task)
 {
     *task = (NFSRPC) {
         .co             = qemu_coroutine_self(),
@@ -418,7 +418,11 @@ static int64_t nfs_client_open(NFSClient *client, BlockdevOptionsNfs *opts,
                                int flags, int open_flags, Error **errp)
 {
     int64_t ret = -EINVAL;
+#ifdef _WIN32
+    struct __stat64 st;
+#else
     struct stat st;
+#endif
     char *file = NULL, *strp = NULL;
 
     qemu_mutex_init(&client->mutex);
@@ -781,7 +785,11 @@ static int nfs_reopen_prepare(BDRVReopenState *state,
                               BlockReopenQueue *queue, Error **errp)
 {
     NFSClient *client = state->bs->opaque;
+#ifdef _WIN32
+    struct __stat64 st;
+#else
     struct stat st;
+#endif
     int ret = 0;
 
     if (state->flags & BDRV_O_RDWR && bdrv_is_read_only(state->bs)) {

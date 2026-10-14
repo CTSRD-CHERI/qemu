@@ -40,7 +40,7 @@ union fpr_t {
  *define FP_ENDIAN_IDX to access the same location
  * in the fpr_t union regardless of the host endianness
  */
-#if defined(HOST_WORDS_BIGENDIAN)
+#if HOST_BIG_ENDIAN
 #  define FP_ENDIAN_IDX 1
 #else
 #  define FP_ENDIAN_IDX 0
@@ -1082,6 +1082,7 @@ typedef struct CPUArchState {
  */
     uint64_t CP0_WatchHi[8];
 #define CP0WH_ASID 16
+#define CP0WH_M    31
 /*
  * CP0 Register 20
  */
@@ -1157,9 +1158,9 @@ typedef struct CPUArchState {
     uint32_t hflags;    /* CPU State */
     /* TMASK defines different execution modes */
 #ifdef TARGET_CHERI
-#define MIPS_HFLAG_TMASK (0x1F5807FF | MIPS_HFLAG_COP2X)
+#define MIPS_HFLAG_TMASK (0x3F5807FF | MIPS_HFLAG_COP2X)
 #else
-#define MIPS_HFLAG_TMASK  0x1F5807FF
+#define MIPS_HFLAG_TMASK  0x3F5807FF
 #endif /* TARGET_CHERI */
 #define MIPS_HFLAG_MODE   0x00007 /* execution modes                    */
     /*
@@ -1223,7 +1224,7 @@ typedef struct CPUArchState {
 #define MIPS_HFLAG_ITC_CACHE  0x8000000 /* CACHE instr. operates on ITC tag */
 #define MIPS_HFLAG_ERL   0x10000000 /* error level flag */
 #ifdef TARGET_CHERI
-#define MIPS_HFLAG_COP2X 0x20000000 /* CHERI/CP2 enabled              */
+#define MIPS_HFLAG_COP2X 0x40000000 /* CHERI/CP2 enabled              */
 #endif /* TARGET_CHERI */
     target_ulong btarget;        /* Jump / branch target               */
     target_ulong bcond;          /* Branch condition (if needed)       */
@@ -1387,8 +1388,9 @@ typedef enum {
     EXCP_MSAFPE,
     EXCP_TLBXI,
     EXCP_TLBRI,
+    EXCP_SEMIHOST,
 
-    EXCP_LAST = EXCP_TLBRI,
+    EXCP_LAST = EXCP_SEMIHOST,
 } MipsExcp;
 
 /*

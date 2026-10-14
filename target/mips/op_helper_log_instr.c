@@ -321,7 +321,7 @@ static void simple_dump_state(CPUMIPSState *env, FILE *f,
 
 void helper_mtc0_dumpstate(CPUMIPSState *env, target_ulong arg1)
 {
-    FILE *logfile = qemu_log_lock();
+    FILE *logfile = qemu_log_trylock();
     simple_dump_state(env, logfile ? logfile : stderr, fprintf);
     qemu_log_unlock(logfile);
 }

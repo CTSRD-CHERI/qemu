@@ -489,7 +489,7 @@ void hmp_nbd_server_stop(Monitor *mon, const QDict *qdict)
     hmp_handle_error(mon, err);
 }
 
-void hmp_block_resize(Monitor *mon, const QDict *qdict)
+void coroutine_fn hmp_block_resize(Monitor *mon, const QDict *qdict)
 {
     const char *device = qdict_get_str(qdict, "device");
     int64_t size = qdict_get_int(qdict, "size");
@@ -638,16 +638,16 @@ static void print_block_info(Monitor *mon, BlockInfo *info,
     assert(!info || !info->has_inserted || info->inserted == inserted);
 
     if (info && *info->device) {
-        monitor_printf(mon, "%s", info->device);
+        monitor_puts(mon, info->device);
         if (inserted && inserted->has_node_name) {
             monitor_printf(mon, " (%s)", inserted->node_name);
         }
     } else {
         assert(info || inserted);
-        monitor_printf(mon, "%s",
-                       inserted && inserted->has_node_name ? inserted->node_name
-                       : info && info->has_qdev ? info->qdev
-                       : "<anonymous>");
+        monitor_puts(mon,
+                     inserted && inserted->has_node_name ? inserted->node_name
+                     : info && info->has_qdev ? info->qdev
+                     : "<anonymous>");
     }
 
     if (inserted) {

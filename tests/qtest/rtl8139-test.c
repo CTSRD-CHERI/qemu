@@ -11,7 +11,6 @@
 #include "libqtest-single.h"
 #include "libqos/pci-pc.h"
 #include "qemu/timer.h"
-#include "qemu-common.h"
 
 static int verbosity_level;
 
