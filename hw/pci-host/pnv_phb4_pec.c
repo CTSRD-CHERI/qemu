@@ -8,7 +8,6 @@
  */
 #include "qemu/osdep.h"
 #include "qapi/error.h"
-#include "qemu-common.h"
 #include "qemu/log.h"
 #include "target/ppc/cpu.h"
 #include "hw/ppc/fdt.h"
@@ -116,8 +115,7 @@ static void pnv_pec_default_phb_realize(PnvPhb4PecState *pec,
                                         int stack_no,
                                         Error **errp)
 {
-    PnvPhb4PecClass *pecc = PNV_PHB4_PEC_GET_CLASS(pec);
-    PnvPHB4 *phb = PNV_PHB4(qdev_new(pecc->phb_type));
+    PnvPHB *phb = PNV_PHB(qdev_new(TYPE_PNV_PHB));
     int phb_id = pnv_phb4_pec_get_phb_id(pec, stack_no);
 
     object_property_add_child(OBJECT(pec), "phb[*]", OBJECT(phb));
@@ -131,9 +129,6 @@ static void pnv_pec_default_phb_realize(PnvPhb4PecState *pec,
     if (!sysbus_realize(SYS_BUS_DEVICE(phb), errp)) {
         return;
     }
-
-    /* Add a single Root port if running with defaults */
-    pnv_phb_attach_root_port(PCI_HOST_BRIDGE(phb), pecc->rp_model);
 }
 
 static void pnv_pec_realize(DeviceState *dev, Error **errp)
@@ -151,8 +146,10 @@ static void pnv_pec_realize(DeviceState *dev, Error **errp)
     pec->num_phbs = pecc->num_phbs[pec->index];
 
     /* Create PHBs if running with defaults */
-    for (i = 0; i < pec->num_phbs; i++) {
-        pnv_pec_default_phb_realize(pec, i, errp);
+    if (defaults_enabled()) {
+        for (i = 0; i < pec->num_phbs; i++) {
+            pnv_pec_default_phb_realize(pec, i, errp);
+        }
     }
 
     /* Initialize the XSCOM regions for the PEC registers */
@@ -216,11 +213,11 @@ static int pnv_pec_dt_xscom(PnvXScomInterface *dev, void *fdt,
 }
 
 static Property pnv_pec_properties[] = {
-        DEFINE_PROP_UINT32("index", PnvPhb4PecState, index, 0),
-        DEFINE_PROP_UINT32("chip-id", PnvPhb4PecState, chip_id, 0),
-        DEFINE_PROP_LINK("chip", PnvPhb4PecState, chip, TYPE_PNV_CHIP,
-                         PnvChip *),
-        DEFINE_PROP_END_OF_LIST(),
+    DEFINE_PROP_UINT32("index", PnvPhb4PecState, index, 0),
+    DEFINE_PROP_UINT32("chip-id", PnvPhb4PecState, chip_id, 0),
+    DEFINE_PROP_LINK("chip", PnvPhb4PecState, chip, TYPE_PNV_CHIP,
+                     PnvChip *),
+    DEFINE_PROP_END_OF_LIST(),
 };
 
 static uint32_t pnv_pec_xscom_pci_base(PnvPhb4PecState *pec)
@@ -265,7 +262,6 @@ static void pnv_pec_class_init(ObjectClass *klass, void *data)
     pecc->version = PNV_PHB4_VERSION;
     pecc->phb_type = TYPE_PNV_PHB4;
     pecc->num_phbs = pnv_pec_num_phbs;
-    pecc->rp_model = TYPE_PNV_PHB4_ROOT_PORT;
 }
 
 static const TypeInfo pnv_pec_type_info = {
@@ -318,7 +314,6 @@ static void pnv_phb5_pec_class_init(ObjectClass *klass, void *data)
     pecc->version = PNV_PHB5_VERSION;
     pecc->phb_type = TYPE_PNV_PHB5;
     pecc->num_phbs = pnv_phb5_pec_num_stacks;
-    pecc->rp_model = TYPE_PNV_PHB5_ROOT_PORT;
 }
 
 static const TypeInfo pnv_phb5_pec_type_info = {

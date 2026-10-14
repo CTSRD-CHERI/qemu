@@ -41,7 +41,7 @@ build-system-ubuntu:
     job: amd64-ubuntu2004-container
   variables:
     IMAGE: ubuntu2004
-    CONFIGURE_ARGS: --enable-docs --enable-fdt=system --enable-slirp=system
+    CONFIGURE_ARGS: --enable-docs --enable-fdt=system --enable-capstone
     TARGETS: aarch64-softmmu alpha-softmmu cris-softmmu hppa-softmmu
       microblazeel-softmmu mips64el-softmmu
     MAKE_CHECK_ARGS: check-build
@@ -109,7 +109,8 @@ crash-test-debian:
     IMAGE: debian-amd64
   script:
     - cd build
-    - scripts/device-crash-test -q ./qemu-system-i386
+    - make check-venv
+    - tests/venv/bin/python3 scripts/device-crash-test -q ./qemu-system-i386
 
 build-system-fedora:
   extends: .native_build_job_template
@@ -118,7 +119,7 @@ build-system-fedora:
   variables:
     IMAGE: fedora
     CONFIGURE_ARGS: --disable-gcrypt --enable-nettle --enable-docs
-             --enable-fdt=system --enable-slirp=system --enable-capstone=system
+             --enable-fdt=system --enable-slirp --enable-capstone
     TARGETS: tricore-softmmu microblaze-softmmu mips-softmmu
       xtensa-softmmu m68k-softmmu riscv32-softmmu ppc-softmmu sparc64-softmmu
     MAKE_CHECK_ARGS: check-build
@@ -154,8 +155,9 @@ crash-test-fedora:
     IMAGE: fedora
   script:
     - cd build
-    - scripts/device-crash-test -q ./qemu-system-ppc
-    - scripts/device-crash-test -q ./qemu-system-riscv32
+    - make check-venv
+    - tests/venv/bin/python3 scripts/device-crash-test -q ./qemu-system-ppc
+    - tests/venv/bin/python3 scripts/device-crash-test -q ./qemu-system-riscv32
 
 build-system-centos:
   extends: .native_build_job_template
@@ -165,6 +167,7 @@ build-system-centos:
     IMAGE: centos8
     CONFIGURE_ARGS: --disable-nettle --enable-gcrypt --enable-fdt=system
       --enable-modules --enable-trace-backends=dtrace --enable-docs
+      --enable-vfio-user-server
     TARGETS: ppc64-softmmu or1k-softmmu s390x-softmmu
       x86_64-softmmu rx-softmmu sh4-softmmu nios2-softmmu
     MAKE_CHECK_ARGS: check-build
@@ -324,6 +327,7 @@ clang-user:
   extends: .native_build_job_template
   needs:
     job: amd64-debian-user-cross-container
+  timeout: 70m
   variables:
     IMAGE: debian-all-test-cross
     CONFIGURE_ARGS: --cc=clang --cxx=clang++ --disable-system
@@ -335,10 +339,8 @@ clang-user:
 # On gitlab runners, default value sometimes end up calling 2 lds concurrently and
 # triggers an Out-Of-Memory error
 #
-# Since slirp callbacks are used in QEMU Timers, slirp needs to be compiled together
-# with QEMU and linked as a static library to avoid false positives in CFI checks.
-# This can be accomplished by using -enable-slirp=git, which avoids the use of
-# a system-wide version of the library
+# Since slirp callbacks are used in QEMU Timers, we cannot use libslirp with
+# CFI builds, and thus have to disable it here.
 #
 # Split in three sets of build/check/avocado to limit the execution time of each
 # job
@@ -351,20 +353,18 @@ build-cfi-aarch64:
     AR: llvm-ar
     IMAGE: fedora
     CONFIGURE_ARGS: --cc=clang --cxx=clang++ --enable-cfi --enable-cfi-debug
-      --enable-safe-stack --enable-slirp=git
+      --enable-safe-stack --disable-slirp
     TARGETS: aarch64-softmmu
     MAKE_CHECK_ARGS: check-build
-  timeout: 70m
+    # FIXME: This job is often failing, likely due to out-of-memory problems in
+    # the constrained containers of the shared runners. Thus this is marked as
+    # skipped until the situation has been solved.
+    QEMU_JOB_SKIPPED: 1
+  timeout: 90m
   artifacts:
     expire_in: 2 days
     paths:
       - build
-  rules:
-    # FIXME: This job is often failing, likely due to out-of-memory problems in
-    # the constrained containers of the shared runners. Thus this is marked as
-    # manual until the situation has been solved.
-    - when: manual
-      allow_failure: true
 
 check-cfi-aarch64:
   extends: .native_test_job_template
@@ -393,20 +393,18 @@ build-cfi-ppc64-s390x:
     AR: llvm-ar
     IMAGE: fedora
     CONFIGURE_ARGS: --cc=clang --cxx=clang++ --enable-cfi --enable-cfi-debug
-      --enable-safe-stack --enable-slirp=git
+      --enable-safe-stack --disable-slirp
     TARGETS: ppc64-softmmu s390x-softmmu
     MAKE_CHECK_ARGS: check-build
-  timeout: 70m
+    # FIXME: This job is often failing, likely due to out-of-memory problems in
+    # the constrained containers of the shared runners. Thus this is marked as
+    # skipped until the situation has been solved.
+    QEMU_JOB_SKIPPED: 1
+  timeout: 80m
   artifacts:
     expire_in: 2 days
     paths:
       - build
-  rules:
-    # FIXME: This job is often failing, likely due to out-of-memory problems in
-    # the constrained containers of the shared runners. Thus this is marked as
-    # manual until the situation has been solved.
-    - when: manual
-      allow_failure: true
 
 check-cfi-ppc64-s390x:
   extends: .native_test_job_template
@@ -435,7 +433,7 @@ build-cfi-x86_64:
     AR: llvm-ar
     IMAGE: fedora
     CONFIGURE_ARGS: --cc=clang --cxx=clang++ --enable-cfi --enable-cfi-debug
-      --enable-safe-stack --enable-slirp=git
+      --enable-safe-stack --disable-slirp
     TARGETS: x86_64-softmmu
     MAKE_CHECK_ARGS: check-build
   timeout: 70m
@@ -469,7 +467,7 @@ tsan-build:
   variables:
     IMAGE: ubuntu2004
     CONFIGURE_ARGS: --enable-tsan --cc=clang-10 --cxx=clang++-10
-          --enable-trace-backends=ust --enable-fdt=system --enable-slirp=system
+          --enable-trace-backends=ust --enable-fdt=system --disable-slirp
     TARGETS: x86_64-softmmu ppc64-softmmu riscv64-softmmu x86_64-linux-user
     MAKE_CHECK_ARGS: bench V=1
 
@@ -496,7 +494,17 @@ check-gprof-gcov:
     IMAGE: ubuntu2004
     MAKE_CHECK_ARGS: check
   after_script:
-    - ${CI_PROJECT_DIR}/scripts/ci/coverage-summary.sh
+    - cd build
+    - gcovr --xml-pretty --exclude-unreachable-branches --print-summary
+        -o coverage.xml --root ${CI_PROJECT_DIR} . *.p
+  coverage: /^\s*lines:\s*\d+.\d+\%/
+  artifacts:
+    name: ${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}-${CI_COMMIT_SHA}
+    expire_in: 2 days
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: build/coverage.xml
 
 build-oss-fuzz:
   extends: .native_build_job_template
@@ -571,13 +579,13 @@ build-without-default-features:
       --disable-capstone
       --disable-pie
       --disable-qom-cast-debug
-      --disable-slirp
       --disable-strip
     TARGETS: avr-softmmu i386-softmmu mips64-softmmu s390x-softmmu sh4-softmmu
       sparc64-softmmu hexagon-linux-user i386-linux-user s390x-linux-user
     MAKE_CHECK_ARGS: check-unit check-qtest SPEED=slow
 
 build-libvhost-user:
+  extends: .base_job_template
   stage: build
   image: $CI_REGISTRY_IMAGE/qemu/fedora:latest
   needs:
@@ -594,10 +602,13 @@ build-tools-and-docs-debian:
   extends: .native_build_job_template
   needs:
     job: amd64-debian-container
+    # when running on 'master' we use pre-existing container
+    optional: true
   variables:
     IMAGE: debian-amd64
-    MAKE_CHECK_ARGS: check-unit check-softfloat ctags TAGS cscope
+    MAKE_CHECK_ARGS: check-unit ctags TAGS cscope
     CONFIGURE_ARGS: --disable-system --disable-user --enable-docs --enable-tools
+    QEMU_JOB_PUBLISH: 1
   artifacts:
     expire_in: 2 days
     paths:
@@ -617,6 +628,7 @@ build-tools-and-docs-debian:
 # that users can see the results of their commits, regardless
 # of what topic branch they're currently using
 pages:
+  extends: .base_job_template
   image: $CI_REGISTRY_IMAGE/qemu/debian-amd64:latest
   stage: test
   needs:
@@ -634,10 +646,5 @@ pages:
   artifacts:
     paths:
       - public
-  rules:
-    - if: '$CI_PROJECT_NAMESPACE == "qemu-project" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
-      when: on_success
-    - if: '$CI_PROJECT_NAMESPACE == "qemu-project"'
-      when: never
-    - if: '$CI_PROJECT_NAMESPACE != "qemu-project"'
-      when: on_success
+  variables:
+    QEMU_JOB_PUBLISH: 1

@@ -1267,6 +1267,15 @@ void mips_cpu_do_interrupt(CPUState *cs)
     }
     offset = 0x180;
     switch (cs->exception_index) {
+    case EXCP_SEMIHOST:
+        cs->exception_index = EXCP_NONE;
+        mips_semihosting(env);
+#ifdef TARGET_CHERI
+        env->active_tc.PCC._cr_cursor+= env->error_code;
+#else
+        env->active_tc.PC += env->error_code;
+#endif
+        return;
     case EXCP_DSS:
         env->CP0_Debug |= 1 << CP0DB_DSS;
         /*

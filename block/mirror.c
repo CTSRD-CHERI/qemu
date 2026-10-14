@@ -73,7 +73,7 @@ typedef struct MirrorBlockJob {
 
     uint64_t last_pause_ns;
     unsigned long *in_flight_bitmap;
-    int in_flight;
+    unsigned in_flight;
     int64_t bytes_in_flight;
     QTAILQ_HEAD(, MirrorOp) ops_in_flight;
     int ret;
@@ -82,6 +82,7 @@ typedef struct MirrorBlockJob {
     int max_iov;
     bool initial_zeroing_ongoing;
     int in_active_write_counter;
+    int64_t active_write_bytes_in_flight;
     bool prepared;
     bool in_drain;
 } MirrorBlockJob;
@@ -304,31 +305,26 @@ static int mirror_cow_align(MirrorBlockJob *s, int64_t *offset,
 }
 
 static inline void coroutine_fn
-mirror_wait_for_any_operation(MirrorBlockJob *s, bool active)
+mirror_wait_for_free_in_flight_slot(MirrorBlockJob *s)
 {
     MirrorOp *op;
 
     QTAILQ_FOREACH(op, &s->ops_in_flight, next) {
-        /* Do not wait on pseudo ops, because it may in turn wait on
+        /*
+         * Do not wait on pseudo ops, because it may in turn wait on
          * some other operation to start, which may in fact be the
          * caller of this function.  Since there is only one pseudo op
          * at any given time, we will always find some real operation
-         * to wait on. */
-        if (!op->is_pseudo_op && op->is_in_flight &&
-            op->is_active_write == active)
-        {
+         * to wait on.
+         * Also, do not wait on active operations, because they do not
+         * use up in-flight slots.
+         */
+        if (!op->is_pseudo_op && op->is_in_flight && !op->is_active_write) {
             qemu_co_queue_wait(&op->waiting_requests, NULL);
             return;
         }
     }
     abort();
-}
-
-static inline void coroutine_fn
-mirror_wait_for_free_in_flight_slot(MirrorBlockJob *s)
-{
-    /* Only non-active operations use up in-flight slots */
-    mirror_wait_for_any_operation(s, false);
 }
 
 /* Perform a mirror copy operation.
@@ -494,6 +490,13 @@ static uint64_t coroutine_fn mirror_iteration(MirrorBlockJob *s)
     }
     bdrv_dirty_bitmap_unlock(s->dirty_bitmap);
 
+    /*
+     * Wait for concurrent requests to @offset.  The next loop will limit the
+     * copied area based on in_flight_bitmap so we only copy an area that does
+     * not overlap with concurrent in-flight requests.  Still, we would like to
+     * copy something, so wait until there are at least no more requests to the
+     * very beginning of the area.
+     */
     mirror_wait_on_conflicts(NULL, s, offset, 1);
 
     job_pause_point(&s->common.job);
@@ -894,6 +897,7 @@ static int coroutine_fn mirror_run(Job *job, Error **errp)
     BlockDriverState *bs = s->mirror_top_bs->backing->bs;
     BlockDriverState *target_bs = blk_bs(s->target);
     bool need_drain = true;
+    BlockDeviceIoStatus iostatus;
     int64_t length;
     int64_t target_length;
     BlockDriverInfo bdi;
@@ -921,8 +925,8 @@ static int coroutine_fn mirror_run(Job *job, Error **errp)
      * active layer. */
     if (s->base == blk_bs(s->target)) {
         if (s->bdev_length > target_length) {
-            ret = blk_truncate(s->target, s->bdev_length, false,
-                               PREALLOC_MODE_OFF, 0, NULL);
+            ret = blk_co_truncate(s->target, s->bdev_length, false,
+                                  PREALLOC_MODE_OFF, 0, NULL);
             if (ret < 0) {
                 goto immediate_exit;
             }
@@ -987,12 +991,6 @@ static int coroutine_fn mirror_run(Job *job, Error **errp)
         int64_t cnt, delta;
         bool should_complete;
 
-        /* Do not start passive operations while there are active
-         * writes in progress */
-        while (s->in_active_write_counter) {
-            mirror_wait_for_any_operation(s, true);
-        }
-
         if (s->ret < 0) {
             ret = s->ret;
             goto immediate_exit;
@@ -1009,15 +1007,20 @@ static int coroutine_fn mirror_run(Job *job, Error **errp)
         /* cnt is the number of dirty bytes remaining and s->bytes_in_flight is
          * the number of bytes currently being processed; together those are
          * the current remaining operation length */
-        job_progress_set_remaining(&s->common.job, s->bytes_in_flight + cnt);
+        job_progress_set_remaining(&s->common.job,
+                                   s->bytes_in_flight + cnt +
+                                   s->active_write_bytes_in_flight);
 
         /* Note that even when no rate limit is applied we need to yield
          * periodically with no pending I/O so that bdrv_drain_all() returns.
          * We do so every BLKOCK_JOB_SLICE_TIME nanoseconds, or when there is
          * an error, or when the source is clean, whichever comes first. */
         delta = qemu_clock_get_ns(QEMU_CLOCK_REALTIME) - s->last_pause_ns;
+        WITH_JOB_LOCK_GUARD() {
+            iostatus = s->common.iostatus;
+        }
         if (delta < BLOCK_JOB_SLICE_TIME &&
-            s->common.iostatus == BLOCK_DEVICE_IO_STATUS_OK) {
+            iostatus == BLOCK_DEVICE_IO_STATUS_OK) {
             if (s->in_flight >= MAX_IN_FLIGHT || s->buf_free_count == 0 ||
                 (cnt == 0 && s->in_flight > 0)) {
                 trace_mirror_yield(s, cnt, s->buf_free_count, s->in_flight);
@@ -1067,6 +1070,10 @@ static int coroutine_fn mirror_run(Job *job, Error **errp)
 
             s->in_drain = true;
             bdrv_drained_begin(bs);
+
+            /* Must be zero because we are drained */
+            assert(s->in_active_write_counter == 0);
+
             cnt = bdrv_get_dirty_count(s->dirty_bitmap);
             if (cnt > 0 || mirror_flush(s) < 0) {
                 bdrv_drained_end(bs);
@@ -1152,8 +1159,10 @@ static void mirror_complete(Job *job, Error **errp)
     s->should_complete = true;
 
     /* If the job is paused, it will be re-entered when it is resumed */
-    if (!job->paused) {
-        job_enter(job);
+    WITH_JOB_LOCK_GUARD() {
+        if (!job->paused) {
+            job_enter_cond_locked(job, NULL);
+        }
     }
 }
 
@@ -1173,8 +1182,11 @@ static bool mirror_drained_poll(BlockJob *job)
      * from one of our own drain sections, to avoid a deadlock waiting for
      * ourselves.
      */
-    if (!s->common.job.paused && !job_is_cancelled(&job->job) && !s->in_drain) {
-        return true;
+    WITH_JOB_LOCK_GUARD() {
+        if (!s->common.job.paused && !job_is_cancelled_locked(&job->job)
+            && !s->in_drain) {
+            return true;
+        }
     }
 
     return !!s->in_flight;
@@ -1297,6 +1309,7 @@ do_sync_target_write(MirrorBlockJob *job, MirrorMethod method,
     }
 
     job_progress_increase_remaining(&job->common.job, bytes);
+    job->active_write_bytes_in_flight += bytes;
 
     switch (method) {
     case MIRROR_METHOD_COPY:
@@ -1318,6 +1331,7 @@ do_sync_target_write(MirrorBlockJob *job, MirrorMethod method,
         abort();
     }
 
+    job->active_write_bytes_in_flight -= bytes;
     if (ret >= 0) {
         job_progress_update(&job->common.job, bytes);
     } else {
@@ -1366,6 +1380,19 @@ static MirrorOp *coroutine_fn active_write_prepare(MirrorBlockJob *s,
 
     s->in_active_write_counter++;
 
+    /*
+     * Wait for concurrent requests affecting the area.  If there are already
+     * running requests that are copying off now-to-be stale data in the area,
+     * we must wait for them to finish before we begin writing fresh data to the
+     * target so that the write operations appear in the correct order.
+     * Note that background requests (see mirror_iteration()) in contrast only
+     * wait for conflicting requests at the start of the dirty area, and then
+     * (based on the in_flight_bitmap) truncate the area to copy so it will not
+     * conflict with any requests beyond that.  For active writes, however, we
+     * cannot truncate that area.  The request from our parent must be blocked
+     * until the area is copied in full.  Therefore, we must wait for the whole
+     * area to become free of concurrent requests.
+     */
     mirror_wait_on_conflicts(op, s, offset, bytes);
 
     bitmap_set(s->in_flight_bitmap, start_chunk, end_chunk - start_chunk);
@@ -1411,11 +1438,13 @@ static int coroutine_fn bdrv_mirror_top_do_write(BlockDriverState *bs,
     MirrorOp *op = NULL;
     MirrorBDSOpaque *s = bs->opaque;
     int ret = 0;
-    bool copy_to_target;
+    bool copy_to_target = false;
 
-    copy_to_target = s->job->ret >= 0 &&
-                     !job_is_cancelled(&s->job->common.job) &&
-                     s->job->copy_mode == MIRROR_COPY_MODE_WRITE_BLOCKING;
+    if (s->job) {
+        copy_to_target = s->job->ret >= 0 &&
+                         !job_is_cancelled(&s->job->common.job) &&
+                         s->job->copy_mode == MIRROR_COPY_MODE_WRITE_BLOCKING;
+    }
 
     if (copy_to_target) {
         op = active_write_prepare(s->job, offset, bytes);
@@ -1460,11 +1489,13 @@ static int coroutine_fn bdrv_mirror_top_pwritev(BlockDriverState *bs,
     QEMUIOVector bounce_qiov;
     void *bounce_buf;
     int ret = 0;
-    bool copy_to_target;
+    bool copy_to_target = false;
 
-    copy_to_target = s->job->ret >= 0 &&
-                     !job_is_cancelled(&s->job->common.job) &&
-                     s->job->copy_mode == MIRROR_COPY_MODE_WRITE_BLOCKING;
+    if (s->job) {
+        copy_to_target = s->job->ret >= 0 &&
+                         !job_is_cancelled(&s->job->common.job) &&
+                         s->job->copy_mode == MIRROR_COPY_MODE_WRITE_BLOCKING;
+    }
 
     if (copy_to_target) {
         /* The guest might concurrently modify the data to write; but
@@ -1477,6 +1508,8 @@ static int coroutine_fn bdrv_mirror_top_pwritev(BlockDriverState *bs,
         qemu_iovec_init(&bounce_qiov, 1);
         qemu_iovec_add(&bounce_qiov, bounce_buf, bytes);
         qiov = &bounce_qiov;
+
+        flags &= ~BDRV_REQ_REGISTERED_BUF;
     }
 
     ret = bdrv_mirror_top_do_write(bs, MIRROR_METHOD_COPY, offset, bytes, qiov,
@@ -1578,6 +1611,7 @@ static BlockDriver bdrv_mirror_top = {
     .bdrv_child_perm            = bdrv_mirror_top_child_perm,
 
     .is_filter                  = true,
+    .filtered_child_is_backing  = true,
 };
 
 static BlockJob *mirror_start_job(

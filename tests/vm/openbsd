@@ -22,8 +22,8 @@ class OpenBSDVM(basevm.BaseVM):
     name = "openbsd"
     arch = "x86_64"
 
-    link = "https://cdn.openbsd.org/pub/OpenBSD/7.0/amd64/install70.iso"
-    csum = "1882f9a23c9800e5dba3dbd2cf0126f552605c915433ef4c5bb672610a4ca3a4"
+    link = "https://cdn.openbsd.org/pub/OpenBSD/7.2/amd64/install72.iso"
+    csum = "0369ef40a3329efcb978c578c7fdc7bda71e502aecec930a74b44160928c91d3"
     size = "20G"
     pkgs = [
         # tools
@@ -48,13 +48,17 @@ class OpenBSDVM(basevm.BaseVM):
         "jpeg",
         "png",
 
-	# libs: ui
+        # libs: ui
+        "capstone",
         "sdl2",
         "gtk+3",
         "libxkbcommon",
 
         # libs: migration
         "zstd",
+
+        # libs: networking
+        "libslirp",
     ]
 
     BUILD_SCRIPT = """
@@ -81,7 +85,6 @@ class OpenBSDVM(basevm.BaseVM):
 
         self.print_step("Booting installer")
         self.boot(img_tmp, extra_args = [
-            "-bios", "pc-bios/bios-256k.bin",
             "-machine", "graphics=off",
             "-device", "VGA",
             "-cdrom", iso

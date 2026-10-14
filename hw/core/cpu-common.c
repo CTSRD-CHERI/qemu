@@ -137,8 +137,7 @@ static void cpu_common_reset(DeviceState *dev)
     cpu->cflags_next_tb = -1;
 
     if (tcg_enabled()) {
-        cpu_tb_jmp_cache_clear(cpu);
-
+        tcg_flush_jmp_cache(cpu);
         tcg_flush_softmmu_tlb(cpu);
     }
 }
@@ -257,6 +256,9 @@ static void cpu_common_finalize(Object *obj)
 {
     CPUState *cpu = CPU(obj);
 
+#ifdef CONFIG_TCG_LOG_INSTR
+    qemu_log_instr_finalize(cpu);
+#endif
     qemu_mutex_destroy(&cpu->work_mutex);
 }
 

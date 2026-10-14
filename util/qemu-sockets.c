@@ -21,7 +21,6 @@
 #include <linux/vm_sockets.h>
 #endif /* CONFIG_AF_VSOCK */
 
-#include "qemu-common.h"
 #include "monitor/monitor.h"
 #include "qapi/clone-visitor.h"
 #include "qapi/error.h"
@@ -488,7 +487,7 @@ int inet_connect_saddr(InetSocketAddress *saddr, Error **errp)
 
         if (ret < 0) {
             error_setg_errno(errp, errno, "Unable to set KEEPALIVE");
-            close(sock);
+            closesocket(sock);
             return -1;
         }
     }
@@ -603,7 +602,7 @@ err:
 static int inet_parse_flag(const char *flagname, const char *optstr, bool *val,
                            Error **errp)
 {
-    char *end;
+    const char *end;
     size_t len;
 
     end = strstr(optstr, ",");
@@ -634,7 +633,7 @@ int inet_parse(InetSocketAddress *addr, const char *str, Error **errp)
     char port[33];
     int to;
     int pos;
-    char *begin;
+    const char *begin;
 
     memset(addr, 0, sizeof(*addr));
 
@@ -881,8 +880,6 @@ static int vsock_parse(VsockSocketAddress *addr, const char *str,
 }
 #endif /* CONFIG_AF_VSOCK */
 
-#ifndef _WIN32
-
 static bool saddr_is_abstract(UnixSocketAddress *saddr)
 {
 #ifdef CONFIG_LINUX
@@ -922,9 +919,8 @@ static int unix_listen_saddr(UnixSocketAddress *saddr,
     if (saddr->path[0] || abstract) {
         path = saddr->path;
     } else {
-        const char *tmpdir = getenv("TMPDIR");
-        tmpdir = tmpdir ? tmpdir : "/tmp";
-        path = pathbuf = g_strdup_printf("%s/qemu-socket-XXXXXX", tmpdir);
+        path = pathbuf = g_strdup_printf("%s/qemu-socket-XXXXXX",
+                                         g_get_tmp_dir());
     }
 
     pathlen = strlen(path);
@@ -1051,28 +1047,9 @@ static int unix_connect_saddr(UnixSocketAddress *saddr, Error **errp)
     return sock;
 
  err:
-    close(sock);
+    closesocket(sock);
     return -1;
 }
-
-#else
-
-static int unix_listen_saddr(UnixSocketAddress *saddr,
-                             int num,
-                             Error **errp)
-{
-    error_setg(errp, "unix sockets are not available on windows");
-    errno = ENOTSUP;
-    return -1;
-}
-
-static int unix_connect_saddr(UnixSocketAddress *saddr, Error **errp)
-{
-    error_setg(errp, "unix sockets are not available on windows");
-    errno = ENOTSUP;
-    return -1;
-}
-#endif
 
 /* compatibility wrapper */
 int unix_listen(const char *str, Error **errp)
@@ -1099,6 +1076,26 @@ int unix_connect(const char *path, Error **errp)
     return sock;
 }
 
+char *socket_uri(SocketAddress *addr)
+{
+    switch (addr->type) {
+    case SOCKET_ADDRESS_TYPE_INET:
+        return g_strdup_printf("tcp:%s:%s",
+                               addr->u.inet.host,
+                               addr->u.inet.port);
+    case SOCKET_ADDRESS_TYPE_UNIX:
+        return g_strdup_printf("unix:%s",
+                               addr->u.q_unix.path);
+    case SOCKET_ADDRESS_TYPE_FD:
+        return g_strdup_printf("fd:%s", addr->u.fd.str);
+    case SOCKET_ADDRESS_TYPE_VSOCK:
+        return g_strdup_printf("vsock:%s:%s",
+                               addr->u.vsock.cid,
+                               addr->u.vsock.port);
+    default:
+        return g_strdup("unknown address type");
+    }
+}
 
 SocketAddress *socket_parse(const char *str, Error **errp)
 {
@@ -1124,6 +1121,11 @@ SocketAddress *socket_parse(const char *str, Error **errp)
     } else if (strstart(str, "vsock:", NULL)) {
         addr->type = SOCKET_ADDRESS_TYPE_VSOCK;
         if (vsock_parse(&addr->u.vsock, str + strlen("vsock:"), errp)) {
+            goto fail;
+        }
+    } else if (strstart(str, "tcp:", NULL)) {
+        addr->type = SOCKET_ADDRESS_TYPE_INET;
+        if (inet_parse(&addr->u.inet, str + strlen("tcp:"), errp)) {
             goto fail;
         }
     } else {
@@ -1336,7 +1338,6 @@ socket_sockaddr_to_address_inet(struct sockaddr_storage *sa,
 }
 
 
-#ifndef WIN32
 static SocketAddress *
 socket_sockaddr_to_address_unix(struct sockaddr_storage *sa,
                                 socklen_t salen,
@@ -1363,7 +1364,6 @@ socket_sockaddr_to_address_unix(struct sockaddr_storage *sa,
     addr->u.q_unix.path = g_strndup(su->sun_path, salen);
     return addr;
 }
-#endif /* WIN32 */
 
 #ifdef CONFIG_AF_VSOCK
 static SocketAddress *
@@ -1395,10 +1395,8 @@ socket_sockaddr_to_address(struct sockaddr_storage *sa,
     case AF_INET6:
         return socket_sockaddr_to_address_inet(sa, salen, errp);
 
-#ifndef WIN32
     case AF_UNIX:
         return socket_sockaddr_to_address_unix(sa, salen, errp);
-#endif /* WIN32 */
 
 #ifdef CONFIG_AF_VSOCK
     case AF_VSOCK:

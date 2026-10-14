@@ -92,7 +92,7 @@ int qemu_v9fs_synth_mkdir(V9fsSynthNode *parent, int mode,
         }
     }
     /* Add the name */
-    node = v9fs_add_dir_node(parent, mode, name, NULL, synth_node_count++);
+    node = v9fs_add_dir_node(parent, mode, name, NULL, ++synth_node_count);
     v9fs_add_dir_node(node, parent->attr->mode, "..",
                       parent->attr, parent->attr->inode);
     v9fs_add_dir_node(node, node->attr->mode, ".",
@@ -130,7 +130,7 @@ int qemu_v9fs_synth_add_file(V9fsSynthNode *parent, int mode,
     mode = ((mode & 0777) | S_IFREG);
     node = g_new0(V9fsSynthNode, 1);
     node->attr         = &node->actual_attr;
-    node->attr->inode  = synth_node_count++;
+    node->attr->inode  = ++synth_node_count;
     node->attr->nlink  = 1;
     node->attr->read   = read;
     node->attr->write  = write;
@@ -443,7 +443,7 @@ static int synth_statfs(FsContext *s, V9fsPath *fs_path,
     stbuf->f_bsize = 512;
     stbuf->f_blocks = 0;
     stbuf->f_files = synth_node_count;
-#ifndef CONFIG_DARWIN
+#if !defined(CONFIG_DARWIN) && !defined(CONFIG_BSD)
     stbuf->f_namelen = NAME_MAX;
 #endif
     return 0;

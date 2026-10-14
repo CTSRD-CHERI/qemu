@@ -331,13 +331,10 @@ we should add it to the hmp-commands.hx file::
         .cmd        = hmp_hello_world,
     },
 
-::
-
- STEXI
- @item hello_world @var{message}
- @findex hello_world
- Print message to the standard output
- ETEXI
+ SRST
+ ``hello_world`` *message*
+   Print message to the standard output
+ ERST
 
 To test this you have to open a user monitor and issue the "hello-world"
 command. It might be instructive to check the command's documentation with
@@ -719,7 +716,7 @@ message. Here's the implementation of the "info roms" HMP command::
      if (hmp_handle_error(mon, err)) {
          return;
      }
-     monitor_printf(mon, "%s", info->human_readable_text);
+     monitor_puts(mon, info->human_readable_text);
  }
 
 Also, you have to add the function's prototype to the hmp.h file.

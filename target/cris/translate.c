@@ -3268,11 +3268,12 @@ static void cris_tr_tb_stop(DisasContextBase *dcbase, CPUState *cpu)
     }
 }
 
-static void cris_tr_disas_log(const DisasContextBase *dcbase, CPUState *cpu)
+static void cris_tr_disas_log(const DisasContextBase *dcbase, CPUState *cpu,
+                              FILE *logfile)
 {
     if (!DISAS_CRIS) {
-        qemu_log("IN: %s\n", lookup_symbol(dcbase->pc_first));
-        log_target_disas(cpu, dcbase->pc_first, dcbase->tb->size);
+        fprintf(logfile, "IN: %s\n", lookup_symbol(dcbase->pc_first));
+        target_disas(logfile, cpu, dcbase->pc_first, dcbase->tb->size);
     }
 }
 
@@ -3285,10 +3286,11 @@ static const TranslatorOps cris_tr_ops = {
     .disas_log          = cris_tr_disas_log,
 };
 
-void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns)
+void gen_intermediate_code(CPUState *cs, TranslationBlock *tb, int max_insns,
+                           target_ulong pc, void *host_pc)
 {
     DisasContext dc;
-    translator_loop(&cris_tr_ops, &dc.base, cs, tb, max_insns);
+    translator_loop(cs, tb, max_insns, pc, host_pc, &cris_tr_ops, &dc.base);
 }
 
 void cris_cpu_dump_state(CPUState *cs, FILE *f, int flags)
@@ -3389,10 +3391,4 @@ void cris_initialize_tcg(void)
                                        offsetof(CPUCRISState, pregs[i]),
                                        pregnames_v32[i]);
     }
-}
-
-void restore_state_to_opc(CPUCRISState *env, TranslationBlock *tb,
-                          target_ulong *data)
-{
-    env->pc = data[0];
 }

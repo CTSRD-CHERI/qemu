@@ -19,6 +19,7 @@ class BootLinuxX8664(LinuxTest):
     """
     :avocado: tags=arch:x86_64
     """
+    timeout = 480
 
     def test_pc_i440fx_tcg(self):
         """
@@ -57,12 +58,16 @@ class BootLinuxX8664(LinuxTest):
         self.launch_and_wait(set_up_ssh_connection=False)
 
 
+# For Aarch64 we only boot KVM tests in CI as the TCG tests are very
+# heavyweight. There are lighter weight distros which we use in the
+# machine_aarch64_virt.py tests.
 class BootLinuxAarch64(LinuxTest):
     """
     :avocado: tags=arch:aarch64
     :avocado: tags=machine:virt
     :avocado: tags=machine:gic-version=2
     """
+    timeout = 720
 
     def add_common_args(self):
         self.vm.add_args('-bios',
@@ -71,7 +76,8 @@ class BootLinuxAarch64(LinuxTest):
         self.vm.add_args('-device', 'virtio-rng-pci,rng=rng0')
         self.vm.add_args('-object', 'rng-random,id=rng0,filename=/dev/urandom')
 
-    def test_virt_tcg_gicv2(self):
+    @skipIf(os.getenv('GITLAB_CI'), 'Running on GitLab')
+    def test_fedora_cloud_tcg_gicv2(self):
         """
         :avocado: tags=accel:tcg
         :avocado: tags=cpu:max
@@ -84,7 +90,8 @@ class BootLinuxAarch64(LinuxTest):
         self.add_common_args()
         self.launch_and_wait(set_up_ssh_connection=False)
 
-    def test_virt_tcg_gicv3(self):
+    @skipIf(os.getenv('GITLAB_CI'), 'Running on GitLab')
+    def test_fedora_cloud_tcg_gicv3(self):
         """
         :avocado: tags=accel:tcg
         :avocado: tags=cpu:max
@@ -114,6 +121,8 @@ class BootLinuxPPC64(LinuxTest):
     :avocado: tags=arch:ppc64
     """
 
+    timeout = 360
+
     def test_pseries_tcg(self):
         """
         :avocado: tags=machine:pseries
@@ -128,6 +137,8 @@ class BootLinuxS390X(LinuxTest):
     """
     :avocado: tags=arch:s390x
     """
+
+    timeout = 240
 
     @skipIf(os.getenv('GITLAB_CI'), 'Running on GitLab')
     def test_s390_ccw_virtio_tcg(self):

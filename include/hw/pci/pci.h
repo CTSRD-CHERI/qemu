@@ -16,6 +16,7 @@ extern bool pci_available;
 #define PCI_SLOT(devfn)         (((devfn) >> 3) & 0x1f)
 #define PCI_FUNC(devfn)         ((devfn) & 0x07)
 #define PCI_BUILD_BDF(bus, devfn)     ((bus << 8) | (devfn))
+#define PCI_BDF_TO_DEVFN(x)     ((x) & 0xff)
 #define PCI_BUS_MAX             256
 #define PCI_DEVFN_MAX           256
 #define PCI_SLOT_MAX            32
@@ -75,6 +76,7 @@ extern bool pci_available;
 #define PCI_SUBVENDOR_ID_REDHAT_QUMRANET 0x1af4
 #define PCI_SUBDEVICE_ID_QEMU            0x1100
 
+/* legacy virtio-pci devices */
 #define PCI_DEVICE_ID_VIRTIO_NET         0x1000
 #define PCI_DEVICE_ID_VIRTIO_BLOCK       0x1001
 #define PCI_DEVICE_ID_VIRTIO_BALLOON     0x1002
@@ -83,9 +85,15 @@ extern bool pci_available;
 #define PCI_DEVICE_ID_VIRTIO_RNG         0x1005
 #define PCI_DEVICE_ID_VIRTIO_9P          0x1009
 #define PCI_DEVICE_ID_VIRTIO_VSOCK       0x1012
-#define PCI_DEVICE_ID_VIRTIO_PMEM        0x1013
-#define PCI_DEVICE_ID_VIRTIO_IOMMU       0x1014
-#define PCI_DEVICE_ID_VIRTIO_MEM         0x1015
+
+/*
+ * modern virtio-pci devices get their id assigned automatically,
+ * there is no need to add #defines here.  It gets calculated as
+ *
+ * PCI_DEVICE_ID = PCI_DEVICE_ID_VIRTIO_10_BASE +
+ *                 virtio_bus_get_vdev_id(bus)
+ */
+#define PCI_DEVICE_ID_VIRTIO_10_BASE     0x1040
 
 #define PCI_VENDOR_ID_REDHAT             0x1b36
 #define PCI_DEVICE_ID_REDHAT_BRIDGE      0x0001
@@ -126,6 +134,10 @@ typedef uint32_t PCIConfigReadFunc(PCIDevice *pci_dev,
 typedef void PCIMapIORegionFunc(PCIDevice *pci_dev, int region_num,
                                 pcibus_t addr, pcibus_t size, int type);
 typedef void PCIUnregisterFunc(PCIDevice *pci_dev);
+
+typedef void MSITriggerFunc(PCIDevice *dev, MSIMessage msg);
+typedef MSIMessage MSIPrepareMessageFunc(PCIDevice *dev, unsigned vector);
+typedef MSIMessage MSIxPrepareMessageFunc(PCIDevice *dev, unsigned vector);
 
 typedef struct PCIIORegion {
     pcibus_t addr; /* current PCI mapping address. -1 means not mapped */
@@ -194,12 +206,20 @@ enum {
     QEMU_PCIE_LNKSTA_DLLLA = (1 << QEMU_PCIE_LNKSTA_DLLLA_BITNR),
 #define QEMU_PCIE_EXTCAP_INIT_BITNR 9
     QEMU_PCIE_EXTCAP_INIT = (1 << QEMU_PCIE_EXTCAP_INIT_BITNR),
+#define QEMU_PCIE_CXL_BITNR 10
+    QEMU_PCIE_CAP_CXL = (1 << QEMU_PCIE_CXL_BITNR),
 };
 
 #define TYPE_PCI_DEVICE "pci-device"
 typedef struct PCIDeviceClass PCIDeviceClass;
 DECLARE_OBJ_CHECKERS(PCIDevice, PCIDeviceClass,
                      PCI_DEVICE, TYPE_PCI_DEVICE)
+
+/*
+ * Implemented by devices that can be plugged on CXL buses. In the spec, this is
+ * actually a "CXL Component, but we name it device to match the PCI naming.
+ */
+#define INTERFACE_CXL_DEVICE "cxl-device"
 
 /* Implemented by devices that can be plugged on PCI Express buses */
 #define INTERFACE_PCIE_DEVICE "pci-express-device"
@@ -321,6 +341,14 @@ struct PCIDevice {
     /* Space to store MSIX table & pending bit array */
     uint8_t *msix_table;
     uint8_t *msix_pba;
+
+    /* May be used by INTx or MSI during interrupt notification */
+    void *irq_opaque;
+
+    MSITriggerFunc *msi_trigger;
+    MSIPrepareMessageFunc *msi_prepare_message;
+    MSIxPrepareMessageFunc *msix_prepare_message;
+
     /* MemoryRegion container for msix exclusive BAR setup */
     MemoryRegion msix_exclusive_bar;
     /* Memory Regions for MSIX table and pending bit entries. */
@@ -400,6 +428,7 @@ typedef PCIINTxRoute (*pci_route_irq_fn)(void *opaque, int pin);
 #define TYPE_PCI_BUS "PCI"
 OBJECT_DECLARE_TYPE(PCIBus, PCIBusClass, PCI_BUS)
 #define TYPE_PCIE_BUS "PCIE"
+#define TYPE_CXL_BUS "CXL"
 
 typedef void (*pci_bus_dev_fn)(PCIBus *b, PCIDevice *d, void *opaque);
 typedef void (*pci_bus_fn)(PCIBus *b, void *opaque);
@@ -666,60 +695,44 @@ static inline void
 pci_set_byte_by_mask(uint8_t *config, uint8_t mask, uint8_t reg)
 {
     uint8_t val = pci_get_byte(config);
-    uint8_t rval = reg << ctz32(mask);
-    pci_set_byte(config, (~mask & val) | (mask & rval));
-}
+    uint8_t rval;
 
-static inline uint8_t
-pci_get_byte_by_mask(uint8_t *config, uint8_t mask)
-{
-    uint8_t val = pci_get_byte(config);
-    return (val & mask) >> ctz32(mask);
+    assert(mask);
+    rval = reg << ctz32(mask);
+    pci_set_byte(config, (~mask & val) | (mask & rval));
 }
 
 static inline void
 pci_set_word_by_mask(uint8_t *config, uint16_t mask, uint16_t reg)
 {
     uint16_t val = pci_get_word(config);
-    uint16_t rval = reg << ctz32(mask);
-    pci_set_word(config, (~mask & val) | (mask & rval));
-}
+    uint16_t rval;
 
-static inline uint16_t
-pci_get_word_by_mask(uint8_t *config, uint16_t mask)
-{
-    uint16_t val = pci_get_word(config);
-    return (val & mask) >> ctz32(mask);
+    assert(mask);
+    rval = reg << ctz32(mask);
+    pci_set_word(config, (~mask & val) | (mask & rval));
 }
 
 static inline void
 pci_set_long_by_mask(uint8_t *config, uint32_t mask, uint32_t reg)
 {
     uint32_t val = pci_get_long(config);
-    uint32_t rval = reg << ctz32(mask);
-    pci_set_long(config, (~mask & val) | (mask & rval));
-}
+    uint32_t rval;
 
-static inline uint32_t
-pci_get_long_by_mask(uint8_t *config, uint32_t mask)
-{
-    uint32_t val = pci_get_long(config);
-    return (val & mask) >> ctz32(mask);
+    assert(mask);
+    rval = reg << ctz32(mask);
+    pci_set_long(config, (~mask & val) | (mask & rval));
 }
 
 static inline void
 pci_set_quad_by_mask(uint8_t *config, uint64_t mask, uint64_t reg)
 {
     uint64_t val = pci_get_quad(config);
-    uint64_t rval = reg << ctz32(mask);
-    pci_set_quad(config, (~mask & val) | (mask & rval));
-}
+    uint64_t rval;
 
-static inline uint64_t
-pci_get_quad_by_mask(uint8_t *config, uint64_t mask)
-{
-    uint64_t val = pci_get_quad(config);
-    return (val & mask) >> ctz32(mask);
+    assert(mask);
+    rval = reg << ctz32(mask);
+    pci_set_quad(config, (~mask & val) | (mask & rval));
 }
 
 PCIDevice *pci_new_multifunction(int devfn, bool multifunction,
@@ -760,6 +773,11 @@ static inline void pci_irq_pulse(PCIDevice *pci_dev)
 {
     pci_irq_assert(pci_dev);
     pci_irq_deassert(pci_dev);
+}
+
+static inline int pci_is_cxl(const PCIDevice *d)
+{
+    return d->cap_present & QEMU_PCIE_CAP_CXL;
 }
 
 static inline int pci_is_express(const PCIDevice *d)

@@ -18,7 +18,6 @@
  */
 
 #include "qemu/osdep.h"
-#include "qemu-common.h"
 #include "qapi/error.h"
 
 #include "exec/target_page.h"
@@ -132,17 +131,24 @@ const VMStateDescription vmstate_cpu_common = {
 
 void cpu_exec_realizefn(CPUState *cpu, Error **errp)
 {
-#ifndef CONFIG_USER_ONLY
-    CPUClass *cc = CPU_GET_CLASS(cpu);
-#endif
+    /* cache the cpu class for the hotpath */
+    cpu->cc = CPU_GET_CLASS(cpu);
 
-    cpu_list_add(cpu);
     if (!accel_cpu_realizefn(cpu, errp)) {
         return;
     }
+
     /* NB: errp parameter is unused currently */
     if (tcg_enabled()) {
         tcg_exec_realizefn(cpu, errp);
+    }
+
+    /* Wait until cpu initialization complete before exposing cpu. */
+    cpu_list_add(cpu);
+
+    /* Plugin initialization must wait until cpu_index assigned. */
+    if (tcg_enabled()) {
+        qemu_plugin_vcpu_init_hook(cpu);
     }
 
 #ifdef CONFIG_USER_ONLY
@@ -152,8 +158,8 @@ void cpu_exec_realizefn(CPUState *cpu, Error **errp)
     if (qdev_get_vmsd(DEVICE(cpu)) == NULL) {
         vmstate_register(NULL, cpu->cpu_index, &vmstate_cpu_common, cpu);
     }
-    if (cc->sysemu_ops->legacy_vmsd != NULL) {
-        vmstate_register(NULL, cpu->cpu_index, cc->sysemu_ops->legacy_vmsd, cpu);
+    if (cpu->cc->sysemu_ops->legacy_vmsd != NULL) {
+        vmstate_register(NULL, cpu->cpu_index, cpu->cc->sysemu_ops->legacy_vmsd, cpu);
     }
 #endif /* CONFIG_USER_ONLY */
 }
@@ -279,7 +285,7 @@ void list_cpus(const char *optarg)
 void tb_invalidate_phys_addr(target_ulong addr)
 {
     mmap_lock();
-    tb_invalidate_phys_page_range(addr, addr + 1);
+    tb_invalidate_phys_page(addr);
     mmap_unlock();
 }
 #else
@@ -300,7 +306,7 @@ void tb_invalidate_phys_addr(AddressSpace *as, hwaddr addr, MemTxAttrs attrs)
         return;
     }
     ram_addr = memory_region_get_ram_addr(mr) + addr;
-    tb_invalidate_phys_page_range(ram_addr, ram_addr + 1);
+    tb_invalidate_phys_page(ram_addr);
 }
 #endif
 
@@ -400,14 +406,14 @@ void cpu_abort(CPUState *cpu, const char *fmt, ...)
     fprintf(stderr, "\n");
     cpu_dump_state(cpu, stderr, CPU_DUMP_FPU | CPU_DUMP_CCOP);
     if (qemu_log_separate()) {
-        FILE *logfile = qemu_log_lock();
-        qemu_log("qemu: fatal: ");
-        qemu_log_vprintf(fmt, ap2);
-        qemu_log("\n");
-        log_cpu_state(cpu, CPU_DUMP_FPU | CPU_DUMP_CCOP);
-        qemu_log_flush();
-        qemu_log_unlock(logfile);
-        qemu_log_close();
+        FILE *logfile = qemu_log_trylock();
+        if (logfile) {
+            fprintf(logfile, "qemu: fatal: ");
+            vfprintf(logfile, fmt, ap2);
+            fprintf(logfile, "\n");
+            cpu_dump_state(cpu, logfile, CPU_DUMP_FPU | CPU_DUMP_CCOP);
+            qemu_log_unlock(logfile);
+        }
     }
     va_end(ap2);
     va_end(ap);
@@ -469,7 +475,7 @@ int cpu_memory_rw_debug(CPUState *cpu, vaddr addr,
 
 bool target_words_bigendian(void)
 {
-#if defined(TARGET_WORDS_BIGENDIAN)
+#if TARGET_BIG_ENDIAN
     return true;
 #else
     return false;
@@ -481,7 +487,7 @@ void page_size_init(void)
     /* NOTE: we can always suppose that qemu_host_page_size >=
        TARGET_PAGE_SIZE */
     if (qemu_host_page_size == 0) {
-        qemu_host_page_size = qemu_real_host_page_size;
+        qemu_host_page_size = qemu_real_host_page_size();
     }
     if (qemu_host_page_size < TARGET_PAGE_SIZE) {
         qemu_host_page_size = TARGET_PAGE_SIZE;

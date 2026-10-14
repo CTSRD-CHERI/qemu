@@ -152,6 +152,7 @@ typedef struct {
  * Initialize instruction logging for a cpu.
  */
 void qemu_log_instr_init(CPUState *cpu);
+void qemu_log_instr_finalize(CPUState *cpu);
 int qemu_log_instr_global_switch(int log_flags);
 
 /*

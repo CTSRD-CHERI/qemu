@@ -7,6 +7,9 @@
 /* register accel-specific operations */
 void cpus_register_accel(const AccelOpsClass *i);
 
+/* return registers ops */
+const AccelOpsClass *cpus_get_accel(void);
+
 /* accel/dummy-cpus.c */
 
 /* Create a dummy vcpu for AccelOpsClass->create_vcpu_thread */
@@ -54,5 +57,18 @@ void cpu_synchronize_all_pre_loadvm(void);
 extern int smp_cores;
 extern int smp_threads;
 #endif
+
+#ifdef CONFIG_RVFI_DII
+extern int rvfi_client_fd;
+#endif
+
+static inline bool rvfi_dii_enabled(void)
+{
+#ifdef CONFIG_RVFI_DII
+    return (rvfi_client_fd != 0);
+#else
+    return false;
+#endif
+}
 
 #endif

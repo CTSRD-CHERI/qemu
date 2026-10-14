@@ -48,12 +48,19 @@
     }                                            \
 } while (0)
 
+#define REQUIRE_ZBKX(ctx) do {                   \
+    if (!ctx->cfg_ptr->ext_zbkx) {               \
+        return false;                            \
+    }                                            \
+} while (0)
+
 #define REQUIRE_ZISH4ADD(ctx)                                                  \
     do {                                                                       \
         if (!RISCV_CPU(ctx->cs)->cfg.ext_zish4add) {                           \
             return false;                                                      \
         }                                                                      \
     } while (0)
+
 
 static void gen_clz(TCGv ret, TCGv arg1)
 {
@@ -560,7 +567,7 @@ static bool trans_slli_uw(DisasContext *ctx, arg_slli_uw *a)
 
 static bool trans_clmul(DisasContext *ctx, arg_clmul *a)
 {
-    REQUIRE_ZBC(ctx);
+    REQUIRE_EITHER_EXT(ctx, zbc, zbkc);
     return gen_arith(ctx, a, EXT_NONE, gen_helper_clmul, NULL);
 }
 
@@ -572,7 +579,7 @@ static void gen_clmulh(TCGv dst, TCGv src1, TCGv src2)
 
 static bool trans_clmulh(DisasContext *ctx, arg_clmulr *a)
 {
-    REQUIRE_ZBC(ctx);
+    REQUIRE_EITHER_EXT(ctx, zbc, zbkc);
     return gen_arith(ctx, a, EXT_NONE, gen_clmulh, NULL);
 }
 
@@ -644,4 +651,16 @@ static bool trans_zip(DisasContext *ctx, arg_zip *a)
     REQUIRE_32BIT(ctx);
     REQUIRE_ZBKB(ctx);
     return gen_unary(ctx, a, EXT_NONE, gen_helper_zip);
+}
+
+static bool trans_xperm4(DisasContext *ctx, arg_xperm4 *a)
+{
+    REQUIRE_ZBKX(ctx);
+    return gen_arith(ctx, a, EXT_NONE, gen_helper_xperm4, NULL);
+}
+
+static bool trans_xperm8(DisasContext *ctx, arg_xperm8 *a)
+{
+    REQUIRE_ZBKX(ctx);
+    return gen_arith(ctx, a, EXT_NONE, gen_helper_xperm8, NULL);
 }

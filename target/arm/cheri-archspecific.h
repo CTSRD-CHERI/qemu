@@ -87,7 +87,7 @@ static inline ARMFaultType cheri_cause_to_arm_fault(CheriCapExcCause cause)
 
 extern bool cheri_debugger_on_trap;
 
-static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
+static inline void G_NORETURN raise_cheri_exception_impl_if_wnr(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
     target_ulong addr, bool instavail, uintptr_t hostpc, bool instruction_fetch,
     bool is_write)
@@ -125,7 +125,7 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
         // AARCH's cpu_restore_state will reset syndrome, so don't use
         // raise_exception_ra here.
         CPUState *cs = env_cpu(env);
-        cpu_restore_state(cs, hostpc, true);
+        cpu_restore_state(cs, hostpc);
     }
 
     raise_exception(env,
@@ -133,7 +133,7 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl_if_wnr(
                     syn, target_el);
 }
 
-static inline void QEMU_NORETURN raise_cheri_exception_impl(
+static inline void G_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
     target_ulong addr, bool instavail, uintptr_t hostpc)
 {
@@ -141,7 +141,7 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
                                       hostpc, false, false);
 }
 
-static inline void QEMU_NORETURN raise_load_tag_exception(CPUArchState *env,
+static inline void G_NORETURN raise_load_tag_exception(CPUArchState *env,
                                                           target_ulong va,
                                                           int cb,
                                                           uintptr_t retpc)
@@ -150,7 +150,7 @@ static inline void QEMU_NORETURN raise_load_tag_exception(CPUArchState *env,
                                       retpc, false, false);
 }
 
-static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
+static inline void G_NORETURN raise_store_tag_exception(CPUArchState *env,
                                                            target_ulong va,
                                                            int reg,
                                                            uintptr_t retpc)
@@ -159,14 +159,14 @@ static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
                                       retpc, false, true);
 }
 
-static inline void QEMU_NORETURN raise_unaligned_load_exception(
+static inline void G_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
     arm_cpu_do_unaligned_access(env_cpu(env), addr, MMU_DATA_LOAD,
                                 cpu_mmu_index(env, false), retpc);
 }
 
-static inline void QEMU_NORETURN raise_unaligned_store_exception(
+static inline void G_NORETURN raise_unaligned_store_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
     arm_cpu_do_unaligned_access(env_cpu(env), addr, MMU_DATA_STORE,

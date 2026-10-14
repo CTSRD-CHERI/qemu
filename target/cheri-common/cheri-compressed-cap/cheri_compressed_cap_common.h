@@ -85,16 +85,30 @@ enum {
 #define _CC_MAX_TOP _CC_N(MAX_TOP)
 #define _CC_CURSOR_MASK _CC_N(CURSOR_MASK)
 
+#if _CC_ADDR_WIDTH == 64
+typedef uint64_t _cc_N(addr_t);
+typedef int64_t _cc_N(saddr_t);
+/* Use __uint128 to represent 65 bit length */
+__extension__ typedef unsigned __int128 _cc_N(length_t);
+__extension__ typedef signed __int128 _cc_N(offset_t);
+#elif _CC_ADDR_WIDTH == 32
+typedef uint32_t _cc_N(addr_t);
+typedef int32_t _cc_N(saddr_t);
+/* Use uint64_t to represent 33 bit length */
+typedef uint64_t _cc_N(length_t);
+typedef int64_t _cc_N(offset_t);
+#endif
+
 #if _CC_N(USES_LEN_MSB) == 0
 enum { _CC_N(FIELD_LEN_MSB_SIZE) = 0 };
 #endif
 
 // Check that the sizes of the individual fields match up
+_CC_STATIC_ASSERT_SAME(_CC_MANTISSA_WIDTH, _CC_N(FIELD_EXP_ZERO_BOTTOM_SIZE));
+_CC_STATIC_ASSERT_SAME(_CC_N(PERMS_ALL) & _CC_N(PERM_SW_ALL), 0);
+_CC_STATIC_ASSERT_SAME(_CC_N(PERMS_ALL) | _CC_N(PERM_SW_ALL), _CC_N(PERMS_MASK));
 _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_EXP_ZERO_TOP_SIZE) +
                            _CC_N(FIELD_LEN_MSB_SIZE) + _CC_N(FIELD_EXP_ZERO_BOTTOM_SIZE),
-                       _CC_N(FIELD_EBT_SIZE));
-_CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_LEN_MSB_SIZE) + _CC_N(FIELD_TOP_ENCODED_SIZE) +
-                           _CC_N(FIELD_BOTTOM_ENCODED_SIZE),
                        _CC_N(FIELD_EBT_SIZE));
 _CC_STATIC_ASSERT_SAME(_CC_N(FIELD_INTERNAL_EXPONENT_SIZE) + _CC_N(FIELD_LEN_MSB_SIZE) +
                            _CC_N(FIELD_EXP_NONZERO_TOP_SIZE) + _CC_N(FIELD_EXP_NONZERO_BOTTOM_SIZE) +
@@ -112,7 +126,9 @@ _CC_STATIC_ASSERT(_CC_N(MAX_RESERVED_OTYPE) <= _CC_N(MAX_REPRESENTABLE_OTYPE), "
 // Forward-declare the accessors since we use them inside the struct body:
 typedef struct _cc_N(cap) _cc_N(cap_t);
 #define _cc_cap_t _cc_N(cap_t)
+#ifdef CC_IS_V9
 static inline uint8_t _cc_N(get_flags)(const _cc_cap_t* cap);
+#endif
 static inline uint32_t _cc_N(get_otype)(const _cc_cap_t* cap);
 static inline uint32_t _cc_N(get_level)(const _cc_cap_t* cap);
 static inline _cc_addr_t _cc_N(get_perms)(const _cc_cap_t* cap);
@@ -173,7 +189,12 @@ struct _cc_N(cap) {
     inline uint32_t level() const { return _cc_N(get_level)(this); }
     inline bool is_sealed() const { return type() != _CC_N(OTYPE_UNSEALED); }
     inline _cc_addr_t reserved_bits() const { return _cc_N(get_reserved)(this); }
+#ifndef CC_IS_MORELLO
+    inline _cc_mode execution_mode() const { return _cc_N(get_execution_mode)(this); }
+#endif
+#ifdef CC_IS_V9
     inline uint8_t flags() const { return _cc_N(get_flags)(this); }
+#endif
     inline bool operator==(const _cc_N(cap) & other) const;
 #endif
 };
@@ -256,10 +277,8 @@ static inline uint64_t _cc_N(truncate64)(uint64_t value, size_t n) { return valu
         return value >> (type_width - n);                                                                              \
     }
 TRUNCATE_LSB_FUNC(_CC_MANTISSA_WIDTH)
-TRUNCATE_LSB_FUNC(32)
-TRUNCATE_LSB_FUNC(64)
+#undef TRUNCATE_LSB_FUNC
 
-#define _cc_truncateLSB_generic(type_width) _CC_CONCAT(_cc_N(truncateLSB_), _CC_EXPAND(type_width))
 #define _cc_truncateLSB(type_width) _cc_N(_CC_CONCAT(truncateLSB_, type_width))
 
 struct _cc_N(bounds_bits) {
@@ -270,7 +289,7 @@ struct _cc_N(bounds_bits) {
 };
 #define _cc_bounds_bits struct _cc_N(bounds_bits)
 
-#define ALL_WRAPPERS(X, FN, type)                                                                                      \
+#define _CC_DEFINE_PESBT_EXTRACT_DEPOSIT_WRAPPERS(X, FN, type)                                                         \
     static inline _cc_addr_t _cc_N(cap_pesbt_extract_##FN)(_cc_addr_t pesbt) { return _CC_EXTRACT_FIELD(pesbt, X); }   \
     static inline _cc_addr_t _cc_N(cap_pesbt_encode_##FN)(type value) { return _CC_ENCODE_FIELD(value, X); }           \
     static inline _cc_addr_t _cc_N(cap_pesbt_deposit_##FN)(_cc_addr_t pesbt, type value) {                             \
@@ -280,9 +299,7 @@ struct _cc_N(bounds_bits) {
     static inline void _cc_N(update_##FN)(_cc_cap_t * cap, _cc_addr_t value) {                                         \
         cap->cr_pesbt = _cc_N(cap_pesbt_deposit_##FN)(cap->cr_pesbt, value);                                           \
     }
-ALL_WRAPPERS(OTYPE, otype, uint32_t)
-ALL_WRAPPERS(FLAGS, flags, uint8_t)
-#undef ALL_WRAPPERS
+_CC_DEFINE_PESBT_EXTRACT_DEPOSIT_WRAPPERS(OTYPE, otype, uint32_t)
 
 static inline bool _cc_N(is_cap_sealed)(const _cc_cap_t* cp) { return _cc_N(get_otype)(cp) != _CC_N(OTYPE_UNSEALED); }
 
@@ -303,16 +320,9 @@ static inline void _cc_N(update_level)(_cc_cap_t* cap, uint8_t level) {
 }
 #endif
 
-// These two split helpers exist for backwards compatibility with code that doesn't use the new functions
-static inline _cc_cap_t _cc_N(make_null_derived_cap)(_cc_addr_t addr);
+// These split helpers exist for backwards compatibility with code that doesn't use the new functions
 _CC_DEPRECATED("Use get_all_permissions") static inline _cc_addr_t _cc_N(get_perms)(const _cc_cap_t* cap) {
-    // We assume that HWPERMS always start at non-zero bit position
-    _CC_STATIC_ASSERT(_CC_N(UPERMS_SHFT) != 0, "Architectural perms expected to start at offset zero");
-    // We have to clear reserved one-bits for the 64r/128r formats (will be elided by compiler for other formats)
-    _cc_cap_t null_cap = _cc_N(make_null_derived_cap)(0);
-    _cc_addr_t reserved_one_bits = _cc_N(get_all_permissions)(&null_cap);
-    _cc_addr_t all_perms_w_reserved = _cc_N(get_all_permissions)(cap);
-    return (all_perms_w_reserved & ~reserved_one_bits) & ~_CC_N(PERM_SW_ALL);
+    return _cc_N(get_all_permissions)(cap) & _CC_N(PERMS_ALL);
 }
 _CC_DEPRECATED("Use get_all_permissions") static inline _cc_addr_t _cc_N(get_uperms)(const _cc_cap_t* cap) {
     return (_cc_N(get_all_permissions)(cap) & _CC_N(PERM_SW_ALL)) >> _CC_N(UPERMS_SHFT);
@@ -330,7 +340,6 @@ _CC_DEPRECATED("Use set_permissions") static inline void _cc_N(update_uperms)(_c
 
 /// Extract the bits used for bounds and infer the top two bits of T
 static inline _cc_bounds_bits _cc_N(extract_bounds_bits)(_cc_addr_t pesbt) {
-    _CC_STATIC_ASSERT(_CC_MANTISSA_WIDTH == _CC_N(BOT_WIDTH), "Wrong bot width?");
     uint32_t BWidth = _CC_MANTISSA_WIDTH;
     uint32_t BMask = (1u << BWidth) - 1;
     uint32_t TMask = BMask >> 2;
@@ -547,10 +556,7 @@ static inline bool _cc_N(pesbt_is_correct)(const _cc_cap_t* csp) {
     // NB: We use the unsafe decompression function here to handle non-derivable caps without asserting.
     _cc_N(unsafe_decompress_raw)(csp->cr_pesbt, csp->_cr_cursor, csp->cr_tag, _cc_N(get_lvbits)(csp), &tmp);
     tmp.cr_extra = csp->cr_extra; // raw_equal also compares, cr_extra but we don't care about that here.
-    if (!_cc_N(raw_equal)(&tmp, csp)) {
-        return false;
-    }
-    return true;
+    return _cc_N(raw_equal)(&tmp, csp);
 }
 
 // Update ebt bits in pesbt
@@ -590,10 +596,7 @@ static inline bool _cc_N(is_representable_cap_exact)(const _cc_cap_t* cap) {
     _cc_debug_assert(decompressed_cap._cr_cursor == cap->_cr_cursor);
     _cc_debug_assert(decompressed_cap.cr_pesbt == cap->cr_pesbt);
     // If any of these fields changed then the capability is not representable:
-    if (decompressed_cap.cr_base != cap->cr_base || decompressed_cap._cr_top != cap->_cr_top) {
-        return false;
-    }
-    return true;
+    return decompressed_cap.cr_base == cap->cr_base && decompressed_cap._cr_top == cap->_cr_top;
 }
 
 static inline uint32_t _cc_N(compute_ebt)(_cc_addr_t req_base, _cc_length_t req_top, _cc_addr_t* alignment_mask,
@@ -753,7 +756,7 @@ static inline bool _cc_N(_precise_is_representable_new_addr)(const _cc_cap_t* ol
 }
 
 static inline bool _cc_N(cap_bounds_uses_value_for_exp)(uint8_t exponent) {
-    return exponent < (sizeof(_cc_addr_t) * 8) - _CC_N(FIELD_BOTTOM_ENCODED_SIZE);
+    return exponent < (sizeof(_cc_addr_t) * 8) - _CC_MANTISSA_WIDTH;
 }
 
 /// Returns whether the capability bounds depend on any of the cursor bits or if they can be fully derived from E/B/T.
@@ -941,11 +944,11 @@ static inline bool _cc_N(setbounds_impl)(_cc_cap_t* cap, _cc_length_t req_len, _
 
 /* @return whether the operation was able to set precise bounds precise or not */
 static inline bool _cc_N(setbounds)(_cc_cap_t* cap, _cc_length_t req_len) {
-    __attribute__((unused)) _cc_addr_t old_base = cap->cr_base;
-    __attribute__((unused)) _cc_length_t old_top = cap->_cr_top;
-    __attribute__((unused)) _cc_addr_t req_base =
+    _cc_maybe_unused _cc_addr_t old_base = cap->cr_base;
+    _cc_maybe_unused _cc_length_t old_top = cap->_cr_top;
+    _cc_maybe_unused _cc_addr_t req_base =
         _cc_N(cap_bounds_uses_value)(cap) ? _cc_N(cap_bounds_address)(cap->_cr_cursor) : cap->_cr_cursor;
-    __attribute__((unused)) _cc_length_t req_top = req_len + req_base;
+    _cc_maybe_unused _cc_length_t req_top = req_len + req_base;
     bool exact = _cc_N(setbounds_impl)(cap, req_len, NULL);
     if (cap->cr_tag) {
         // Assertions to check that we didn't break any invariants.
@@ -974,9 +977,9 @@ static inline bool _cc_N(setbounds)(_cc_cap_t* cap, _cc_length_t req_len) {
 
 /** Like setbounds, but also asserts that the operation is strictly monotonic. */
 static inline bool _cc_N(checked_setbounds)(_cc_cap_t* cap, _cc_length_t req_len) {
-    __attribute__((unused)) _cc_addr_t req_base =
+    _cc_maybe_unused _cc_addr_t req_base =
         _cc_N(cap_bounds_uses_value)(cap) ? _cc_N(cap_bounds_address)(cap->_cr_cursor) : cap->_cr_cursor;
-    __attribute__((unused)) _cc_length_t req_top = req_len + req_base;
+    _cc_maybe_unused _cc_length_t req_top = req_len + req_base;
     if (cap->cr_tag) {
         // Assertions to detect API misuse - those checks should have been performed before calling setbounds.
         _cc_api_requirement(!_cc_N(is_cap_sealed)(cap), "cannot be used on tagged sealed capabilities");
@@ -1019,7 +1022,7 @@ static inline _cc_cap_t _cc_N(_make_max_perms_cap_common)(_cc_addr_t base, _cc_a
 static inline _cc_cap_t _cc_N(make_max_perms_cap_ext)(_cc_addr_t base, _cc_addr_t cursor, _cc_length_t top,
                                                       _cc_mode mode, uint8_t lvbits) {
     _cc_cap_t creg = _cc_N(_make_max_perms_cap_common)(base, cursor, top, lvbits);
-    bool mode_valid = _cc_N(set_execution_mode(&creg, mode));
+    _cc_maybe_unused bool mode_valid = _cc_N(set_execution_mode(&creg, mode));
     assert(mode_valid && "Could not set mode on max perms cap");
     return creg;
 }
@@ -1040,11 +1043,11 @@ static inline _cc_addr_t _cc_N(get_alignment_mask)(_cc_addr_t req_length) {
         // This avoids undefined behaviour when counting most significant bit later.
         return _CC_MAX_ADDR;
     }
-    // To compute the mask we set bounds on a maximum permissions capability and
-    // return the mask that was used to adjust the length
-    _cc_cap_t tmpcap = _cc_N(make_max_perms_cap(0, 0, _CC_MAX_TOP));
+    // To compute the mask we compute the EBT for a capability with base=0 and
+    // top=req_length and return the mask that was used to adjust the length.
     _cc_addr_t mask = 0;
-    _cc_N(setbounds_impl)(&tmpcap, req_length, &mask);
+    bool exact = false;
+    (void)_cc_N(compute_ebt)(0, req_length, &mask, &exact);
     return mask;
 }
 

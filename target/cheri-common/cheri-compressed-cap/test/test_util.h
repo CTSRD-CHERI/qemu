@@ -58,8 +58,13 @@ template <class Cap> static void dump_cap_fields(FILE* f, const Cap& result) {
 #endif
     fprintf(f, "Tag:         %d  Permissions: %#" PRIx32 "  User Perms: %#" PRIx32 "\n", result.cr_tag,
             result.permissions(), result.software_permissions());
-    fprintf(f, "Flags:       %d  Reserved: %d  Sealed: %d  OType: %#" PRIx32 "%s", (int)result.flags(),
-            (int)result.reserved_bits(), (int)result.is_sealed(), result.type(), otype_suffix(result.type()));
+#ifdef TEST_CC_IS_CHERI256
+    fprintf(f, "Flags:       %d  ", (int)result.flags());
+#elif !defined(TEST_CC_IS_MORELLO)
+    fprintf(f, "Mode:        %d  ", (int)result.execution_mode());
+#endif
+    fprintf(f, "Reserved: %d  Sealed: %d  OType: %#" PRIx32 "%s", (int)result.reserved_bits(), (int)result.is_sealed(),
+            result.type(), otype_suffix(result.type()));
 }
 
 std::ostream& operator<<(std::ostream& os, const _cc_cap_t& value);

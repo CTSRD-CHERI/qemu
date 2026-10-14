@@ -44,9 +44,9 @@
 #include "exec/exec-all.h"
 
 static inline target_ulong cpu_get_current_pc(CPUArchState *env,
-                                              uintptr_t retpc, bool will_exit)
+                                              uintptr_t retpc)
 {
-    cpu_restore_state(env_cpu(env), retpc, will_exit);
+    cpu_restore_state(env_cpu(env), retpc);
     cheri_debug_assert(pc_is_current(env));
     return cpu_get_recent_pc(env);
 }
@@ -303,7 +303,7 @@ static inline uint32_t min_perms_for_store(CPUArchState *env, uint32_t cs)
     return perms;
 }
 
-typedef void QEMU_NORETURN (*unaligned_memaccess_handler)(CPUArchState *env,
+typedef void G_NORETURN (*unaligned_memaccess_handler)(CPUArchState *env,
                                                           target_ulong addr,
                                                           uintptr_t retpc);
 /* Do all the permission and bounds checks for loads/stores on cbp.

@@ -21,7 +21,6 @@
 
 #include <linux/kvm.h>
 
-#include "qemu-common.h"
 #include "qemu/timer.h"
 #include "qemu/error-report.h"
 #include "qemu/main-loop.h"
@@ -532,4 +531,8 @@ void kvm_riscv_set_irq(RISCVCPU *cpu, int irq, int level)
 bool kvm_arch_cpu_check_are_resettable(void)
 {
     return true;
+}
+
+void kvm_arch_accel_class_init(ObjectClass *oc)
+{
 }

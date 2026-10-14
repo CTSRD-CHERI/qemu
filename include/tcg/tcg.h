@@ -405,7 +405,7 @@ typedef struct TCGv_cap_checked_ptr_tl_d *TCGv_cap_checked_ptr;
 #define TCG_CALL_NO_WRITE_GLOBALS   0x0002
 /* Helper can be safely suppressed if the return value is not used. */
 #define TCG_CALL_NO_SIDE_EFFECTS    0x0004
-/* Helper is QEMU_NORETURN.  */
+/* Helper is G_NORETURN.  */
 #define TCG_CALL_NO_RETURN          0x0008
 
 /* convenience version of most used call flags */
@@ -440,6 +440,8 @@ typedef enum TCGTempVal {
 typedef enum TCGTempKind {
     /* Temp is dead at the end of all basic blocks. */
     TEMP_NORMAL,
+    /* Temp is live across conditional branch, but dead otherwise. */
+    TEMP_EBB,
     /* Temp is saved across basic blocks but dead at the end of TBs. */
     TEMP_LOCAL,
     /* Temp is saved across both basic blocks and translation blocks. */
@@ -541,7 +543,7 @@ typedef struct TCGProfile {
 } TCGProfile;
 
 struct TCGContext {
-    uint8_t *pool_cur, *pool_end;
+    uintptr_t pool_cur, pool_end;
     TCGPool *pool_first, *pool_current, *pool_first_large;
     int nb_labels;
     int nb_globals;
@@ -638,7 +640,7 @@ static inline bool temp_readonly(TCGTemp *ts)
 
 extern __thread TCGContext *tcg_ctx;
 extern const void *tcg_code_gen_epilogue;
-extern uintptr_t tcg_splitwx_diff;
+extern ptrdiff_t tcg_splitwx_diff;
 extern TCGv_env cpu_env;
 #ifdef TARGET_CHERI
 extern TCGv ddc_interposition;
@@ -839,7 +841,7 @@ size_t tcg_nb_tbs(void);
 static inline void *tcg_malloc(int size)
 {
     TCGContext *s = tcg_ctx;
-    uint8_t *ptr, *ptr_end;
+    uintptr_t ptr, ptr_end;
 
     /* ??? This is a weak placeholder for minimum malloc alignment.  */
     size = QEMU_ALIGN_UP(size, 8);
@@ -850,7 +852,7 @@ static inline void *tcg_malloc(int size)
         return tcg_malloc_internal(tcg_ctx, size);
     } else {
         s->pool_cur = ptr_end;
-        return ptr;
+        return (void *)ptr;
     }
 }
 
@@ -859,7 +861,7 @@ void tcg_register_thread(void);
 void tcg_prologue_init(TCGContext *s);
 void tcg_func_start(TCGContext *s);
 
-int tcg_gen_code(TCGContext *s, TranslationBlock *tb);
+int tcg_gen_code(TCGContext *s, TranslationBlock *tb, target_ulong pc_start);
 
 void tcg_set_frame(TCGContext *s, TCGReg reg, intptr_t start, intptr_t size);
 
@@ -1075,9 +1077,11 @@ TCGv_vec tcg_constant_vec_matching(TCGv_vec match, unsigned vece, int64_t val);
 #if UINTPTR_MAX == UINT32_MAX
 # define tcg_const_ptr(x)        ((TCGv_ptr)tcg_const_i32((intptr_t)(x)))
 # define tcg_const_local_ptr(x)  ((TCGv_ptr)tcg_const_local_i32((intptr_t)(x)))
+# define tcg_constant_ptr(x)     ((TCGv_ptr)tcg_constant_i32((intptr_t)(x)))
 #else
 # define tcg_const_ptr(x)        ((TCGv_ptr)tcg_const_i64((intptr_t)(x)))
 # define tcg_const_local_ptr(x)  ((TCGv_ptr)tcg_const_local_i64((intptr_t)(x)))
+# define tcg_constant_ptr(x)     ((TCGv_ptr)tcg_constant_i64((intptr_t)(x)))
 #endif
 
 TCGLabel *gen_new_label(void);

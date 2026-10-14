@@ -228,7 +228,7 @@ void HELPER(cspecialrw)(CPUArchState *env, uint32_t cd, uint32_t cs,
 {
     uintptr_t _host_return_address = GETPC();
     // Ensure that env->pcc.cursor is correct:
-    cpu_restore_state(env_cpu(env), _host_return_address, false);
+    cpu_restore_state(env_cpu(env), _host_return_address);
 
     assert(index <= 31 && "Bug in translator?");
     uint32_t csrno = csr_for_cspecialrw(index);
@@ -269,7 +269,6 @@ void HELPER(cjal)(CPUArchState *env, uint32_t cd, target_ulong target_addr,
 
 void HELPER(modesw)(CPUArchState *env, int to_capmode)
 {
-    _Static_assert(CAP_FLAGS_ALL_BITS == 1, "Only one flag should exist");
     assert(cheri_in_capmode(env) != to_capmode &&
            "Should have skipped this call during translate");
     cap_set_exec_mode(&env->pcc,
@@ -359,7 +358,7 @@ static void lr_c_impl(CPUArchState *env, uint32_t dest_reg, uint32_t auth_reg,
             addr, cap_get_cursor(cbp), cap_get_top(cbp));
         raise_cheri_exception(env, CapEx_LengthViolation, auth_reg);
     } else if (!QEMU_IS_ALIGNED(addr, CHERI_CAP_SIZE)) {
-        raise_unaligned_store_exception(env, addr, _host_return_address);
+        raise_unaligned_load_exception(env, addr, _host_return_address);
     }
     /*
      * For the reservation, we need the raw memory content without any fixups

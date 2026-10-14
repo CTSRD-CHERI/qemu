@@ -332,7 +332,7 @@ static inline void emit_text_reg(log_reginfo_t *rinfo)
  */
 static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
 {
-    QemuLogFile *logfile;
+    FILE *logfile;
     int i;
 
     /* Dump CPU-ID:ASID + address */
@@ -342,13 +342,12 @@ static void emit_text_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
      * Instruction disassembly, note that we use the instruction info
      * opcode bytes, without accessing target memory here.
      */
-    rcu_read_lock();
-    logfile = qatomic_rcu_read(&qemu_logfile);
+    logfile = qemu_log_trylock();
     if (logfile) {
-        target_disas_buf(logfile->fd, env_cpu(env), iinfo->insn_bytes,
+        target_disas_buf(logfile, env_cpu(env), iinfo->insn_bytes,
                          sizeof(iinfo->insn_bytes), iinfo->pc, 1);
     }
-    rcu_read_unlock();
+    qemu_log_unlock(logfile);
 
     /*
      * TODO(am2419): what to do with injected instructions?
@@ -436,7 +435,7 @@ static void emit_text_stop(CPUArchState *env, target_ulong pc)
  */
 static void emit_cvtrace_header(CPUArchState *env)
 {
-    FILE *logfile = qemu_log_lock();
+    FILE *logfile = qemu_log_trylock();
     char buffer[sizeof(cheri_trace_entry_t)];
 
     buffer[0] = CTE_QEMU_VERSION;
@@ -525,7 +524,7 @@ static void emit_cvtrace_entry(CPUArchState *env, cpu_log_instr_info_t *iinfo)
             entry.entry_type += 2;
     }
 
-    logfile = qemu_log_lock();
+    logfile = qemu_log_trylock();
     fwrite(&entry, sizeof(entry), 1, logfile);
     qemu_log_unlock(logfile);
 }
@@ -722,7 +721,7 @@ static void cpu_loglevel_switch(CPUArchState *env,
 static void global_loglevel_enable(void)
 {
     if (!qemu_loglevel_mask(CPU_LOG_INSTR))
-        qemu_set_log_internal(qemu_loglevel | CPU_LOG_INSTR);
+        qemu_set_log_internal(NULL, false, qemu_loglevel | CPU_LOG_INSTR, NULL);
 }
 
 /*
@@ -810,6 +809,7 @@ static void qemu_log_instr_info_destroy(gpointer data)
 void qemu_log_instr_init(CPUState *cpu)
 {
     cpu_log_instr_state_t *cpulog = &cpu->log_state;
+    assert(cpulog->instr_info == NULL);
     GArray *iinfo_ring = g_array_sized_new(FALSE, TRUE,
         sizeof(cpu_log_instr_info_t), reset_entry_buffer_size);
     cpu_log_instr_info_t *iinfo = NULL;
@@ -845,6 +845,16 @@ void qemu_log_instr_init(CPUState *cpu)
     else if (qemu_loglevel_mask(CPU_LOG_INSTR))
         do_cpu_loglevel_switch(cpu,
             RUN_ON_CPU_HOST_INT(QEMU_LOG_INSTR_LOGLEVEL_ALL));
+}
+
+void qemu_log_instr_finalize(CPUState *cpu)
+{
+    cpu_log_instr_state_t *cpulog = &cpu->log_state;
+
+    if (cpulog->instr_info) {
+        g_array_free(cpulog->instr_info, TRUE);
+        cpulog->instr_info = NULL;
+    }
 }
 
 static void

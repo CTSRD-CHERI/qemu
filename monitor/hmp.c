@@ -285,10 +285,15 @@ void help_cmd(Monitor *mon, const char *name)
         if (!strcmp(name, "log")) {
             const QEMULogItem *item;
             monitor_printf(mon, "Log items (comma separated):\n");
-            monitor_printf(mon, "%-10s %s\n", "none", "remove all logs");
+            monitor_printf(mon, "%-15s %s\n", "none", "remove all logs");
             for (item = qemu_log_items; item->mask != 0; item++) {
-                monitor_printf(mon, "%-10s %s\n", item->name, item->help);
+                monitor_printf(mon, "%-15s %s\n", item->name, item->help);
             }
+#ifdef CONFIG_TRACE_LOG
+            monitor_printf(mon, "trace:PATTERN   enable trace events\n");
+            monitor_printf(mon, "\nUse \"log trace:help\" to get a list of "
+                           "trace events.\n\n");
+#endif
             return;
         }
 
@@ -308,8 +313,8 @@ void help_cmd(Monitor *mon, const char *name)
 static const char *pch;
 static sigjmp_buf expr_env;
 
-static void G_GNUC_PRINTF(2, 3) QEMU_NORETURN
-expr_error(Monitor *mon, const char *fmt, ...)
+static G_NORETURN G_GNUC_PRINTF(2, 3)
+void expr_error(Monitor *mon, const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
@@ -574,10 +579,11 @@ static const char *get_command_name(const char *cmdline,
  * Read key of 'type' into 'key' and return the current
  * 'type' pointer.
  */
-static char *key_get_info(const char *type, char **key)
+static const char *key_get_info(const char *type, char **key)
 {
     size_t len;
-    char *p, *str;
+    const char *p;
+    char *str;
 
     if (*type == ',') {
         type++;
@@ -1089,7 +1095,7 @@ static void hmp_info_human_readable_text(Monitor *mon,
         return;
     }
 
-    monitor_printf(mon, "%s", info->human_readable_text);
+    monitor_puts(mon, info->human_readable_text);
 }
 
 static void handle_hmp_command_exec(Monitor *mon,

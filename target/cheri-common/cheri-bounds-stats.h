@@ -114,8 +114,8 @@ struct oob_stats_info {
             ") created using %s: " PRINT_CAP_FMTSTR ", pc=%016" PRIx64
             " ASID=%u\n",
             howmuch, name, PRINT_CAP_ARGS(cr),
-            cpu_get_current_pc(env, retpc, false),
-            cpu_get_asid(env, cpu_get_current_pc(env, retpc, false)));
+            cpu_get_current_pc(env, retpc),
+            cpu_get_asid(env, cpu_get_current_pc(env, retpc)));
         return howmuch;
     }
     return 0;

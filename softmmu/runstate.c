@@ -40,7 +40,6 @@
 #include "qapi/error.h"
 #include "qapi/qapi-commands-run-state.h"
 #include "qapi/qapi-events-run-state.h"
-#include "qemu-common.h"
 #include "qemu/error-report.h"
 #include "qemu/log.h"
 #include "qemu/job.h"
@@ -127,6 +126,7 @@ static const RunStateTransition runstate_transitions_def[] = {
     { RUN_STATE_RESTORE_VM, RUN_STATE_PRELAUNCH },
 
     { RUN_STATE_COLO, RUN_STATE_RUNNING },
+    { RUN_STATE_COLO, RUN_STATE_PRELAUNCH },
     { RUN_STATE_COLO, RUN_STATE_SHUTDOWN},
 
     { RUN_STATE_RUNNING, RUN_STATE_DEBUG },
@@ -441,11 +441,16 @@ void qemu_system_reset(ShutdownCause reason)
     cpu_synchronize_all_states();
 
     if (mc && mc->reset) {
-        mc->reset(current_machine);
+        mc->reset(current_machine, reason);
     } else {
-        qemu_devices_reset();
+        qemu_devices_reset(reason);
     }
-    if (reason && reason != SHUTDOWN_CAUSE_SUBSYSTEM_RESET) {
+    switch (reason) {
+    case SHUTDOWN_CAUSE_NONE:
+    case SHUTDOWN_CAUSE_SUBSYSTEM_RESET:
+    case SHUTDOWN_CAUSE_SNAPSHOT_LOAD:
+        break;
+    default:
         qapi_event_send_reset(shutdown_caused_by_guest(reason), reason);
     }
     cpu_synchronize_all_post_reset();
@@ -482,7 +487,8 @@ void qemu_system_guest_panicked(GuestPanicInformation *info)
         qapi_event_send_guest_panicked(GUEST_PANIC_ACTION_PAUSE,
                                         !!info, info);
         vm_stop(RUN_STATE_GUEST_PANICKED);
-    } else if (panic_action == PANIC_ACTION_SHUTDOWN) {
+    } else if (panic_action == PANIC_ACTION_SHUTDOWN ||
+               panic_action == PANIC_ACTION_EXIT_FAILURE) {
         qapi_event_send_guest_panicked(GUEST_PANIC_ACTION_POWEROFF,
                                        !!info, info);
         vm_stop(RUN_STATE_GUEST_PANICKED);
@@ -662,7 +668,7 @@ void qemu_system_debug_request(void)
     qemu_notify_event();
 }
 
-static bool main_loop_should_exit(void)
+static bool main_loop_should_exit(int *status)
 {
     RunState r;
     ShutdownCause request;
@@ -680,6 +686,10 @@ static bool main_loop_should_exit(void)
         if (shutdown_action == SHUTDOWN_ACTION_PAUSE) {
             vm_stop(RUN_STATE_SHUTDOWN);
         } else {
+            if (request == SHUTDOWN_CAUSE_GUEST_PANIC &&
+                panic_action == PANIC_ACTION_EXIT_FAILURE) {
+                *status = EXIT_FAILURE;
+            }
             return true;
         }
     }
@@ -715,12 +725,14 @@ static bool main_loop_should_exit(void)
     return false;
 }
 
-void qemu_main_loop(void)
+int qemu_main_loop(void)
 {
+    int status = EXIT_SUCCESS;
 #ifdef CONFIG_PROFILER
     int64_t ti;
 #endif
-    while (!main_loop_should_exit()) {
+
+    while (!main_loop_should_exit(&status)) {
 #ifdef CONFIG_PROFILER
         ti = profile_getclock();
 #endif
@@ -729,6 +741,8 @@ void qemu_main_loop(void)
         dev_time += profile_getclock() - ti;
 #endif
     }
+
+    return status;
 }
 
 void qemu_add_exit_notifier(Notifier *notify)

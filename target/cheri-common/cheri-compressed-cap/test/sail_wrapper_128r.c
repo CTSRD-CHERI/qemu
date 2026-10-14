@@ -35,7 +35,12 @@
 /* Provide the RISC-V standard 128-bit APIs for sail_wrapper_common.c */
 
 #define SAIL_COMPRESSION_GENERATED_C_FILE "contrib/sail_compression_128r.c"
+#ifndef SAIL_WRAPPER_CC_IS_RVY093
 #define SAIL_WRAPPER_CC_FORMAT_LOWER 128r
 #define SAIL_WRAPPER_CC_FORMAT_UPPER 128R
+#else
+#define SAIL_WRAPPER_CC_FORMAT_LOWER 128r093
+#define SAIL_WRAPPER_CC_FORMAT_UPPER 128R093
+#endif
 
 #include "sail_wrapper_common_riscv.c"

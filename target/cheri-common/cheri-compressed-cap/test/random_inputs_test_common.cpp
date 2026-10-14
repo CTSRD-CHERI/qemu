@@ -42,7 +42,9 @@ static bool check_fields_match(const typename Handler::cap_t& result, const test
     CHECK_AND_SAVE_SUCCESS(sail_result._cr_top == result._cr_top);
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_base == result.cr_base);
     CHECK_AND_SAVE_SUCCESS(sail_result.cr_pesbt == result.cr_pesbt);
-    CHECK_AND_SAVE_SUCCESS(sail_result.flags() == result.flags());
+#ifndef TEST_CC_IS_MORELLO
+    CHECK_AND_SAVE_SUCCESS(sail_result.execution_mode() == result.execution_mode());
+#endif
     CHECK_AND_SAVE_SUCCESS(sail_result.type() == result.type());
     CHECK_AND_SAVE_SUCCESS(sail_result.permissions() == result.permissions());
     CHECK_AND_SAVE_SUCCESS(sail_result.reserved_bits() == result.reserved_bits());

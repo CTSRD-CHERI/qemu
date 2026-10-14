@@ -1833,10 +1833,11 @@ static void mb_tr_tb_stop(DisasContextBase *dcb, CPUState *cs)
     }
 }
 
-static void mb_tr_disas_log(const DisasContextBase *dcb, CPUState *cs)
+static void mb_tr_disas_log(const DisasContextBase *dcb, CPUState *cs,
+                            FILE *logfile)
 {
-    qemu_log("IN: %s\n", lookup_symbol(dcb->pc_first));
-    log_target_disas(cs, dcb->pc_first, dcb->tb->size);
+    fprintf(logfile, "IN: %s\n", lookup_symbol(dcb->pc_first));
+    target_disas(logfile, cs, dcb->pc_first, dcb->tb->size);
 }
 
 static const TranslatorOps mb_tr_ops = {
@@ -1848,10 +1849,11 @@ static const TranslatorOps mb_tr_ops = {
     .disas_log          = mb_tr_disas_log,
 };
 
-void gen_intermediate_code(CPUState *cpu, TranslationBlock *tb, int max_insns)
+void gen_intermediate_code(CPUState *cpu, TranslationBlock *tb, int max_insns,
+                           target_ulong pc, void *host_pc)
 {
     DisasContext dc;
-    translator_loop(&mb_tr_ops, &dc.base, cpu, tb, max_insns);
+    translator_loop(cpu, tb, max_insns, pc, host_pc, &mb_tr_ops, &dc.base);
 }
 
 void mb_cpu_dump_state(CPUState *cs, FILE *f, int flags)
@@ -1943,11 +1945,4 @@ void mb_tcg_init(void)
 
     cpu_res_addr =
         tcg_global_mem_new(cpu_env, offsetof(CPUMBState, res_addr), "res_addr");
-}
-
-void restore_state_to_opc(CPUMBState *env, TranslationBlock *tb,
-                          target_ulong *data)
-{
-    env->pc = data[0];
-    env->iflags = data[1];
 }

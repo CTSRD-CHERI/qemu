@@ -200,11 +200,6 @@ static void morello_machine_init(MachineState *machine)
                                     trickbox->mmio[1].memory);
     }
 
-    /* Start logging */
-#ifdef CONFIG_TCG_LOG_INSTR
-    qemu_log_instr_init(CPU(ARM_CPU(first_cpu)));
-#endif
-
     /* The real memory map is specified above. This is just to make
      * arm_load_kernel happy,
      * as it will assert if ram_size is not large enough to hold the ELF */

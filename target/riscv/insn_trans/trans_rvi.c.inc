@@ -32,9 +32,7 @@ static bool trans_c64_illegal(DisasContext *ctx, arg_empty *a)
 
 static bool trans_lui(DisasContext *ctx, arg_lui *a)
 {
-    if (a->rd != 0) {
-        gen_set_gpri(ctx, a->rd, a->imm);
-    }
+    gen_set_gpri(ctx, a->rd, a->imm);
     return true;
 }
 
@@ -51,9 +49,7 @@ static bool trans_auipc(DisasContext *ctx, arg_auipc *a)
      * AUIPC returns a value relative to PCC.base for ISAv8 but the address for
      * v9. This is handled by the pcc_reloc() macro.
      */
-    if (a->rd != 0) {
-        gen_set_gpri(ctx, a->rd, a->imm + ctx->base.pc_next - pcc_reloc(ctx));
-    }
+    gen_set_gpri(ctx, a->rd, a->imm + ctx->base.pc_next);
     return true;
 }
 
@@ -931,6 +927,8 @@ static inline bool is_cap_csr(uint32_t csrno)
 
 static bool do_csr_post(DisasContext *ctx)
 {
+    /* The helper may raise ILLEGAL_INSN -- record binv for unwind. */
+    decode_save_opc(ctx);
     /* We may have changed important cpu state -- exit to main loop. */
     gen_set_pc_imm(ctx, ctx->pc_succ_insn);
     tcg_gen_exit_tb(NULL, 0);

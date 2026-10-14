@@ -39,13 +39,14 @@
 
 #ifdef TARGET_CHERI
 #ifdef TARGET_AARCH64
-#define PRINT_CAP_MODE(cr) (unsigned)(cap_get_cursor(cr) & 1)
+#define PRINT_CAP_MODE(cr) (cap_get_cursor(cr) & 1) ? "CAP" : "INT"
 #else
-#define PRINT_CAP_MODE(cr) (unsigned)cap_get_exec_mode(cr)
+#define PRINT_CAP_MODE(cr)                                                     \
+    cap_get_exec_mode(cr) == CHERI_EXEC_CAPMODE ? "CAP" : "INT"
 #endif
 #define PRINT_CAP_FMTSTR                                                       \
-    "v:%d m:%d p:%2x ct:" TARGET_FMT_ld " b:" TARGET_FMT_lx                    \
-    " a:" TARGET_FMT_lx " t:" TARGET_FMT_lx " bv: %d"
+    "v:%d %s p:%2x ct:" TARGET_FMT_ld " b:" TARGET_FMT_lx " a:" TARGET_FMT_lx  \
+    " t:" TARGET_FMT_lx " bv: %d"
 #define PRINT_CAP_ARGS(cr)                                                     \
     (cr)->cr_tag, PRINT_CAP_MODE(cr), (unsigned)cap_get_all_perms(cr),         \
         cap_get_otype_signext(cr), cap_get_base(cr), cap_get_cursor(cr),       \
@@ -198,9 +199,7 @@ static inline bool fix_up_exec_mode(G_GNUC_UNUSED CPUArchState *env,
                                     G_GNUC_UNUSED CheriExecMode *mode,
                                     G_GNUC_UNUSED target_ulong perms)
 {
-#if CAP_CC(ADDR_WIDTH) == 32
-    /* ACPERM rule 15 (RV32 only in 0.9.3) */
-    _Static_assert(CHERI_EXEC_CAPMODE == 1, "wrong definition of modes");
+    /* ACPERM rules M=1 X=0 reserved */
     if (*mode == 1) {
         bool hybrid_support = riscv_feature(env, RISCV_FEATURE_CHERI_HYBRID);
         if (!(perms & RVY_AP_X) || !hybrid_support) {
@@ -208,7 +207,6 @@ static inline bool fix_up_exec_mode(G_GNUC_UNUSED CPUArchState *env,
             return true;
         }
     }
-#endif
     return false;
 }
 
@@ -233,30 +231,30 @@ static inline bool cap_legalize_perms(G_GNUC_UNUSED CPUArchState *env,
 #endif
 }
 
-static inline void cap_set_perms(CPUArchState *env, cap_register_t *c,
+static inline bool cap_set_perms(CPUArchState *env, cap_register_t *c,
                                  target_ulong perms)
 {
     bool success = CAP_cc(set_permissions)(c, perms);
-    assert(success);
+    return success;
 }
 
 #ifndef TARGET_AARCH64
+
+/* Accessors handle mapping Arch specific CAP_CC mode to
+ * CHERI_EXEC_MODE
+ */
 static inline CheriExecMode cap_get_exec_mode(const cap_register_t *c)
 {
-    /*
-     * NB: For the RISC-V standard these values are inverted, but this will
-     * be handled by the next cheri-compressed-cap upgrade.
-     */
-    return CAP_cc(get_flags)(c) == 1 ? CHERI_EXEC_CAPMODE : CHERI_EXEC_INTMODE;
+    return CAP_cc(get_execution_mode)(c) == CAP_CC(MODE_CAP)
+               ? CHERI_EXEC_CAPMODE
+               : CHERI_EXEC_INTMODE;
 }
 
-static inline void cap_set_exec_mode(cap_register_t *c, CheriExecMode mode)
+static inline bool cap_set_exec_mode(cap_register_t *c, CheriExecMode mode)
 {
-    /*
-     * NB: For the RISC-V standard these values are inverted, but this will
-     * be handled by the next cheri-compressed-cap upgrade.
-     */
-    CAP_cc(update_flags)(c, mode == CHERI_EXEC_CAPMODE ? 1 : 0);
+    bool ok = CAP_cc(set_execution_mode)(
+        c, mode == CHERI_EXEC_CAPMODE ? CAP_CC(MODE_CAP) : CAP_CC(MODE_INT));
+    return ok;
 }
 #endif
 
@@ -275,7 +273,8 @@ cap_has_invalid_perms_encoding(G_GNUC_UNUSED CPUArchState *env,
 {
 #ifdef TARGET_CHERI_RISCV_STD
     target_ulong perms = cap_get_all_perms(c);
-    return fix_up_ap(env, &perms) == true;
+    CheriExecMode mode = cap_get_exec_mode(c);
+    return fix_up_ap(env, &perms) || fix_up_exec_mode(env, &mode, perms);
 #else
     return false;
 #endif

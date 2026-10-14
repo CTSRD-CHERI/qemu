@@ -206,6 +206,7 @@ static const TypeInfo cmu_device_info = {
     .name = TYPE_CMU_DEVICE,
     .parent = TYPE_SYS_BUS_DEVICE,
     .instance_size = sizeof(CMUDeviceState),
+    .class_size = sizeof(CMUClass),
     .class_init = cmu_class_init,
 };
 

@@ -65,11 +65,18 @@ qga_ss.add(files(
   'commands.c',
   'guest-agent-command-state.c',
   'main.c',
+  'cutils.c',
 ))
 qga_ss.add(when: 'CONFIG_POSIX', if_true: files(
   'channel-posix.c',
   'commands-posix.c',
   'commands-posix-ssh.c',
+))
+qga_ss.add(when: 'CONFIG_LINUX', if_true: files(
+  'commands-linux.c',
+))
+qga_ss.add(when: 'CONFIG_BSD', if_true: files(
+  'commands-bsd.c',
 ))
 qga_ss.add(when: 'CONFIG_WIN32', if_true: files(
   'channel-win32.c',
@@ -83,13 +90,11 @@ qga_ss = qga_ss.apply(config_host, strict: false)
 gen_tlb = []
 qga_libs = []
 if targetos == 'windows'
-  qga_libs += ['-lws2_32', '-lwinmm', '-lpowrprof', '-lwtsapi32', '-lwininet', '-liphlpapi', '-lnetapi32']
+  qga_libs += ['-lws2_32', '-lwinmm', '-lpowrprof', '-lwtsapi32', '-lwininet', '-liphlpapi', '-lnetapi32',
+               '-lsetupapi', '-lcfgmgr32']
   if have_qga_vss
     qga_libs += ['-lole32', '-loleaut32', '-lshlwapi', '-lstdc++', '-Wl,--enable-stdcall-fixup']
     subdir('vss-win32')
-  endif
-  if have_ntddscsi
-    qga_libs += ['-lsetupapi', '-lcfgmgr32']
   endif
 endif
 
@@ -123,15 +128,14 @@ if targetos == 'windows'
                             output: 'qemu-ga-@0@.msi'.format(host_arch),
                             depends: deps,
                             command: [
-                              find_program('env'),
-                              'QEMU_GA_VERSION=' + config_host['QEMU_GA_VERSION'],
-                              'QEMU_GA_MANUFACTURER=' + config_host['QEMU_GA_MANUFACTURER'],
-                              'QEMU_GA_DISTRO=' + config_host['QEMU_GA_DISTRO'],
-                              'BUILD_DIR=' + meson.build_root(),
                               wixl, '-o', '@OUTPUT0@', '@INPUT0@',
                               qemu_ga_msi_arch[cpu],
                               qemu_ga_msi_vss,
-                              '-D', 'Mingw_dlls=' + config_host['QEMU_GA_MSI_MINGW_DLL_PATH'],
+                              '-D', 'BUILD_DIR=' + meson.project_build_root(),
+                              '-D', 'BIN_DIR=' + glib.get_variable('bindir'),
+                              '-D', 'QEMU_GA_VERSION=' + config_host['QEMU_GA_VERSION'],
+                              '-D', 'QEMU_GA_MANUFACTURER=' + config_host['QEMU_GA_MANUFACTURER'],
+                              '-D', 'QEMU_GA_DISTRO=' + config_host['QEMU_GA_DISTRO'],
                             ])
     all_qga += [qga_msi]
     alias_target('msi', qga_msi)
@@ -140,7 +144,7 @@ else
   if get_option('guest_agent_msi').enabled()
     error('MSI guest agent package is available only for MinGW Windows cross-compilation')
   endif
-  install_subdir('run', install_dir: get_option('localstatedir'))
+  install_emptydir(get_option('localstatedir') / 'run')
 endif
 
 alias_target('qemu-ga', all_qga)

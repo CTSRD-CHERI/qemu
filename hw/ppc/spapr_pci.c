@@ -800,6 +800,7 @@ static char *spapr_phb_vfio_get_loc_code(SpaprPhbState *sphb,  PCIDevice *pdev)
     }
 
     /* Construct and read from host device tree the loc-code */
+    g_free(path);
     path = g_strdup_printf("/proc/device-tree%s/ibm,loc-code", devspec);
     if (!g_file_get_contents(path, &buf, NULL, NULL)) {
         return NULL;
@@ -1978,7 +1979,7 @@ static void spapr_phb_realize(DeviceState *dev, Error **errp)
      * our memory slot is of page size granularity.
      */
     if (kvm_enabled()) {
-        msi_window_size = qemu_real_host_page_size;
+        msi_window_size = qemu_real_host_page_size();
     }
 
     memory_region_init_io(&sphb->msiwindow, OBJECT(sphb), &spapr_msi_ops, spapr,
@@ -2044,7 +2045,7 @@ static int spapr_phb_children_reset(Object *child, void *opaque)
     DeviceState *dev = (DeviceState *) object_dynamic_cast(child, TYPE_DEVICE);
 
     if (dev) {
-        device_legacy_reset(dev);
+        device_cold_reset(dev);
     }
 
     return 0;
@@ -2067,6 +2068,7 @@ void spapr_phb_dma_reset(SpaprPhbState *sphb)
     tcet = spapr_tce_find_by_liobn(sphb->dma_liobn[0]);
     spapr_tce_table_enable(tcet, SPAPR_TCE_PAGE_SHIFT, sphb->dma_win_addr,
                            sphb->dma_win_size >> SPAPR_TCE_PAGE_SHIFT);
+    tcet->def_win = true;
 }
 
 static void spapr_phb_reset(DeviceState *qdev)
@@ -2359,8 +2361,9 @@ int spapr_dt_phb(SpaprMachineState *spapr, SpaprPhbState *phb,
         cpu_to_be32(RTAS_IBM_REMOVE_PE_DMA_WINDOW)
     };
     uint32_t ddw_extensions[] = {
-        cpu_to_be32(1),
-        cpu_to_be32(RTAS_IBM_RESET_PE_DMA_WINDOW)
+        cpu_to_be32(2),
+        cpu_to_be32(RTAS_IBM_RESET_PE_DMA_WINDOW),
+        cpu_to_be32(1), /* 1: ibm,query-pe-dma-window 6 outputs, PAPR 2.8 */
     };
     SpaprTceTable *tcet;
     SpaprDrc *drc;

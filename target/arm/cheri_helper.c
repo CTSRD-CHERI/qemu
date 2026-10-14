@@ -427,7 +427,7 @@ void helper_set_pcc(CPUArchState *env, target_ulong addr)
     set_aarch_reg_value(&env->pc, addr);
 }
 
-void QEMU_NORETURN
+void G_NORETURN
 helper_check_capabilities_enabled_exception(CPUArchState *env)
 {
     int el =
@@ -436,7 +436,7 @@ helper_check_capabilities_enabled_exception(CPUArchState *env)
     raise_exception(env, EXCP_UDEF, syn_aa64_capability_access(), el);
 }
 
-void QEMU_NORETURN helper_sys_not_accessible_exception(CPUArchState *env,
+void G_NORETURN helper_sys_not_accessible_exception(CPUArchState *env,
                                                        uint32_t syndrome)
 {
     int el = exception_target_el_capability(env);

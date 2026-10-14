@@ -11,6 +11,7 @@
  */
 
 #include "qemu/osdep.h"
+#include "qemu/cpu-float.h"
 #include "qemu-file.h"
 #include "migration.h"
 #include "migration/vmstate.h"
@@ -387,9 +388,11 @@ const VMStateInfo vmstate_info_uint64 = {
 /* Instantiate the macro for each capability type */
 DEFINE_CAP_VMSTATE(64, 32)
 DEFINE_CAP_VMSTATE(64r, 32)
+DEFINE_CAP_VMSTATE(64r093, 32)
 DEFINE_CAP_VMSTATE(128, 64)
 DEFINE_CAP_VMSTATE(128m, 64)
 DEFINE_CAP_VMSTATE(128r, 64)
+DEFINE_CAP_VMSTATE(128r093, 64)
 
 static int get_nullptr(QEMUFile *f, void *pv, size_t size,
                        const VMStateField *field)

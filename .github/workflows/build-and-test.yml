@@ -6,9 +6,43 @@ on:
   pull_request:
     branches: [ "main" ]
 
+permissions:
+  checks: write
+  pull-requests: write
+
 jobs:
   build-and-test:
-    runs-on: ubuntu-22.04
+    name: build-and-test (${{ matrix.name }})
+    runs-on: ${{ matrix.runs-on }}
+    container: ${{ matrix.container }}
+    env:
+      ASAN_OPTIONS: "halt_on_error=1:abort_on_error=1:print_summary=1"
+      UBSAN_OPTIONS: "halt_on_error=1:abort_on_error=1:print_summary=1:print_stacktrace=1"
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            host: linux
+            runs-on: the-capable-hub-aws-ci-amd64
+            container: capablehub/tch-ubuntu-24-builder
+            targets: "arm-softmmu,aarch64-softmmu,morello-softmmu,mips64-softmmu,mips64cheri128-softmmu,riscv64-softmmu,riscv64xcheri-softmmu,riscv32-softmmu,riscv32xcheri-softmmu,x86_64-softmmu,riscv32cheristd-softmmu,riscv64cheristd-softmmu"
+            configure_flags: ""
+          - name: linux-sanitizers
+            host: linux
+            runs-on: the-capable-hub-aws-ci-amd64
+            container: capablehub/tch-ubuntu-24-builder
+            targets: "arm-softmmu,aarch64-softmmu,morello-softmmu,mips64-softmmu,mips64cheri128-softmmu,riscv64-softmmu,riscv64xcheri-softmmu,riscv32-softmmu,riscv32xcheri-softmmu,x86_64-softmmu,riscv32cheristd-softmmu,riscv64cheristd-softmmu"
+            configure_flags: "--cc=clang --cxx=clang++ --enable-debug --enable-sanitizers"
+          - name: macos
+            host: macos
+            runs-on: macos-latest
+            container: ''
+            # The host-specific code (9pfs in particular) is compiled once for
+            # all targets, so a subset is enough to cover the macOS-only paths.
+            targets: "aarch64-softmmu,riscv64-softmmu,riscv64cheristd-softmmu,x86_64-softmmu"
+            configure_flags: ""
 
     steps:
       - uses: actions/checkout@v5
@@ -16,41 +50,61 @@ jobs:
           submodules: 'false'
 
       - name: Install dependencies
+        if: matrix.host == 'linux'
         run: |
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
+              clang \
               python3 \
+              python-is-python3 \
               ninja-build \
               pkgconf \
               libglib2.0-dev \
+              libcap-ng-dev \
+              libattr1-dev \
               libfdt-dev \
               libslirp-dev \
               libpixman-1-dev
+
+      - name: Install dependencies
+        if: matrix.host == 'macos'
+        run: |
+          brew install ninja pkgconf glib dtc libslirp pixman python-setuptools meson
 
       - name: Configure
         run: |
           mkdir build
           cd build
+          # Homebrew's prefix isn't on clang's default search path, so
+          # meson can't find libfdt etc without this (see freebsd.yml).
+          extra_flags="${{ matrix.configure_flags }}"
+          if [ "${{ matrix.host }}" = "macos" ]; then
+            # Homebrew python 3.14 is not compatible with the bundled meson, use system meson.
+            extra_flags="$extra_flags --meson=meson --extra-cflags=-I$(brew --prefix)/include --extra-ldflags=-L$(brew --prefix)/lib"
+          fi
           ../configure \
             --enable-werror \
+            --enable-virtfs \
             --disable-docs \
+            --disable-cocoa \
             --enable-fdt=system \
-            --enable-slirp=system \
             --disable-capstone \
             --disable-linux-user \
-            --target-list="arm-softmmu,aarch64-softmmu,morello-softmmu,mips64-softmmu,mips64cheri128-softmmu,riscv64-softmmu,riscv64xcheri-softmmu,riscv32-softmmu,riscv32xcheri-softmmu,x86_64-softmmu,riscv32cheristd-softmmu,riscv64cheristd-softmmu"
+            --target-list="${{ matrix.targets }}" \
+            $extra_flags
 
       - name: Build
         run: |
           cd build
-          make -j$(nproc)
+          make -j$(getconf _NPROCESSORS_ONLN)
 
       - name: Run Morello tests
+        if: matrix.host == 'linux'
         run: |
           git clone https://github.com/rems-project/morello-generated-tests.git
           pwd
           python -m venv .venv
-          source .venv/bin/activate
+          . .venv/bin/activate
           pip install pytest-xdist
           cd tests/morello && pytest \
             --morello-tests-dir=$GITHUB_WORKSPACE/morello-generated-tests \
@@ -61,15 +115,32 @@ jobs:
         run: |
           cd build
           pwd
-          ../meson/meson.py test --print-errorlogs --timeout-multiplier=2
+          _meson=../meson/meson.py
+          if [ "${{ matrix.host }}" = "macos" ]; then
+            _meson=meson
+          fi
+          ${_meson} test --print-errorlogs --timeout-multiplier=2
           cp meson-logs/testlog.junit.xml $GITHUB_WORKSPACE/qemu-test-results.xml
         continue-on-error: true
 
+      # The regular action only works on Linux since it runs in a container;
+      # macOS (and Windows) runners need the composite variant instead.
       - name: Publish Test Results
         uses: EnricoMi/publish-unit-test-result-action@v2
+        if: matrix.host == 'linux' && !cancelled()
         with:
           files: "*-test-results.xml"
           action_fail_on_inconclusive: 'true'
-          action_fail: 'true'
-          # QEMU test results produce
+          # Would require additional permissions at the repository level
+          check_run: 'false'
+          # QEMU test results produce large output files
+          large_files: 'true'
+
+      - name: Publish Test Results
+        uses: EnricoMi/publish-unit-test-result-action/composite@v2
+        if: matrix.host == 'macos' && !cancelled()
+        with:
+          files: "*-test-results.xml"
+          action_fail_on_inconclusive: 'true'
+          check_run: 'false'
           large_files: 'true'

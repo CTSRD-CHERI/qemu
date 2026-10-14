@@ -34,6 +34,7 @@
  * SUCH DAMAGE.
  */
 // This file defines the 64-bit CHERI compressed capability format for the CHERI ISA version 9.
+#define CC_IS_V9
 
 #define CC_FORMAT_LOWER 128
 #define CC_FORMAT_UPPER 128
@@ -56,13 +57,8 @@
 #define CC128_SPECIAL_OTYPE_VAL_SIGNED(subtract) (((int64_t)-1) - subtract##u)
 // ISAv9 always supports exactly one level bit (local/global).
 #define CC128_MANDATORY_LEVEL_BITS 1
-#define CC128_MAX_LEVEL_BITS CC64_MANDATORY_LEVEL_BITS
+#define CC128_MAX_LEVEL_BITS CC128_MANDATORY_LEVEL_BITS
 
-/* Use __uint128 to represent 65 bit length */
-__extension__ typedef unsigned __int128 cc128_length_t;
-__extension__ typedef signed __int128 cc128_offset_t;
-typedef uint64_t cc128_addr_t;
-typedef int64_t cc128_saddr_t;
 #include "cheri_compressed_cap_macros.h"
 typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 1, _CC_N(MODE_INT) = 0 } _CC_N(Mode);
 
@@ -78,8 +74,6 @@ enum {
     _CC_FIELD(EBT, 90, 64),
 
     _CC_FIELD(INTERNAL_EXPONENT, 90, 90),
-    _CC_FIELD(TOP_ENCODED, 89, 78),
-    _CC_FIELD(BOTTOM_ENCODED, 77, 64),
 
     // Top/bottom offsets depending in INTERNAL_EXPONENT flag:
     // Without internal exponent:
@@ -94,9 +88,6 @@ enum {
 #pragma GCC diagnostic pop
 
 #define CC128_OTYPE_BITS CC128_FIELD_OTYPE_SIZE
-#define CC128_BOT_WIDTH CC128_FIELD_EXP_ZERO_BOTTOM_SIZE
-#define CC128_BOT_INTERNAL_EXP_WIDTH CC128_FIELD_EXP_NONZERO_BOTTOM_SIZE
-#define CC128_EXP_LOW_WIDTH CC128_FIELD_EXPONENT_LOW_PART_SIZE
 
 #define CC128_PERM_GLOBAL (1 << 0)
 #define CC128_PERM_EXECUTE (1 << 1)
@@ -148,8 +139,6 @@ enum _CC_N(OTypes) {
     ITEM(OTYPE_INDIRECT_PAIR, __VA_ARGS__)                                                                             \
     ITEM(OTYPE_INDIRECT_SENTRY, __VA_ARGS__)
 
-_CC_STATIC_ASSERT_SAME(CC128_MANTISSA_WIDTH, CC128_FIELD_EXP_ZERO_BOTTOM_SIZE);
-
 // CHERI ISA v9 uses the "internal exponent" bit.
 #define CC128_ENCODE_IE(IE) _CC_ENCODE_FIELD(IE, INTERNAL_EXPONENT)
 #define CC128_EXTRACT_IE(pesbt) _CC_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT)
@@ -186,5 +175,6 @@ decompress_128cap(uint64_t pesbt, uint64_t cursor, _cc_cap_t* cdp) {
     cc128_decompress_mem(pesbt, cursor, cdp->cr_tag, cdp);
 }
 
+#undef CC_IS_V9
 #undef CC_FORMAT_LOWER
 #undef CC_FORMAT_UPPER

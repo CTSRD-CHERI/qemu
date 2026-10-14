@@ -10,8 +10,8 @@
  * or later.  See the COPYING.LIB file in the top-level directory.
  */
 
-#ifndef BLOCK_BACKEND_GS_H
-#define BLOCK_BACKEND_GS_H
+#ifndef BLOCK_BACKEND_GLOBAL_STATE_H
+#define BLOCK_BACKEND_GLOBAL_STATE_H
 
 #include "block-backend-common.h"
 
@@ -106,11 +106,11 @@ void blk_io_limits_enable(BlockBackend *blk, const char *group);
 void blk_io_limits_update_group(BlockBackend *blk, const char *group);
 void blk_set_force_allow_inactivate(BlockBackend *blk);
 
-void blk_register_buf(BlockBackend *blk, void *host, size_t size);
-void blk_unregister_buf(BlockBackend *blk, void *host);
+bool blk_register_buf(BlockBackend *blk, void *host, size_t size, Error **errp);
+void blk_unregister_buf(BlockBackend *blk, void *host, size_t size);
 
 const BdrvChild *blk_root(BlockBackend *blk);
 
 int blk_make_empty(BlockBackend *blk, Error **errp);
 
-#endif /* BLOCK_BACKEND_GS_H */
+#endif /* BLOCK_BACKEND_GLOBAL_STATE_H */

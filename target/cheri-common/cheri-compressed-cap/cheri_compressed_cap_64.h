@@ -34,6 +34,7 @@
  * SUCH DAMAGE.
  */
 // This file defines the 32-bit CHERI compressed capability format for the CHERI ISA version 9.
+#define CC_IS_V9
 
 #define CC_FORMAT_LOWER 64
 #define CC_FORMAT_UPPER 64
@@ -58,11 +59,6 @@
 #define CC64_MANDATORY_LEVEL_BITS 1
 #define CC64_MAX_LEVEL_BITS CC64_MANDATORY_LEVEL_BITS
 
-/* Use uint64_t to represent 33 bit length */
-typedef uint64_t cc64_length_t;
-typedef int64_t cc64_offset_t;
-typedef uint32_t cc64_addr_t;
-typedef int32_t cc64_saddr_t;
 #include "cheri_compressed_cap_macros.h"
 typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 1, _CC_N(MODE_INT) = 0 } _CC_N(Mode);
 
@@ -76,8 +72,6 @@ enum {
     _CC_FIELD(EBT, 46, 32),
 
     _CC_FIELD(INTERNAL_EXPONENT, 46, 46),
-    _CC_FIELD(TOP_ENCODED, 45, 40),
-    _CC_FIELD(BOTTOM_ENCODED, 39, 32),
 
     // Top/bottom offsets depending in INTERNAL_EXPONENT flag:
     // Without internal exponent:
@@ -96,9 +90,6 @@ _CC_STATIC_ASSERT_SAME(CC64_FIELD_UPERMS_SIZE, 0);
 _CC_STATIC_ASSERT_SAME(CC64_FIELD_RESERVED_SIZE, 0);
 
 #define CC64_OTYPE_BITS CC64_FIELD_OTYPE_SIZE
-#define CC64_BOT_WIDTH CC64_FIELD_EXP_ZERO_BOTTOM_SIZE
-#define CC64_BOT_INTERNAL_EXP_WIDTH CC64_FIELD_EXP_NONZERO_BOTTOM_SIZE
-#define CC64_EXP_LOW_WIDTH CC64_FIELD_EXPONENT_LOW_PART_SIZE
 
 #define CC64_PERM_GLOBAL (1 << 0)
 #define CC64_PERM_EXECUTE (1 << 1)
@@ -137,8 +128,6 @@ enum _CC_N(OTypes) {
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)
 
-_CC_STATIC_ASSERT_SAME(CC64_MANTISSA_WIDTH, CC64_FIELD_EXP_ZERO_BOTTOM_SIZE);
-
 // CHERI ISA v9 uses the "internal exponent" bit.
 #define CC64_ENCODE_IE(IE) _CC_ENCODE_FIELD(IE, INTERNAL_EXPONENT)
 #define CC64_EXTRACT_IE(pesbt) _CC_EXTRACT_FIELD(pesbt, INTERNAL_EXPONENT)
@@ -156,5 +145,6 @@ _CC_STATIC_ASSERT_SAME(CC64_MANTISSA_WIDTH, CC64_FIELD_EXP_ZERO_BOTTOM_SIZE);
 // Sanity-check mask is the expected NULL encoding
 _CC_STATIC_ASSERT_SAME(CC64_MEM_XOR_MASK, UINT32_C(0x7c302));
 
+#undef CC_IS_V9
 #undef CC_FORMAT_LOWER
 #undef CC_FORMAT_UPPER

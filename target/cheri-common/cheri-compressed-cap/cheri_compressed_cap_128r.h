@@ -63,11 +63,6 @@
 // The encoding allows for many levels, but the current implementation is limited to one level bit.
 #define CC128R_MAX_LEVEL_BITS 1
 
-/* Use __uint128 to represent 65 bit length */
-__extension__ typedef unsigned __int128 cc128r_length_t;
-__extension__ typedef signed __int128 cc128r_offset_t;
-typedef uint64_t cc128r_addr_t;
-typedef int64_t cc128r_saddr_t;
 #include "cheri_compressed_cap_macros.h"
 typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 0, _CC_N(MODE_INT) = 1 } _CC_N(Mode);
 
@@ -75,12 +70,11 @@ typedef enum _CC_N(Mode) { _CC_N(MODE_CAP) = 0, _CC_N(MODE_INT) = 1 } _CC_N(Mode
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wpedantic"
 enum {
-    _CC_FIELD(RESERVED1, 127, 121),
-    _CC_FIELD(SDP, 120, 117),
-    _CC_FIELD(FLAGS, 116, 116), // TODO: remove this old alias
-    _CC_FIELD(AP_M, 116, 108),  // Combined architectural permissions and mode
-    _CC_FIELD(MODE, 116, 116),
-    _CC_FIELD(AP, 115, 108),
+    _CC_FIELD(SDP, 127, 124),
+    _CC_FIELD(RESERVED1, 123, 117),
+    _CC_FIELD(AP_M, 116, 108), // Combined architectural permissions and mode
+    _CC_FIELD(AP, 116, 109),
+    _CC_FIELD(MODE, 108, 108),
     _CC_FIELD(LEVEL, 107, 107),
     _CC_FIELD(RESERVED0, 106, 92),
     _CC_FIELD(OTYPE, 91, 91),
@@ -89,8 +83,6 @@ enum {
     _CC_FIELD(EXPONENT_FORMAT, 90, 90),
     // The FIELD_INTERNAL_EXPONENT_SIZE name is currently required by various static assertions.
     _CC_N(FIELD_INTERNAL_EXPONENT_SIZE) = _CC_N(FIELD_EXPONENT_FORMAT_SIZE),
-    _CC_FIELD(TOP_ENCODED, 89, 78),
-    _CC_FIELD(BOTTOM_ENCODED, 77, 64),
 
     // Top/bottom offsets depending on INTERNAL_EXPONENT flag:
     // Without internal exponent:
@@ -105,9 +97,6 @@ enum {
 #pragma GCC diagnostic pop
 
 #define CC128R_OTYPE_BITS CC128R_FIELD_OTYPE_SIZE
-#define CC128R_BOT_WIDTH CC128R_FIELD_EXP_ZERO_BOTTOM_SIZE
-#define CC128R_BOT_INTERNAL_EXP_WIDTH CC128R_FIELD_EXP_NONZERO_BOTTOM_SIZE
-#define CC128R_EXP_LOW_WIDTH CC128R_FIELD_EXPONENT_LOW_PART_SIZE
 
 #define CC128R_PERM_WRITE (1 << 0)
 #define CC128R_PERM_LOAD_MUTABLE (1 << 1)
@@ -125,9 +114,9 @@ enum {
 #define CC128R_PERMS_ALL (0x7003f)
 
 _CC_STATIC_ASSERT_SAME(CC128R_UPERMS_ALL, CC128R_FIELD_SDP_MAX_VALUE);
-// Encoded value is 0b100111111 since SL and EL are not supported in sail yet.
+// Encoded value is 0b00111111 since SL and EL are not supported in sail yet.
 #define CC128R_ENCODED_INFINITE_PERMS(lvbits)                                                                          \
-    (_CC_ENCODE_FIELD(CC128R_UPERMS_ALL, SDP) | _CC_ENCODE_FIELD(lvbits == 0 ? 0x13f : 0x1ff, AP) |                    \
+    (_CC_ENCODE_FIELD(CC128R_UPERMS_ALL, SDP) | _CC_ENCODE_FIELD(lvbits == 0 ? 0x3f : 0xff, AP) |                      \
      _CC_ENCODE_FIELD(_CC_BITMASK64(lvbits), LEVEL) | _CC_ENCODE_FIELD(1, MODE))
 #define CC128R_PERMS_MASK (CC128R_PERMS_ALL | CC128R_PERM_SW_ALL)
 
@@ -145,8 +134,6 @@ enum _CC_N(OTypes) {
     ITEM(OTYPE_UNSEALED, __VA_ARGS__)                                                                                  \
     ITEM(OTYPE_SENTRY, __VA_ARGS__)
 
-_CC_STATIC_ASSERT_SAME(CC128R_MANTISSA_WIDTH, CC128R_FIELD_EXP_ZERO_BOTTOM_SIZE);
-
 // The RISC-V extension uses an "exponent zero" flag.
 #define CC128R_ENCODE_IE(IE) _CC_ENCODE_FIELD(!(IE), EXPONENT_FORMAT)
 #define CC128R_EXTRACT_IE(value) (!_CC_EXTRACT_FIELD(value, EXPONENT_FORMAT))
@@ -157,7 +144,6 @@ _CC_STATIC_ASSERT_SAME(CC128R_MANTISSA_WIDTH, CC128R_FIELD_EXP_ZERO_BOTTOM_SIZE)
 #define CC128R_HAS_BASE_TOP_SPECIAL_CASES 1
 #define CC128R_USES_V9_CORRECTION_FACTORS 0
 #define CC128R_USES_LEN_MSB 0
-#define CC128R_MAX_LEVEL_BITS 1 // LVLBITS=2 not supported yet
 
 #include "cheri_compressed_cap_common.h"
 #include "cheri_compressed_cap_riscv_common.h"
@@ -198,8 +184,9 @@ static inline _cc_addr_t _cc_N(get_all_permissions)(const _cc_cap_t* cap) {
 static inline bool _cc_N(set_permissions)(_cc_cap_t* cap, _cc_addr_t permissions) {
     _cc_api_requirement((permissions & (_CC_N(PERMS_MASK) | _CC_N(PERMS_RESERVED_ONES))) == permissions,
                         "invalid permissions");
-    // TODO: legalize permissions or reject invalid requests
+    // TODO: legalize the remaining permission dependencies or reject invalid requests
     _cc_addr_t sw_perms = (permissions >> _CC_N(UPERMS_SHFT)) & _CC_N(UPERMS_ALL);
+    _cc_mode mode = (_cc_mode)_CC_EXTRACT_FIELD(cap->cr_pesbt, MODE);
     // See "Encoding of architectural permissions for MXLEN=64" in the spec
     _cc_addr_t result = 0;
     if (permissions & CC128R_PERM_CAPABILITY)
@@ -224,7 +211,11 @@ static inline bool _cc_N(set_permissions)(_cc_cap_t* cap, _cc_addr_t permissions
     }
     cap->cr_pesbt = _CC_DEPOSIT_FIELD(cap->cr_pesbt, result, AP);
     cap->cr_pesbt = _CC_DEPOSIT_FIELD(cap->cr_pesbt, sw_perms, SDP);
-    return true; // all permissions are representable
+    if ((permissions & CC128R_PERM_EXECUTE) == 0 && mode == _CC_N(MODE_INT)) {
+        cap->cr_pesbt = _CC_DEPOSIT_FIELD(cap->cr_pesbt, (unsigned)_CC_N(MODE_CAP), MODE);
+        return false;
+    }
+    return true;
 }
 
 static inline _cc_mode _cc_N(get_execution_mode)(const _cc_cap_t* cap) {

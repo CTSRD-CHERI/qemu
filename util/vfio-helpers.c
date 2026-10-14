@@ -163,7 +163,7 @@ void *qemu_vfio_pci_map_bar(QEMUVFIOState *s, int index,
                             Error **errp)
 {
     void *p;
-    assert(QEMU_IS_ALIGNED(offset, qemu_real_host_page_size));
+    assert(QEMU_IS_ALIGNED(offset, qemu_real_host_page_size()));
     assert_bar_index_valid(s, index);
     p = mmap(NULL, MIN(size, s->bar_region_info[index].size - offset),
              prot, MAP_SHARED,
@@ -591,9 +591,9 @@ static IOVAMapping *qemu_vfio_add_mapping(QEMUVFIOState *s,
     IOVAMapping m = {.host = host, .size = size, .iova = iova};
     IOVAMapping *insert;
 
-    assert(QEMU_IS_ALIGNED(size, qemu_real_host_page_size));
-    assert(QEMU_IS_ALIGNED(s->low_water_mark, qemu_real_host_page_size));
-    assert(QEMU_IS_ALIGNED(s->high_water_mark, qemu_real_host_page_size));
+    assert(QEMU_IS_ALIGNED(size, qemu_real_host_page_size()));
+    assert(QEMU_IS_ALIGNED(s->low_water_mark, qemu_real_host_page_size()));
+    assert(QEMU_IS_ALIGNED(s->high_water_mark, qemu_real_host_page_size()));
     trace_qemu_vfio_new_mapping(s, host, size, index, iova);
 
     assert(index >= 0);
@@ -644,7 +644,7 @@ static void qemu_vfio_undo_mapping(QEMUVFIOState *s, IOVAMapping *mapping,
 
     index = mapping - s->mappings;
     assert(mapping->size > 0);
-    assert(QEMU_IS_ALIGNED(mapping->size, qemu_real_host_page_size));
+    assert(QEMU_IS_ALIGNED(mapping->size, qemu_real_host_page_size()));
     assert(index >= 0 && index < s->nr_mappings);
     if (ioctl(s->container, VFIO_IOMMU_UNMAP_DMA, &unmap)) {
         error_setg_errno(errp, errno, "VFIO_UNMAP_DMA failed");
@@ -752,8 +752,8 @@ int qemu_vfio_dma_map(QEMUVFIOState *s, void *host, size_t size,
     IOVAMapping *mapping;
     uint64_t iova0;
 
-    assert(QEMU_PTR_IS_ALIGNED(host, qemu_real_host_page_size));
-    assert(QEMU_IS_ALIGNED(size, qemu_real_host_page_size));
+    assert(QEMU_PTR_IS_ALIGNED(host, qemu_real_host_page_size()));
+    assert(QEMU_IS_ALIGNED(size, qemu_real_host_page_size()));
     trace_qemu_vfio_dma_map(s, host, size, temporary, iova);
     QEMU_LOCK_GUARD(&s->lock);
     mapping = qemu_vfio_find_mapping(s, host, &index);
@@ -847,10 +847,13 @@ void qemu_vfio_close(QEMUVFIOState *s)
     if (!s) {
         return;
     }
+
+    ram_block_notifier_remove(&s->ram_notifier);
+
     for (i = 0; i < s->nr_mappings; ++i) {
         qemu_vfio_undo_mapping(s, &s->mappings[i], NULL);
     }
-    ram_block_notifier_remove(&s->ram_notifier);
+
     g_free(s->usable_iova_ranges);
     s->nb_iova_ranges = 0;
     qemu_vfio_reset(s);

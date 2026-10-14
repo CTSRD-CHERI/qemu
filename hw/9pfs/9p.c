@@ -138,8 +138,10 @@ static int dotl_to_open_flags(int flags)
         { P9_DOTL_NONBLOCK, O_NONBLOCK } ,
         { P9_DOTL_DSYNC, O_DSYNC },
         { P9_DOTL_FASYNC, FASYNC },
-#ifndef CONFIG_DARWIN
+#if !defined(CONFIG_DARWIN) && !defined(CONFIG_BSD)
         { P9_DOTL_NOATIME, O_NOATIME },
+#endif
+#ifndef CONFIG_DARWIN
         /*
          *  On Darwin, we could map to F_NOCACHE, which is
          *  similar, but doesn't quite have the same
@@ -256,7 +258,8 @@ static size_t v9fs_string_size(V9fsString *str)
 }
 
 /*
- * returns 0 if fid got re-opened, 1 if not, < 0 on error */
+ * returns 0 if fid got re-opened, 1 if not, < 0 on error
+ */
 static int coroutine_fn v9fs_reopen_fid(V9fsPDU *pdu, V9fsFidState *f)
 {
     int err = 1;
@@ -282,33 +285,32 @@ static V9fsFidState *coroutine_fn get_fid(V9fsPDU *pdu, int32_t fid)
     V9fsFidState *f;
     V9fsState *s = pdu->s;
 
-    QSIMPLEQ_FOREACH(f, &s->fid_list, next) {
+    f = g_hash_table_lookup(s->fids, GINT_TO_POINTER(fid));
+    if (f) {
         BUG_ON(f->clunked);
-        if (f->fid == fid) {
-            /*
-             * Update the fid ref upfront so that
-             * we don't get reclaimed when we yield
-             * in open later.
-             */
-            f->ref++;
-            /*
-             * check whether we need to reopen the
-             * file. We might have closed the fd
-             * while trying to free up some file
-             * descriptors.
-             */
-            err = v9fs_reopen_fid(pdu, f);
-            if (err < 0) {
-                f->ref--;
-                return NULL;
-            }
-            /*
-             * Mark the fid as referenced so that the LRU
-             * reclaim won't close the file descriptor
-             */
-            f->flags |= FID_REFERENCED;
-            return f;
+        /*
+         * Update the fid ref upfront so that
+         * we don't get reclaimed when we yield
+         * in open later.
+         */
+        f->ref++;
+        /*
+         * check whether we need to reopen the
+         * file. We might have closed the fd
+         * while trying to free up some file
+         * descriptors.
+         */
+        err = v9fs_reopen_fid(pdu, f);
+        if (err < 0) {
+            f->ref--;
+            return NULL;
         }
+        /*
+         * Mark the fid as referenced so that the LRU
+         * reclaim won't close the file descriptor
+         */
+        f->flags |= FID_REFERENCED;
+        return f;
     }
     return NULL;
 }
@@ -317,12 +319,11 @@ static V9fsFidState *alloc_fid(V9fsState *s, int32_t fid)
 {
     V9fsFidState *f;
 
-    QSIMPLEQ_FOREACH(f, &s->fid_list, next) {
+    f = g_hash_table_lookup(s->fids, GINT_TO_POINTER(fid));
+    if (f) {
         /* If fid is already there return NULL */
         BUG_ON(f->clunked);
-        if (f->fid == fid) {
-            return NULL;
-        }
+        return NULL;
     }
     f = g_new0(V9fsFidState, 1);
     f->fid = fid;
@@ -333,7 +334,7 @@ static V9fsFidState *alloc_fid(V9fsState *s, int32_t fid)
      * reclaim won't close the file descriptor
      */
     f->flags |= FID_REFERENCED;
-    QSIMPLEQ_INSERT_TAIL(&s->fid_list, f, next);
+    g_hash_table_insert(s->fids, GINT_TO_POINTER(fid), f);
 
     v9fs_readdir_init(s->proto_version, &f->fs.dir);
     v9fs_readdir_init(s->proto_version, &f->fs_reclaim.dir);
@@ -424,12 +425,12 @@ static V9fsFidState *clunk_fid(V9fsState *s, int32_t fid)
 {
     V9fsFidState *fidp;
 
-    QSIMPLEQ_FOREACH(fidp, &s->fid_list, next) {
-        if (fidp->fid == fid) {
-            QSIMPLEQ_REMOVE(&s->fid_list, fidp, V9fsFidState, next);
-            fidp->clunked = true;
-            return fidp;
-        }
+    /* TODO: Use g_hash_table_steal_extended() instead? */
+    fidp = g_hash_table_lookup(s->fids, GINT_TO_POINTER(fid));
+    if (fidp) {
+        g_hash_table_remove(s->fids, GINT_TO_POINTER(fid));
+        fidp->clunked = true;
+        return fidp;
     }
     return NULL;
 }
@@ -439,10 +440,15 @@ void coroutine_fn v9fs_reclaim_fd(V9fsPDU *pdu)
     int reclaim_count = 0;
     V9fsState *s = pdu->s;
     V9fsFidState *f;
+    GHashTableIter iter;
+    gpointer fid;
+
+    g_hash_table_iter_init(&iter, s->fids);
+
     QSLIST_HEAD(, V9fsFidState) reclaim_list =
         QSLIST_HEAD_INITIALIZER(reclaim_list);
 
-    QSIMPLEQ_FOREACH(f, &s->fid_list, next) {
+    while (g_hash_table_iter_next(&iter, &fid, (gpointer *) &f)) {
         /*
          * Unlink fids cannot be reclaimed. Check
          * for them and skip them. Also skip fids
@@ -514,72 +520,85 @@ void coroutine_fn v9fs_reclaim_fd(V9fsPDU *pdu)
     }
 }
 
+/*
+ * This is used when a path is removed from the directory tree. Any
+ * fids that still reference it must not be closed from then on, since
+ * they cannot be reopened.
+ */
 static int coroutine_fn v9fs_mark_fids_unreclaim(V9fsPDU *pdu, V9fsPath *path)
 {
-    int err;
+    int err = 0;
     V9fsState *s = pdu->s;
-    V9fsFidState *fidp, *fidp_next;
+    V9fsFidState *fidp;
+    gpointer fid;
+    GHashTableIter iter;
+    /*
+     * The most common case is probably that we have exactly one
+     * fid for the given path, so preallocate exactly one.
+     */
+    g_autoptr(GArray) to_reopen = g_array_sized_new(FALSE, FALSE,
+            sizeof(V9fsFidState *), 1);
+    gint i;
 
-    fidp = QSIMPLEQ_FIRST(&s->fid_list);
-    if (!fidp) {
-        return 0;
-    }
+    g_hash_table_iter_init(&iter, s->fids);
 
     /*
-     * v9fs_reopen_fid() can yield : a reference on the fid must be held
-     * to ensure its pointer remains valid and we can safely pass it to
-     * QSIMPLEQ_NEXT(). The corresponding put_fid() can also yield so
-     * we must keep a reference on the next fid as well. So the logic here
-     * is to get a reference on a fid and only put it back during the next
-     * iteration after we could get a reference on the next fid. Start with
-     * the first one.
+     * We iterate over the fid table looking for the entries we need
+     * to reopen, and store them in to_reopen. This is because
+     * v9fs_reopen_fid() and put_fid() yield. This allows the fid table
+     * to be modified in the meantime, invalidating our iterator.
      */
-    for (fidp->ref++; fidp; fidp = fidp_next) {
+    while (g_hash_table_iter_next(&iter, &fid, (gpointer *) &fidp)) {
         if (fidp->path.size == path->size &&
             !memcmp(fidp->path.data, path->data, path->size)) {
-            /* Mark the fid non reclaimable. */
-            fidp->flags |= FID_NON_RECLAIMABLE;
-
-            /* reopen the file/dir if already closed */
-            err = v9fs_reopen_fid(pdu, fidp);
-            if (err < 0) {
-                put_fid(pdu, fidp);
-                return err;
-            }
-        }
-
-        fidp_next = QSIMPLEQ_NEXT(fidp, next);
-
-        if (fidp_next) {
             /*
-             * Ensure the next fid survives a potential clunk request during
-             * put_fid() below and v9fs_reopen_fid() in the next iteration.
+             * Ensure the fid survives a potential clunk request during
+             * v9fs_reopen_fid or put_fid.
              */
-            fidp_next->ref++;
+            fidp->ref++;
+            fidp->flags |= FID_NON_RECLAIMABLE;
+            g_array_append_val(to_reopen, fidp);
         }
-
-        /* We're done with this fid */
-        put_fid(pdu, fidp);
     }
 
-    return 0;
+    for (i = 0; i < to_reopen->len; i++) {
+        fidp = g_array_index(to_reopen, V9fsFidState*, i);
+        /* reopen the file/dir if already closed */
+        err = v9fs_reopen_fid(pdu, fidp);
+        if (err < 0) {
+            break;
+        }
+    }
+
+    for (i = 0; i < to_reopen->len; i++) {
+        put_fid(pdu, g_array_index(to_reopen, V9fsFidState*, i));
+    }
+    return err;
 }
 
 static void coroutine_fn virtfs_reset(V9fsPDU *pdu)
 {
     V9fsState *s = pdu->s;
     V9fsFidState *fidp;
+    GList *freeing;
+    /*
+     * Get a list of all the values (fid states) in the table, which
+     * we then...
+     */
+    g_autoptr(GList) fids = g_hash_table_get_values(s->fids);
 
-    /* Free all fids */
-    while (!QSIMPLEQ_EMPTY(&s->fid_list)) {
-        /* Get fid */
-        fidp = QSIMPLEQ_FIRST(&s->fid_list);
+    /* ... remove from the table, taking over ownership. */
+    g_hash_table_steal_all(s->fids);
+
+    /*
+     * This allows us to release our references to them asynchronously without
+     * iterating over the hash table and risking iterator invalidation
+     * through concurrent modifications.
+     */
+    for (freeing = fids; freeing; freeing = freeing->next) {
+        fidp = freeing->data;
         fidp->ref++;
-
-        /* Clunk fid */
-        QSIMPLEQ_REMOVE(&s->fid_list, fidp, V9fsFidState, next);
         fidp->clunked = true;
-
         put_fid(pdu, fidp);
     }
 }
@@ -1054,6 +1073,8 @@ static void coroutine_fn pdu_complete(V9fsPDU *pdu, ssize_t len)
             }
             len += ret;
             id = P9_RERROR;
+        } else {
+            err = errno_to_dotl(err);
         }
 
         ret = pdu_marshal(pdu, len, "d", err);
@@ -1327,7 +1348,7 @@ static int stat_to_v9stat_dotl(V9fsPDU *pdu, const struct stat *stbuf,
     v9lstat->st_nlink = stbuf->st_nlink;
     v9lstat->st_uid = stbuf->st_uid;
     v9lstat->st_gid = stbuf->st_gid;
-    v9lstat->st_rdev = stbuf->st_rdev;
+    v9lstat->st_rdev = host_dev_to_dotl_dev(stbuf->st_rdev);
     v9lstat->st_size = stbuf->st_size;
     v9lstat->st_blksize = stat_to_iounit(pdu, stbuf);
     v9lstat->st_blocks = stbuf->st_blocks;
@@ -1764,9 +1785,9 @@ static bool same_stat_id(const struct stat *a, const struct stat *b)
 
 static void coroutine_fn v9fs_walk(void *opaque)
 {
-    int name_idx;
+    int name_idx, nwalked;
     g_autofree V9fsQID *qids = NULL;
-    int i, err = 0;
+    int i, err = 0, any_err = 0;
     V9fsPath dpath, path;
     P9ARRAY_REF(V9fsPath) pathes = NULL;
     uint16_t nwnames;
@@ -1784,7 +1805,7 @@ static void coroutine_fn v9fs_walk(void *opaque)
     err = pdu_unmarshal(pdu, offset, "ddw", &fid, &newfid, &nwnames);
     if (err < 0) {
         pdu_complete(pdu, err);
-        return ;
+        return;
     }
     offset += err;
 
@@ -1832,54 +1853,61 @@ static void coroutine_fn v9fs_walk(void *opaque)
      * driver code altogether inside the following block.
      */
     v9fs_co_run_in_worker({
+        nwalked = 0;
         if (v9fs_request_cancelled(pdu)) {
-            err = -EINTR;
+            any_err |= err = -EINTR;
             break;
         }
         err = s->ops->lstat(&s->ctx, &dpath, &fidst);
         if (err < 0) {
-            err = -errno;
+            any_err |= err = -errno;
             break;
         }
         stbuf = fidst;
-        for (name_idx = 0; name_idx < nwnames; name_idx++) {
+        for (; nwalked < nwnames; nwalked++) {
             if (v9fs_request_cancelled(pdu)) {
-                err = -EINTR;
+                any_err |= err = -EINTR;
                 break;
             }
             if (!same_stat_id(&pdu->s->root_st, &stbuf) ||
-                strcmp("..", wnames[name_idx].data))
+                strcmp("..", wnames[nwalked].data))
             {
                 err = s->ops->name_to_path(&s->ctx, &dpath,
-                                           wnames[name_idx].data,
-                                           &pathes[name_idx]);
+                                           wnames[nwalked].data,
+                                           &pathes[nwalked]);
                 if (err < 0) {
-                    err = -errno;
+                    any_err |= err = -errno;
                     break;
                 }
                 if (v9fs_request_cancelled(pdu)) {
-                    err = -EINTR;
+                    any_err |= err = -EINTR;
                     break;
                 }
-                err = s->ops->lstat(&s->ctx, &pathes[name_idx], &stbuf);
+                err = s->ops->lstat(&s->ctx, &pathes[nwalked], &stbuf);
                 if (err < 0) {
-                    err = -errno;
+                    any_err |= err = -errno;
                     break;
                 }
-                stbufs[name_idx] = stbuf;
-                v9fs_path_copy(&dpath, &pathes[name_idx]);
+                stbufs[nwalked] = stbuf;
+                v9fs_path_copy(&dpath, &pathes[nwalked]);
             }
         }
     });
     /*
      * Handle all the rest of this Twalk request on main thread ...
+     *
+     * NOTE: -EINTR is an exception where we deviate from the protocol spec
+     * and simply send a (R)Lerror response instead of bothering to assemble
+     * a (deducted) Rwalk response; because -EINTR is always the result of a
+     * Tflush request, so client would no longer wait for a response in this
+     * case anyway.
      */
-    if (err < 0) {
+    if ((err < 0 && !nwalked) || err == -EINTR) {
         goto out;
     }
 
-    err = stat_to_qid(pdu, &fidst, &qid);
-    if (err < 0) {
+    any_err |= err = stat_to_qid(pdu, &fidst, &qid);
+    if (err < 0 && !nwalked) {
         goto out;
     }
     stbuf = fidst;
@@ -1888,19 +1916,28 @@ static void coroutine_fn v9fs_walk(void *opaque)
     v9fs_path_copy(&dpath, &fidp->path);
     v9fs_path_copy(&path, &fidp->path);
 
-    for (name_idx = 0; name_idx < nwnames; name_idx++) {
+    for (name_idx = 0; name_idx < nwalked; name_idx++) {
         if (!same_stat_id(&pdu->s->root_st, &stbuf) ||
             strcmp("..", wnames[name_idx].data))
         {
             stbuf = stbufs[name_idx];
-            err = stat_to_qid(pdu, &stbuf, &qid);
+            any_err |= err = stat_to_qid(pdu, &stbuf, &qid);
             if (err < 0) {
-                goto out;
+                break;
             }
             v9fs_path_copy(&path, &pathes[name_idx]);
             v9fs_path_copy(&dpath, &path);
         }
         memcpy(&qids[name_idx], &qid, sizeof(qid));
+    }
+    if (any_err < 0) {
+        if (!name_idx) {
+            /* don't send any QIDs, send Rlerror instead */
+            goto out;
+        } else {
+            /* send QIDs (not Rlerror), but fid MUST remain unaffected */
+            goto send_qids;
+        }
     }
     if (fid == newfid) {
         if (fidp->fid_type != P9_FID_NONE) {
@@ -1919,8 +1956,9 @@ static void coroutine_fn v9fs_walk(void *opaque)
         newfidp->uid = fidp->uid;
         v9fs_path_copy(&newfidp->path, &path);
     }
-    err = v9fs_walk_marshal(pdu, nwnames, qids);
-    trace_v9fs_walk_return(pdu->tag, pdu->id, nwnames, qids);
+send_qids:
+    err = v9fs_walk_marshal(pdu, name_idx, qids);
+    trace_v9fs_walk_return(pdu->tag, pdu->id, name_idx, qids);
 out:
     put_fid(pdu, fidp);
     if (newfidp) {
@@ -3186,6 +3224,8 @@ static int coroutine_fn v9fs_complete_rename(V9fsPDU *pdu, V9fsFidState *fidp,
     V9fsFidState *tfidp;
     V9fsState *s = pdu->s;
     V9fsFidState *dirfidp = NULL;
+    GHashTableIter iter;
+    gpointer fid;
 
     v9fs_path_init(&new_path);
     if (newdirfid != -1) {
@@ -3219,11 +3259,13 @@ static int coroutine_fn v9fs_complete_rename(V9fsPDU *pdu, V9fsFidState *fidp,
     if (err < 0) {
         goto out;
     }
+
     /*
      * Fixup fid's pointing to the old name to
      * start pointing to the new name
      */
-    QSIMPLEQ_FOREACH(tfidp, &s->fid_list, next) {
+    g_hash_table_iter_init(&iter, s->fids);
+    while (g_hash_table_iter_next(&iter, &fid, (gpointer *) &tfidp)) {
         if (v9fs_path_is_ancestor(&fidp->path, &tfidp->path)) {
             /* replace the name */
             v9fs_fix_path(&tfidp->path, &new_path, strlen(fidp->path.data));
@@ -3301,6 +3343,8 @@ static int coroutine_fn v9fs_fix_fid_paths(V9fsPDU *pdu, V9fsPath *olddir,
     V9fsPath oldpath, newpath;
     V9fsState *s = pdu->s;
     int err;
+    GHashTableIter iter;
+    gpointer fid;
 
     v9fs_path_init(&oldpath);
     v9fs_path_init(&newpath);
@@ -3317,7 +3361,8 @@ static int coroutine_fn v9fs_fix_fid_paths(V9fsPDU *pdu, V9fsPath *olddir,
      * Fixup fid's pointing to the old name to
      * start pointing to the new name
      */
-    QSIMPLEQ_FOREACH(tfidp, &s->fid_list, next) {
+    g_hash_table_iter_init(&iter, s->fids);
+    while (g_hash_table_iter_next(&iter, &fid, (gpointer *) &tfidp)) {
         if (v9fs_path_is_ancestor(&oldpath, &tfidp->path)) {
             /* replace the name */
             v9fs_fix_path(&tfidp->path, &newpath, strlen(oldpath.data));
@@ -3547,7 +3592,7 @@ static int v9fs_fill_statfs(V9fsState *s, V9fsPDU *pdu, struct statfs *stbuf)
     f_bavail = stbuf->f_bavail / bsize_factor;
     f_files  = stbuf->f_files;
     f_ffree  = stbuf->f_ffree;
-#ifdef CONFIG_DARWIN
+#if defined(CONFIG_DARWIN) || defined(CONFIG_BSD)
     fsid_val = (unsigned int)stbuf->f_fsid.val[0] |
                (unsigned long long)stbuf->f_fsid.val[1] << 32;
     f_namelen = NAME_MAX;
@@ -3939,6 +3984,16 @@ out_nofid:
  * Linux guests.
  */
 #define P9_XATTR_SIZE_MAX 65536
+#elif defined(CONFIG_BSD)
+/*
+ * FreeBSD similarly doesn't define a maximum xattr size, the limit is
+ * filesystem dependent.  On UFS filesystems it's 2 times the filesystem block
+ * size, typically 32KB.  On ZFS it depends on the value of the xattr property;
+ * with the default value there is no limit, and with xattr=sa it is 64KB.
+ *
+ * So, a limit of 64k seems reasonable here too.
+ */
+#define P9_XATTR_SIZE_MAX 65536
 #else
 #error Missing definition for P9_XATTR_SIZE_MAX for this host system
 #endif
@@ -4207,7 +4262,7 @@ int v9fs_device_realize_common(V9fsState *s, const V9fsTransport *t,
     s->ctx.fmode = fse->fmode;
     s->ctx.dmode = fse->dmode;
 
-    QSIMPLEQ_INIT(&s->fid_list);
+    s->fids = g_hash_table_new(NULL, NULL);
     qemu_co_rwlock_init(&s->rename_lock);
 
     if (s->ops->init(&s->ctx, errp) < 0) {
@@ -4266,6 +4321,10 @@ void v9fs_device_unrealize_common(V9fsState *s)
     }
     if (s->ctx.fst) {
         fsdev_throttle_cleanup(s->ctx.fst);
+    }
+    if (s->fids) {
+        g_hash_table_destroy(s->fids);
+        s->fids = NULL;
     }
     g_free(s->tag);
     qp_table_destroy(&s->qpd_table);

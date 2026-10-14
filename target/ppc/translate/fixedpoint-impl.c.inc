@@ -79,11 +79,8 @@ static bool do_ldst_quad(DisasContext *ctx, arg_D *a, bool store, bool prefixed)
     REQUIRE_INSNS_FLAGS(ctx, 64BX);
 
     if (!prefixed && !(ctx->insns_flags2 & PPC2_LSQ_ISA207)) {
-        if (ctx->pr) {
-            /* lq and stq were privileged prior to V. 2.07 */
-            gen_priv_exception(ctx, POWERPC_EXCP_PRIV_OPC);
-            return true;
-        }
+        /* lq and stq were privileged prior to V. 2.07 */
+        REQUIRE_SV(ctx);
 
         if (ctx->le_mode) {
             gen_align_no_le(ctx);
@@ -492,3 +489,88 @@ static bool trans_PEXTD(DisasContext *ctx, arg_X *a)
 #endif
     return true;
 }
+
+static bool trans_ADDG6S(DisasContext *ctx, arg_X *a)
+{
+    const uint64_t carry_bits = 0x1111111111111111ULL;
+    TCGv t0, t1, carry, zero = tcg_constant_tl(0);
+
+    REQUIRE_INSNS_FLAGS2(ctx, BCDA_ISA206);
+
+    t0 = tcg_temp_new();
+    t1 = tcg_const_tl(0);
+    carry = tcg_const_tl(0);
+
+    for (int i = 0; i < 16; i++) {
+        tcg_gen_shri_tl(t0, cpu_gpr[a->ra], i * 4);
+        tcg_gen_andi_tl(t0, t0, 0xf);
+        tcg_gen_add_tl(t1, t1, t0);
+
+        tcg_gen_shri_tl(t0, cpu_gpr[a->rb], i * 4);
+        tcg_gen_andi_tl(t0, t0, 0xf);
+        tcg_gen_add_tl(t1, t1, t0);
+
+        tcg_gen_andi_tl(t1, t1, 0x10);
+        tcg_gen_setcond_tl(TCG_COND_NE, t1, t1, zero);
+
+        tcg_gen_shli_tl(t0, t1, i * 4);
+        tcg_gen_or_tl(carry, carry, t0);
+    }
+
+    tcg_gen_xori_tl(carry, carry, (target_long)carry_bits);
+    tcg_gen_muli_tl(cpu_gpr[a->rt], carry, 6);
+
+    tcg_temp_free(t0);
+    tcg_temp_free(t1);
+    tcg_temp_free(carry);
+
+    return true;
+}
+
+static bool trans_CDTBCD(DisasContext *ctx, arg_X_sa *a)
+{
+    REQUIRE_INSNS_FLAGS2(ctx, BCDA_ISA206);
+    gen_helper_CDTBCD(cpu_gpr[a->ra], cpu_gpr[a->rs]);
+    return true;
+}
+
+static bool trans_CBCDTD(DisasContext *ctx, arg_X_sa *a)
+{
+    REQUIRE_INSNS_FLAGS2(ctx, BCDA_ISA206);
+    gen_helper_CBCDTD(cpu_gpr[a->ra], cpu_gpr[a->rs]);
+    return true;
+}
+
+static bool do_hash(DisasContext *ctx, arg_X *a, bool priv,
+    void (*helper)(TCGv_ptr, TCGv, TCGv, TCGv))
+{
+    TCGv ea;
+
+    if (!(ctx->insns_flags2 & PPC2_ISA310)) {
+        /* if version is before v3.1, this operation is a nop */
+        return true;
+    }
+
+    if (priv) {
+        /* if instruction is privileged but the context is in user space */
+        REQUIRE_SV(ctx);
+    }
+
+    if (unlikely(a->ra == 0)) {
+        /* if RA=0, the instruction form is invalid */
+        gen_invalid(ctx);
+        return true;
+    }
+
+    ea = do_ea_calc(ctx, a->ra, tcg_constant_tl(a->rt));
+    helper(cpu_env, ea, cpu_gpr[a->ra], cpu_gpr[a->rb]);
+
+    tcg_temp_free(ea);
+
+    return true;
+}
+
+TRANS(HASHST, do_hash, false, gen_helper_HASHST)
+TRANS(HASHCHK, do_hash, false, gen_helper_HASHCHK)
+TRANS(HASHSTP, do_hash, true, gen_helper_HASHSTP)
+TRANS(HASHCHKP, do_hash, true, gen_helper_HASHCHKP)

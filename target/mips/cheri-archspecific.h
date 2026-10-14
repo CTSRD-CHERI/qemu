@@ -47,7 +47,7 @@ static inline const char* cheri_cause_str(CheriCapExcCause cause);
 
 extern bool cheri_debugger_on_trap;
 
-static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
+static inline G_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
                                                             uint16_t cause,
                                                             uint16_t reg,
                                                             uintptr_t hostpc)
@@ -58,7 +58,7 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
     }
 
     if (qemu_log_instr_or_mask_enabled(env, CPU_LOG_INT)) {
-        cpu_restore_state(env_cpu(env), hostpc, true);
+        cpu_restore_state(env_cpu(env), hostpc);
         qemu_log_instr_or_mask_msg(
             env, CPU_LOG_INT,
             "C2 EXCEPTION: cause=%d(%s) reg=%d PCC=" PRINT_CAP_FMTSTR
@@ -91,12 +91,12 @@ static inline QEMU_NORETURN void do_raise_c2_exception_impl(CPUMIPSState *env,
     do_raise_exception(env, EXCP_C2E, hostpc);
 }
 
-static inline QEMU_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause, uintptr_t pc)
+static inline G_NORETURN void do_raise_c2_exception_noreg(CPUMIPSState *env, uint16_t cause, uintptr_t pc)
 {
     do_raise_c2_exception_impl(env, cause, 0xff, pc);
 }
 
-static inline void QEMU_NORETURN raise_cheri_exception_impl(
+static inline void G_NORETURN raise_cheri_exception_impl(
     CPUArchState *env, CheriCapExcCause cause, unsigned regnum,
     target_ulong addr, bool instavail, uintptr_t hostpc)
 {
@@ -105,14 +105,14 @@ static inline void QEMU_NORETURN raise_cheri_exception_impl(
     do_raise_c2_exception_impl(env, cause, regnum, hostpc);
 }
 
-static inline void QEMU_NORETURN raise_load_tag_exception(
+static inline void G_NORETURN raise_load_tag_exception(
     CPUArchState *env, target_ulong va, int cb, uintptr_t retpc)
 {
     env->CP0_BadVAddr = va;
     do_raise_c2_exception_impl(env, CapEx_CapLoadGen, cb, retpc);
 }
 
-static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
+static inline void G_NORETURN raise_store_tag_exception(CPUArchState *env,
                                                            target_ulong va,
                                                            int cb,
                                                            uintptr_t retpc)
@@ -121,13 +121,13 @@ static inline void QEMU_NORETURN raise_store_tag_exception(CPUArchState *env,
     do_raise_c2_exception_impl(env, CapEx_TLBNoStoreCap, cb, retpc);
 }
 
-static inline void QEMU_NORETURN raise_unaligned_load_exception(
+static inline void G_NORETURN raise_unaligned_load_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
     do_raise_c0_exception_impl(env, EXCP_AdEL, addr, retpc);
 }
 
-static inline void QEMU_NORETURN raise_unaligned_store_exception(
+static inline void G_NORETURN raise_unaligned_store_exception(
     CPUArchState *env, target_ulong addr, uintptr_t retpc)
 {
     do_raise_c0_exception_impl(env, EXCP_AdES, addr, retpc);

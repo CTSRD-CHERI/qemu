@@ -336,14 +336,14 @@ static inline void *get_tagmem_from_iotlb_entry(CPUArchState *env,
     CPUTLBEntry *entry = tlb_entry(env, mmu_idx, vaddr);
     g_assert(tlb_hit(isWrite ? tlb_addr_write(entry) : entry->addr_read, vaddr));
 #endif
-    CPUIOTLBEntry *iotlbentry =
-        &env_tlb(env)->d[mmu_idx].iotlb[tlb_index(env, mmu_idx, vaddr)];
+    CPUTLBEntryFull *pfull =
+        &env_tlb(env)->d[mmu_idx].fulltlb[tlb_index(env, mmu_idx, vaddr)];
     if (isWrite) {
-        *flags_out = IOTLB_GET_TAGMEM_FLAGS(iotlbentry, write);
-        return IOTLB_GET_TAGMEM(iotlbentry, write);
+        *flags_out = IOTLB_GET_TAGMEM_FLAGS(pfull, write);
+        return IOTLB_GET_TAGMEM(pfull, write);
     } else {
-        *flags_out = IOTLB_GET_TAGMEM_FLAGS(iotlbentry, read);
-        return IOTLB_GET_TAGMEM(iotlbentry, read);
+        *flags_out = IOTLB_GET_TAGMEM_FLAGS(pfull, read);
+        return IOTLB_GET_TAGMEM(pfull, read);
     }
 }
 
@@ -405,19 +405,20 @@ void cheri_tag_invalidate(CPUArchState *env, target_ulong vaddr, int32_t size,
                     size, vaddr);
     }
 #else
-    qemu_log_flush();
+    FILE *logfile = qemu_log_trylock();
     error_report("FATAL: %s: " TARGET_FMT_lx
                  "+%d crosses a page boundary\r",
                  __func__, vaddr, size);
     char buffer[256];
     FILE *f = fmemopen(buffer, sizeof(buffer), "w");
     fprintf(f, "Probably caused by guest instruction: ");
-    target_disas(f, env_cpu(env), cpu_get_current_pc(env, pc, false),
+    target_disas(f, env_cpu(env), cpu_get_current_pc(env, pc),
                  /* Only one instr*/ -1);
     fprintf(f, "\r");
     fclose(f);
     buffer[sizeof(buffer) - 1] = '\0';
     error_report("%s", buffer);
+    qemu_log_unlock(logfile);
     exit(1);
 #endif
 #endif
